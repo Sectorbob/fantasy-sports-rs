@@ -1,0 +1,40 @@
+#!/bin/bash
+
+setopt verbose
+source .env # loads YAHOO_CLIENT_ID and YAHOO_REDIRECT_URI
+
+# Generate a random code_verifier
+code_verifier=$(openssl rand -base64 43 | tr -d '=+/')
+
+# Generate the code_challenge using SHA-256 and Base64 URL encoding
+code_challenge=$(echo -n "$code_verifier" | openssl dgst -binary -sha256 | openssl base64 | tr -d '=+/')
+
+echo "Code Verifier: $code_verifier"
+echo "Code Challenge: $code_challenge"
+
+curl -X GET \
+  --dump-header .headers \
+  --get "https://api.login.yahoo.com/oauth2/request_auth" \
+  --data-urlencode "client_id=${YAHOO_CLIENT_ID}" \
+  --data-urlencode "redirect_uri=${YAHOO_REDIRECT_URI}" \
+  --data-urlencode "response_type=code" \
+  --data-urlencode "language=en-us" \
+  --data-urlencode "code_challenge=${code_challenge}" \
+  --data-urlencode "code_challenge_method=S256"
+
+echo "Exit code: $?"
+location=$(cat .headers | grep -i "location: ")
+location=${location:10}
+rm .headers
+echo "Open this link in your browser: ${location}"
+# echo "Opening URL in browser..."
+# open ${location}
+echo "Please enter the code from the URL response:"
+read code
+echo "Code: ${code}"
+
+echo "Obtaining access token..."
+curl -v -X POST \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=${YAHOO_CLIENT_ID}&redirect_uri=oob&code=${code}&grant_type=authorization_code&code_verifier=${code_verifier}" \
+  "https://api.login.yahoo.com/oauth2/get_token"
