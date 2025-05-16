@@ -1,5 +1,6 @@
 use crate::data::{FantasyContent, Game, GameKey, Scoreboard, Token, User};
 use core::str;
+use itertools::join;
 use serde_xml_rs::from_str;
 
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
@@ -135,11 +136,22 @@ impl Client {
             )
             .build()?;
         let resp = self.client.execute(req).await?;
-        if resp.status().is_success() {
-            println!("Success!");
-        } else {
-            println!("Failed: {}", resp.status());
+
+        if resp.status().is_client_error() {
+            let body = resp.text().await.expect("couldn't read response body");
+            match serde_xml_rs::from_str::<crate::data::Error>(body.as_str()) {
+                Ok(yahoo_error) => {
+                    // OAuth oauth_problem="token_expired", realm="yahooapis.com"
+                    panic!("Got client error: {}", yahoo_error.description)
+                }
+                Err(error) => panic!("Got unknown error: {}", error),
+            }
+        } else if resp.status().is_server_error() {
+            let code = resp.status().as_u16();
+            let body = resp.text().await.expect("couldn't read response body");
+            panic!("Got server error ({}): {}", code, body)
         }
+
         let body_text = resp.text().await?;
         println!("Body: {}", body_text);
 

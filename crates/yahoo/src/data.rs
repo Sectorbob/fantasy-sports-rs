@@ -1,4 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "yahoo:error")]
+pub struct Error {
+    #[serde(rename = "yahoo:description")]
+    pub description: String
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Token {
