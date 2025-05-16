@@ -60,11 +60,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .unwrap();
     // println!("League Settings: {:#?}", league);
 
-    let league = client
-        .get_league_standings(LeagueKey::new("371", 20028))
+    let public_league_key = LeagueKey::new(GameKey::Id(223).to_string().as_str(), 431);
+    // let ecr_2017 = LeagueKey::new("371", 20028);
+
+    // let league = client
+    //     .get_league_standings(public_league_key)
+    //     .await
+    //     .unwrap();
+    // println!("League Standings: {:#?}", league);
+
+    let transactions = client
+        .get_league_transactions(public_league_key)
         .await
         .unwrap();
-    println!("League Standings: {:#?}", league);
+    println!("League Transactions: {:#?}", transactions);
 
     Ok(())
 }

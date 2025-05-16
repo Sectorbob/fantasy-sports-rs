@@ -1,6 +1,6 @@
 use crate::data::{
     FantasyContent, Game, GameCode, GameKey, League, LeagueKey, Scoreboard, Settings, Standings,
-    Team, Token, User,
+    Team, Token, Transaction, Transactions, User,
 };
 use core::str;
 use itertools::join;
@@ -223,6 +223,25 @@ impl Client {
             .unwrap()
             .standings
             .unwrap())
+    }
+
+    pub async fn get_league_transactions(
+        &self,
+        league_key: LeagueKey,
+    ) -> Result<Vec<Transaction>, reqwest::Error> {
+        let url = format!(
+            "{}/league/{}/transactions",
+            YAHOO_FANTASY_API_BASE_URL, league_key
+        );
+        Ok(self
+            .get(url.as_str())
+            .await
+            .unwrap()
+            .league
+            .unwrap()
+            .transactions
+            .unwrap()
+            .transactions)
     }
 
     pub async fn get_game(&self, game_key: GameKey) -> Result<Game, reqwest::Error> {

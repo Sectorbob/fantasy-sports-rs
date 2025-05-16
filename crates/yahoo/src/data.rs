@@ -51,6 +51,7 @@ pub struct League {
     pub scoreboard: Option<Scoreboard>,
     pub settings: Option<Settings>,
     pub standings: Option<Standings>,
+    pub transactions: Option<Transactions>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -318,7 +319,7 @@ pub struct Team {
     league_scoring_type: String,   // knwon values: head
     has_draft_grade: u8,           // 0 or 1
     draft_grade: Option<String>,
-    draft_recap_url: String,
+    draft_recap_url: Option<String>,
     managers: Managers,
     team_points: TeamPoints,
     team_standings: TeamStandings,
@@ -337,8 +338,8 @@ pub struct Manager {
     guid: String,
     is_current_login: Option<u8>, // 0 or 1
     image_url: Option<String>,
-    felo_score: u32,
-    felo_tier: String, // known values: gold
+    felo_score: Option<u32>,
+    felo_tier: Option<String>, // known values: gold
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -353,6 +354,9 @@ pub struct TeamStandings {
     rank: u32,
     outcome_totals: OutcomeTotals,
     divisional_outcome_totals: OutcomeTotals,
+    streak: Streak,
+    points_for: f32,
+    points_against: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -362,3 +366,36 @@ pub struct OutcomeTotals {
     ties: u32,
     percentage: Option<f32>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Streak {
+    #[serde(rename = "type")]
+    _type: String,
+    value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Transactions {
+    #[serde(rename = "transaction")]
+    pub transactions: Vec<Transaction>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Transaction {
+    transaction_key: String,
+    transaction_id: u32,
+    #[serde(rename = "type")]
+    _type: String, // known values: commish, add, drop, add/drop, pending_trade
+    status: String, // known values: successful
+    timestamp: u64, // looks to be unix epoch seconds
+    players: Option<Players>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Players {
+    #[serde(rename = "player")]
+    players: Vec<Player>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Player {}
