@@ -25,6 +25,8 @@ pub struct FantasyContent {
     pub game: Option<Game>,
     #[serde(rename = "users")]
     pub users: Option<Users>,
+    #[serde(rename = "games")]
+    pub games: Option<Games>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -152,18 +154,18 @@ pub enum GameCode {
     NCAAF,
     NCAAB,
 }
-impl GameCode {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for GameCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GameCode::NFL => "nfl".to_string(),
-            GameCode::NHL => "nhl".to_string(),
-            GameCode::NBA => "nba".to_string(),
-            GameCode::MLB => "mlb".to_string(),
-            GameCode::EPL => "epl".to_string(),
-            GameCode::MLS => "mls".to_string(),
-            GameCode::MLL => "mll".to_string(),
-            GameCode::NCAAF => "ncaaf".to_string(),
-            GameCode::NCAAB => "ncaab".to_string(),
+            GameCode::NFL => write!(f, "nfl"),
+            GameCode::NHL => write!(f, "nhl"),
+            GameCode::NBA => write!(f, "nba"),
+            GameCode::MLB => write!(f, "mlb"),
+            GameCode::EPL => write!(f, "epl"),
+            GameCode::MLS => write!(f, "mls"),
+            GameCode::MLL => write!(f, "mll"),
+            GameCode::NCAAF => write!(f, "ncaaf"),
+            GameCode::NCAAB => write!(f, "ncaab"),
         }
     }
 }
@@ -181,6 +183,13 @@ pub struct Game {
     is_registration_over: u32,
     is_game_over: u32,
     is_offseason: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename = "games")]
+pub struct Games {
+    #[serde(rename = "game")]
+    pub games: Vec<Game>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

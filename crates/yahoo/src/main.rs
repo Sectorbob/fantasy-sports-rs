@@ -2,9 +2,9 @@ mod client;
 mod data;
 
 use client::Client;
-use data::Token;
-use std::{env, error::Error, io::{self, Write}};
+use data::{GameCode, Token};
 use serde_json;
+use std::{env, error::Error, io, io::Write};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,11 +17,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match load_token_file(yahoo_token_file) {
         Ok(token) => client.token = Some(token),
         // If fails, perform auth flow
-        Err(_) => perform_oauth_flow(&mut client).await
+        Err(_) => perform_oauth_flow(&mut client).await,
     }
 
     let users = client.get_users(true).await.unwrap();
     println!("Users: {:#?}", users);
+
+    let games = client
+        .get_games(vec![GameCode::NFL], vec!["2019", "2020"])
+        .await
+        .unwrap();
+    println!("Games: {:#?}", games);
 
     Ok(())
 }
@@ -50,5 +56,6 @@ fn receive_auth_code_from_stdin() -> String {
     io::stdout().flush().unwrap();
     let mut auth_code = String::new();
     io::stdin().read_line(&mut auth_code).unwrap();
+
     auth_code.trim().to_string()
 }

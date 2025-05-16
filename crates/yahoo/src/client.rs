@@ -1,4 +1,4 @@
-use crate::data::{FantasyContent, Game, GameKey, Scoreboard, Token, User};
+use crate::data::{FantasyContent, Game, GameCode, Games, GameKey, Scoreboard, Token, User};
 use core::str;
 use itertools::join;
 use serde_xml_rs::from_str;
@@ -126,6 +126,8 @@ impl Client {
     }
 
     pub async fn get(&self, url: &str) -> Result<FantasyContent, reqwest::Error> {
+        println!("GET {}", url);
+
         let req = self
             .client
             .get(url)
@@ -184,6 +186,26 @@ impl Client {
             game_key.to_string()
         );
         Ok(self.get(url.as_str()).await.unwrap().game.unwrap())
+    }
+
+    pub async fn get_games(
+        &self,
+        game_codes: Vec<GameCode>,
+        seasons: Vec<&str>,
+    ) -> Result<Games, reqwest::Error> {
+        let mut filter = String::new();
+
+        if !game_codes.is_empty() {
+            filter.push_str(";game_codes=");
+            filter.push_str(join(game_codes, ",").as_str());
+        }
+        if !seasons.is_empty() {
+            filter.push_str(";seasons=");
+            filter.push_str(seasons.join(",").as_str());
+        }
+
+        let url = format!("{}/games{}", YAHOO_FANTASY_API_BASE_URL, filter);
+        Ok(self.get(url.as_str()).await.unwrap().games.unwrap())
     }
 
     pub async fn get_users(&self, use_login: bool) -> Result<Vec<User>, reqwest::Error> {
