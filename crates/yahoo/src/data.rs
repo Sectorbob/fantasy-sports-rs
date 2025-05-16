@@ -34,10 +34,10 @@ pub struct League {
     start_week: u32,
     end_week: u32,
     is_finished: u32,
-    pub scoreboard: Scoreboard
+    pub scoreboard: Scoreboard,
 }
 
-#[derive(Serialize, Deserialize, Debug )]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Scoreboard {
     week: u32,
     // matchups: Vec<Matchup>,
@@ -56,7 +56,6 @@ pub struct Scoreboard {
 //     #[serde(rename = "week")]
 //     week: u32,
 // }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -117,12 +116,11 @@ impl Filters {
         }
         filters.join(",")
     }
-    
 }
 
 pub enum GameKey {
     Code(GameCode),
-    Id(u32)
+    Id(u32),
 }
 impl GameKey {
     pub fn to_string(&self) -> String {
@@ -177,14 +175,12 @@ pub struct Game {
     is_offseason: u32,
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename = "users")]
 pub struct Users {
     #[serde(rename = "user")]
     pub users: Vec<User>,
 }
-
 
 //region User Resource
 #[derive(Serialize, Deserialize, Debug)]
@@ -200,6 +196,5 @@ pub struct User {
     // #[serde(rename = "yahoo_id")]
     // yahoo_id: String,
 }
-
 
 //endregion

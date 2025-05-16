@@ -1710,6 +1710,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde-xml-rs",
+ "serde_json",
  "tokio",
 ]
 
