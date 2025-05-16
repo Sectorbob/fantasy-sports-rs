@@ -80,12 +80,12 @@ impl Client {
             ("redirect_uri", "oob"),
         ];
         let req = self
-            .client_no_redirects
+            .client
             .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(&form)
             .build()?;
-        let resp = self.client_no_redirects.execute(req).await?;
+        let resp = self.client.execute(req).await?;
         if resp.status().is_success() {
             println!("Success!");
         } else {
@@ -95,6 +95,29 @@ impl Client {
         // println!("Response: {:#?}", resp);
 
         // println!("Status: {}", resp.status());
+
+        let body = resp.json::<Token>().await?;
+        self.token = Some(body.clone());
+        return Ok(body);
+    }
+
+    pub async fn refresh_token(&mut self) -> Result<Token, reqwest::Error> {
+        let form = [
+            ("client_id", self.client_id.as_str()),
+            ("refresh_token", self.token.as_mut().unwrap().refresh_token.as_str()),
+            ("grant_type", "refresh_token"),
+            ("redirect_uri", "oob"),
+        ];
+        let req = self
+            .client
+            .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .form(&form)
+            .build()?;
+        let resp = self.client.execute(req).await?;
+        if !resp.status().is_success() {
+            panic!("Failed to refresh token: {}", resp.status());
+        }
 
         let body = resp.json::<Token>().await?;
         self.token = Some(body.clone());
