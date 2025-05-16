@@ -2,9 +2,13 @@ mod client;
 mod data;
 
 use client::Client;
-use data::{GameCode, Token};
+use data::{GameCode, GameKey, LeagueKey, Token};
 use serde_json;
-use std::{env, error::Error, io, io::Write};
+use std::{
+    env,
+    error::Error,
+    io::{self, BufWriter, Write},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,31 +18,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = client::Client::new(yahoo_client_id, yahoo_redirect_uri);
 
     // Try to load token from token file
-    match load_token_file(yahoo_token_file) {
+    match load_token_file(&yahoo_token_file) {
         Ok(token) => client.token = Some(token),
         // If fails, perform auth flow
         Err(_) => perform_oauth_flow(&mut client).await,
     }
 
-    let users = client.get_users(true).await.unwrap();
-    println!("Users: {:#?}", users);
+    // let new_token = client.refresh_token().await.unwrap();
+    // save_token_file(&yahoo_token_file, new_token);
 
-    let games = client
-        .get_games(vec![GameCode::NFL], vec!["2019", "2020"])
+    // let users = client.get_users(true).await.unwrap();
+    // println!("Users: {:#?}", users);
+
+    // let games = client
+    //     .get_games(
+    //         vec![GameCode::NFL],
+    //         vec![
+    //             "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018",
+    //             "2019", "2020",
+    //         ],
+    //     )
+    //     .await
+    //     .unwrap();
+
+    // println!("Games: {:#?}", games);
+
+    // client.get("https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1;/leagues").await; // can't do this
+
+    // let teams = client.get_teams_for_user(GameKey::Id(371)).await.unwrap();
+    // println!("Teams: {:#?}", teams);
+
+    // let league = client
+    //     .get_league(LeagueKey::new("371", 20028))
+    //     .await
+    //     .unwrap();
+    // println!("League: {:#?}", league);
+
+    // let league = client
+    //     .get_league_settings(LeagueKey::new("371", 20028))
+    //     .await
+    //     .unwrap();
+    // println!("League Settings: {:#?}", league);
+
+    let league = client
+        .get_league_standings(LeagueKey::new("371", 20028))
         .await
         .unwrap();
-    println!("Games: {:#?}", games);
+    println!("League Standings: {:#?}", league);
 
     Ok(())
 }
 
-fn load_token_file(file: String) -> Result<Token, Box<dyn Error>> {
+fn load_token_file(file: &String) -> Result<Token, Box<dyn Error>> {
     let file = std::fs::File::open(file)?;
     let reader = std::io::BufReader::new(file);
 
     // Read the JSON contents of the file as an instance of `Token`.
     let token = serde_json::from_reader(reader)?;
     Ok(token)
+}
+
+fn save_token_file(file: &String, token: Token) {
+    let f = std::fs::OpenOptions::new().write(true).open(file).unwrap();
+    let writer = BufWriter::new(f);
+
+    // Read the JSON contents of the file as an instance of `Token`.
+    serde_json::to_writer_pretty(writer, &token).unwrap();
 }
 
 async fn perform_oauth_flow(client: &mut Client) {

@@ -1,4 +1,7 @@
-use crate::data::{FantasyContent, Game, GameCode, Games, GameKey, Scoreboard, Token, User};
+use crate::data::{
+    FantasyContent, Game, GameCode, GameKey, League, LeagueKey, Scoreboard, Settings, Standings,
+    Team, Token, User,
+};
 use core::str;
 use itertools::join;
 use serde_xml_rs::from_str;
@@ -105,7 +108,10 @@ impl Client {
     pub async fn refresh_token(&mut self) -> Result<Token, reqwest::Error> {
         let form = [
             ("client_id", self.client_id.as_str()),
-            ("refresh_token", self.token.as_mut().unwrap().refresh_token.as_str()),
+            (
+                "refresh_token",
+                self.token.as_mut().unwrap().refresh_token.as_str(),
+            ),
             ("grant_type", "refresh_token"),
             ("redirect_uri", "oob"),
         ];
@@ -140,7 +146,10 @@ impl Client {
         let resp = self.client.execute(req).await?;
 
         if resp.status().is_client_error() {
+            let code = resp.status().as_u16();
             let body = resp.text().await.expect("couldn't read response body");
+            println!("Status:   {}", code);
+            println!("Raw Body: {}", body);
             match serde_xml_rs::from_str::<crate::data::Error>(body.as_str()) {
                 Ok(yahoo_error) => {
                     // OAuth oauth_problem="token_expired", realm="yahooapis.com"
@@ -164,7 +173,7 @@ impl Client {
 
     pub async fn get_league_scoreboard(
         &self,
-        league_key: &str,
+        league_key: LeagueKey,
     ) -> Result<Scoreboard, reqwest::Error> {
         let url = format!(
             "{}/league/{}/scoreboard",
@@ -176,7 +185,44 @@ impl Client {
             .unwrap()
             .league
             .unwrap()
-            .scoreboard)
+            .scoreboard
+            .unwrap())
+    }
+
+    pub async fn get_league_settings(
+        &self,
+        league_key: LeagueKey,
+    ) -> Result<Settings, reqwest::Error> {
+        let url = format!(
+            "{}/league/{}/settings",
+            YAHOO_FANTASY_API_BASE_URL, league_key
+        );
+        Ok(self
+            .get(url.as_str())
+            .await
+            .unwrap()
+            .league
+            .unwrap()
+            .settings
+            .unwrap())
+    }
+
+    pub async fn get_league_standings(
+        &self,
+        league_key: LeagueKey,
+    ) -> Result<Standings, reqwest::Error> {
+        let url = format!(
+            "{}/league/{}/standings",
+            YAHOO_FANTASY_API_BASE_URL, league_key
+        );
+        Ok(self
+            .get(url.as_str())
+            .await
+            .unwrap()
+            .league
+            .unwrap()
+            .standings
+            .unwrap())
     }
 
     pub async fn get_game(&self, game_key: GameKey) -> Result<Game, reqwest::Error> {
@@ -192,7 +238,7 @@ impl Client {
         &self,
         game_codes: Vec<GameCode>,
         seasons: Vec<&str>,
-    ) -> Result<Games, reqwest::Error> {
+    ) -> Result<Vec<Game>, reqwest::Error> {
         let mut filter = String::new();
 
         if !game_codes.is_empty() {
@@ -205,7 +251,13 @@ impl Client {
         }
 
         let url = format!("{}/games{}", YAHOO_FANTASY_API_BASE_URL, filter);
-        Ok(self.get(url.as_str()).await.unwrap().games.unwrap())
+        Ok(self
+            .get(url.as_str())
+            .await
+            .unwrap()
+            .games
+            .map(|o| o.games)
+            .unwrap_or(vec![]))
     }
 
     pub async fn get_users(&self, use_login: bool) -> Result<Vec<User>, reqwest::Error> {
@@ -216,5 +268,83 @@ impl Client {
 
         let url = format!("{}/users{}", YAHOO_FANTASY_API_BASE_URL, query);
         Ok(self.get(url.as_str()).await.unwrap().users.unwrap().users)
+    }
+
+    /// league_key is {game_code}.l.{league_id}
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub async fn get_league(
+        &self,
+        league_key: LeagueKey,
+    ) -> Result<Option<League>, reqwest::Error> {
+        let url = format!(
+            "{}/league/{}",
+            YAHOO_FANTASY_API_BASE_URL,
+            league_key.to_string()
+        );
+        Ok(self.get(url.as_str()).await.unwrap().league)
+    }
+
+    pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, reqwest::Error> {
+        let url = format!(
+            "{}/users;use_login=1/games;game_keys={}/teams",
+            YAHOO_FANTASY_API_BASE_URL,
+            game_key.to_string()
+        );
+
+        let content = self.get(url.as_str()).await.unwrap();
+
+        let mut return_me: Vec<Team> = vec![];
+
+        if let Some(users) = content.users {
+            for user in users.users {
+                if let Some(games) = user.games {
+                    for game in games.games {
+                        if let Some(teams) = game.teams {
+                            for team in teams.teams {
+                                return_me.push(team);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // content.users.map(|it| {
+        //     it.users.iter().map(|user| {
+        //         user.games.map(|games| {
+        //             games.games.iter().map(|game| {
+        //                 game.teams.map(|teams| {
+        //                     teams.teams.iter().map(|team| {
+        //                         return_me.push(*team.to_owned());
+        //                     })
+        //                 })
+        //             }).collect()
+        //         })
+        //     })
+        // });
+
+        Ok(return_me)
+
+        // Ok(
+        //     .users
+        //     .unwrap()
+        //     .users
+        //     .first()
+        //     .unwrap().to_owned()
+        //     .games
+        //     .unwrap()
+        //     .games
+        //     .first()
+        //     .unwrap().to_owned()
+        //     .teams
+        //     .unwrap()
+        //     .teams.)
     }
 }
