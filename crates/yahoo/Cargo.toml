@@ -6,6 +6,7 @@ exclude = ["notes/*"]
 authors = ["Sectorbob"]
 
 [dependencies]
+itertools = "0.14.0"
 pkce = "0.2.0" # For OAuth2
 reqwest = { version = "0.12.15", features = ["json"] }  # For HTTP requests
 serde = { version = "1.0.219", features = ["derive"] } # For serialization/deserialization
