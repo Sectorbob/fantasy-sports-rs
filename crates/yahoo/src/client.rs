@@ -3,7 +3,7 @@ use crate::data::{
 };
 use core::str;
 use itertools::join;
-use serde_xml_rs::from_str;
+use quick_xml::de::from_str;
 
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
 const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fantasy/v2";
