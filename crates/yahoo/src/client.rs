@@ -1,6 +1,5 @@
 use crate::data::{
-    FantasyContent, Game, GameCode, GameKey, League, LeagueKey, Scoreboard, Settings, Standings,
-    Team, Token, Transaction, Transactions, User,
+    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Scoreboard, Settings, Standings, Team, Token, Transaction, User
 };
 use core::str;
 use itertools::join;
@@ -166,9 +165,10 @@ impl Client {
         let body_text = resp.text().await?;
         println!("Body: {}", body_text);
 
-        let fantasy_content = from_str(body_text.as_str()).unwrap();
-
-        Ok(fantasy_content)
+        return match from_str(body_text.as_str()) {
+            Ok(content) => Ok(content),
+            Err(error) => panic!("unable to deserialize xml: {}", error),
+        };
     }
 
     pub async fn get_league_scoreboard(
@@ -179,14 +179,17 @@ impl Client {
             "{}/league/{}/scoreboard",
             YAHOO_FANTASY_API_BASE_URL, league_key
         );
-        Ok(self
-            .get(url.as_str())
-            .await
-            .unwrap()
-            .league
-            .unwrap()
-            .scoreboard
-            .unwrap())
+
+        return match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.scoreboard {
+                    Some(scoreboard) => Ok(scoreboard),
+                    None => panic!(),
+                },
+                _ => panic!()
+            },
+            Err(error) => panic!("{}", error),
+        };
     }
 
     pub async fn get_league_settings(
@@ -197,14 +200,18 @@ impl Client {
             "{}/league/{}/settings",
             YAHOO_FANTASY_API_BASE_URL, league_key
         );
-        Ok(self
-            .get(url.as_str())
-            .await
-            .unwrap()
-            .league
-            .unwrap()
-            .settings
-            .unwrap())
+
+        return match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.settings {
+                    Some(settings) => Ok(settings),
+                    None => panic!(),
+                },
+                _ => panic!()
+            },
+            Err(error) => panic!("failed to fetch league settings content: {}", error),
+        };
+
     }
 
     pub async fn get_league_standings(
@@ -215,14 +222,17 @@ impl Client {
             "{}/league/{}/standings",
             YAHOO_FANTASY_API_BASE_URL, league_key
         );
-        Ok(self
-            .get(url.as_str())
-            .await
-            .unwrap()
-            .league
-            .unwrap()
-            .standings
-            .unwrap())
+
+        return match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.standings {
+                    Some(standings) => Ok(standings),
+                    None => panic!("failed to fetch league standings: missing"),
+                },
+                _ => panic!("failed to fetch league standings content: invalid content variant: ")
+            },
+            Err(error) => panic!("failed to fetch league standings content: {}", error),
+        };
     }
 
     pub async fn get_league_transactions(
@@ -233,15 +243,17 @@ impl Client {
             "{}/league/{}/transactions",
             YAHOO_FANTASY_API_BASE_URL, league_key
         );
-        Ok(self
-            .get(url.as_str())
-            .await
-            .unwrap()
-            .league
-            .unwrap()
-            .transactions
-            .unwrap()
-            .transactions)
+
+        return match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.transactions {
+                    Some(transactions) => Ok(transactions.transactions),
+                    None => Ok(vec![]),
+                },
+                _ => panic!("failed to fetch league transactions content: invalid content variant: "),
+            },
+            Err(error) => panic!("failed to fetch league transactions content: {}", error),
+        };
     }
 
     pub async fn get_game(&self, game_key: GameKey) -> Result<Game, reqwest::Error> {
@@ -250,7 +262,13 @@ impl Client {
             YAHOO_FANTASY_API_BASE_URL,
             game_key.to_string()
         );
-        Ok(self.get(url.as_str()).await.unwrap().game.unwrap())
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Game(game) => return Ok(game),
+                _ => panic!("failed to fetch game content: invalid content variant: "),
+            },
+            Err(error) => panic!("failed to fetch game content: {}", error),
+        }
     }
 
     pub async fn get_games(
@@ -270,13 +288,14 @@ impl Client {
         }
 
         let url = format!("{}/games{}", YAHOO_FANTASY_API_BASE_URL, filter);
-        Ok(self
-            .get(url.as_str())
-            .await
-            .unwrap()
-            .games
-            .map(|o| o.games)
-            .unwrap_or(vec![]))
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Games(games) => return Ok(games.games),
+                _ => panic!("failed to fetch users content: invalid content variant: "),
+            },
+            Err(error) => panic!("failed to fetch games content: {}", error),
+        }
     }
 
     pub async fn get_users(&self, use_login: bool) -> Result<Vec<User>, reqwest::Error> {
@@ -286,7 +305,14 @@ impl Client {
         }
 
         let url = format!("{}/users{}", YAHOO_FANTASY_API_BASE_URL, query);
-        Ok(self.get(url.as_str()).await.unwrap().users.unwrap().users)
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Users(users) => return Ok(users.users),
+                _ => panic!("failed to fetch users content: invalid content variant: "),
+            },
+            Err(error) => panic!("failed to fetch users content: {}", error),
+        }
     }
 
     /// league_key is {game_code}.l.{league_id}
@@ -307,7 +333,14 @@ impl Client {
             YAHOO_FANTASY_API_BASE_URL,
             league_key.to_string()
         );
-        Ok(self.get(url.as_str()).await.unwrap().league)
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => return Ok(Some(league)),
+                _ => panic!("failed to fetch league content: invalid content variant: "),
+            },
+            Err(error) => panic!("failed to fetch league content: {}", error),
+        }
     }
 
     pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, reqwest::Error> {
@@ -321,7 +354,7 @@ impl Client {
 
         let mut return_me: Vec<Team> = vec![];
 
-        if let Some(users) = content.users {
+        if let FantasyContent::Users(users) = content.content {
             for user in users.users {
                 if let Some(games) = user.games {
                     for game in games.games {

@@ -20,17 +20,23 @@ pub struct Token {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct FantasyContentWrapper {
+    #[serde(rename = "$value")]
+    pub content: FantasyContent,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "fantasy_content")]
-pub struct FantasyContent {
+#[serde(rename = "$value")]
+pub enum FantasyContent {
     #[serde(rename = "league")]
-    pub league: Option<League>,
-    pub game: Option<Game>,
+    League(League),
+    #[serde(rename = "game")]
+    Game(Game),
     #[serde(rename = "users")]
-    pub users: Option<Users>,
+    Users(Users),
     #[serde(rename = "games")]
-    pub games: Option<Games>,
+    Games(Games),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
