@@ -321,8 +321,8 @@ pub struct Team {
     draft_grade: Option<String>,
     draft_recap_url: Option<String>,
     managers: Managers,
-    team_points: TeamPoints,
-    team_standings: TeamStandings,
+    team_points: Option<TeamPoints>,
+    team_standings: Option<TeamStandings>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -394,7 +394,39 @@ pub struct Transaction {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Players {
     #[serde(rename = "player")]
-    players: Vec<Player>,
+    pub players: Vec<Player>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Player {
+    pub player_key: String,
+    pub player_id: u32,
+    pub name: PlayerName,
+    pub editorial_team_abbr: String,
+    pub display_position: String, //PlayerPosition,
+    pub position_type: String, //PositionType, I'd love to figrue out how to get these to work. I am gettings some "Unsupported operation deserialize any" error
+    pub transaction_data: TransactionData,
+}
+
+// pub struct PlayerKey {}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlayerName {
+    pub full: String,
+    pub first: String,
+    pub last: String,
+    pub ascii_first: String,
+    pub ascii_last: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TransactionData {
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub source_type: String,             // known values: team, freeagents
+    pub source_team_key: Option<String>, // will be present for a trade or drop
+    pub source_team_name: Option<String>,
+    pub destination_type: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
