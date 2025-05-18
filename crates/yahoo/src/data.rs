@@ -258,7 +258,7 @@ pub struct Game {
     game_key: u32,
     game_id: u32,
     name: String,
-    // code: GameCode,
+    code: GameCode,
     #[serde(rename = "type")]
     _type: String,
     url: String,
