@@ -39,6 +39,16 @@ pub enum FantasyContent {
     Users(Users),
     #[serde(rename = "games")]
     Games(Games),
+    #[serde(rename = "leagues")]
+    Leagues(Leagues),
+    #[serde(rename = "team")]
+    Team(Team),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Leagues {
+    #[serde(rename = "league")]
+    pub leagues: Vec<League>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -56,16 +66,18 @@ pub struct League {
     start_week: u32,
     end_week: u32,
     is_finished: u32,
+    pub players: Option<Players>,
     pub scoreboard: Option<Scoreboard>,
     pub settings: Option<Settings>,
     pub standings: Option<Standings>,
+    pub teams: Option<Teams>,
     pub transactions: Option<Transactions>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Scoreboard {
-    week: u32,
-    // matchups: Vec<Matchup>,
+    pub week: u32,
+    pub matchups: Matchups,
 }
 
 #[derive(Deserialize, Debug)]
@@ -99,22 +111,23 @@ pub struct Division {
 
 #[derive(Deserialize, Debug)]
 pub struct Standings {
-    teams: Teams,
+    pub teams: Teams,
 }
 
-// #[derive(Serialize, Deserialize)]
-// pub struct Matchup {
-//     #[serde(rename = "team")]
-//     team: Vec<Team>,
-//     #[serde(rename = "teams")]
-//     teams: Vec<Team>,
-//     #[serde(rename = "matchup_key")]
-//     matchup_key: String,
-//     #[serde(rename = "matchup_id")]
-//     matchup_id: String,
-//     #[serde(rename = "week")]
-//     week: u32,
-// }
+#[derive(Deserialize, Debug)]
+pub struct Matchups {
+    #[serde(rename = "matchup")]
+    pub matchups: Vec<Matchup>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Matchup {
+    pub week: Option<u32>,
+    pub status: String, // known values: postevent
+    pub is_tied: bool,
+    pub winner_team_key: String,
+    pub teams: Teams,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -179,6 +192,7 @@ impl Filters {
     }
 }
 
+#[derive(Clone)]
 pub enum GameKey {
     Code(GameCode),
     Id(u32),
@@ -192,6 +206,7 @@ impl std::fmt::Display for GameKey {
     }
 }
 
+#[derive(Clone)]
 pub struct LeagueKey {
     game_key: String,
     league_id: u32,
@@ -215,9 +230,9 @@ pub struct TeamKey {
     pub team_id: u32,
 }
 impl TeamKey {
-    pub fn new(league_key: LeagueKey, team_id: u32) -> Self {
+    pub fn new(league_key: &LeagueKey, team_id: u32) -> Self {
         TeamKey {
-            league_key,
+            league_key: league_key.clone(),
             team_id,
         }
     }
@@ -228,7 +243,7 @@ impl std::fmt::Display for TeamKey {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum GameCode {
     NCAAF,            // NCCAF College Football Season-long
     NFL,              // NFL Season-long
@@ -352,14 +367,14 @@ pub struct User {
 
 #[derive(Deserialize, Debug)]
 pub struct Teams {
-    #[serde(rename = "team")]
+    #[serde(rename = "team", default)]
     pub teams: Vec<Team>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Team {
     pub team_key: String,
-    pub team_id: String,
+    pub team_id: u32,
     pub name: String,
     pub is_owned_by_current_login: Option<u8>, // 0 or 1
     pub url: String,
@@ -378,11 +393,12 @@ pub struct Team {
     pub managers: Managers,
     pub team_points: Option<TeamPoints>,
     pub team_standings: Option<TeamStandings>,
+    pub roster: Option<Roster>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Managers {
-    #[serde(rename = "manager")]
+    #[serde(rename = "manager", default)]
     pub managers: Vec<Manager>,
 }
 
@@ -399,27 +415,38 @@ pub struct Manager {
 
 #[derive(Deserialize, Debug)]
 pub struct TeamPoints {
-    pub coverage_type: String, // knwon values: season
-    pub season: String,
+    pub coverage_type: String, // known values: season, week
+    pub season: Option<String>,
+    pub week: Option<i32>,
     pub total: f32,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct TeamStandings {
-    rank: u32,
-    outcome_totals: OutcomeTotals,
-    divisional_outcome_totals: OutcomeTotals,
-    streak: Streak,
-    points_for: f32,
-    points_against: f32,
+    pub rank: u32,
+    pub outcome_totals: OutcomeTotals,
+    pub divisional_outcome_totals: OutcomeTotals,
+    pub streak: Streak,
+    pub points_for: f32,
+    pub points_against: f32,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Roster {
+    pub coverage_type: String, // date or week
+    pub date: Option<String>,
+    pub week: Option<String>,
+    pub is_prescoring: Option<bool>,
+    pub is_editable: Option<bool>,
+    pub players: Players,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct OutcomeTotals {
-    wins: u32,
-    losses: u32,
-    ties: u32,
-    percentage: Option<f32>,
+    pub wins: u32,
+    pub losses: u32,
+    pub ties: u32,
+    pub percentage: Option<f32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -629,7 +656,7 @@ impl<'de> Deserialize<'de> for Transaction {
 }
 
 #[derive(Deserialize, Debug)]
-struct Players {
+pub struct Players {
     #[serde(rename = "player")]
     pub players: Vec<Player>,
 }
@@ -639,10 +666,48 @@ pub struct Player {
     pub player_key: String,
     pub player_id: u32,
     pub name: PlayerName,
-    pub editorial_team_abbr: String,
+    pub url: String,                      // https://sports.yahoo.com/nfl/players/7241
+    pub status: Option<String>,           // NA
+    pub status_full: Option<String>,      // Inactive: Coach's Decision or Not on Roster
+    pub editorial_player_key: String,     // nfl.p.7241
+    pub editorial_team_key: String,       // nfl.t.20
+    pub editorial_team_full_name: String, // New York Jets
+    pub editorial_team_abbr: String,      // NYJ
+    pub editorial_team_url: String,       // https://sports.yahoo.com/nfl/teams/ny-jets/
+    pub bye_weeks: Weeks,
+    pub is_keeper: KeeperSummary,
+    pub uniform_number: Option<String>, // can be an empty string
     pub display_position: PlayerPositions, //PlayerPosition,
+    pub headshot: Headshot,
+    pub image_url: String,
+    pub is_undroppable: bool,
     pub position_type: PositionType,
-    pub transaction_data: TransactionData,
+    // pub eligible_positions:
+    // pub eligible_positions_to_add:
+    pub has_player_notes: Option<bool>,
+    pub player_notes_last_timestamp: Option<i64>, //>1747583890</player_notes_last_timestamp>
+    pub transaction_data: Option<TransactionData>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Weeks {
+    #[serde(rename = "week")]
+    pub weeks: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct KeeperSummary {
+    // #[serde(default)]
+    pub status: String, // Option<bool>,
+    pub cost: String,   // Option<u32>,
+    // #[serde(default)]
+    pub kept: String, // Option<bool>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Headshot {
+    pub url: String,
+    pub size: String,
 }
 
 // pub struct PlayerKey {}
@@ -748,6 +813,24 @@ impl<'de> Deserialize<'de> for PlayerPositions {
         deserializer.deserialize_any(PlayerPositionsVisitor)
     }
 }
+impl std::fmt::Display for PlayerPositions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlayerPositions::One(position) => write!(f, "{}", position),
+            PlayerPositions::Many(positions) => {
+                write!(
+                    f,
+                    "{}",
+                    positions
+                        .iter()
+                        .map(|pos| pos.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+            }
+        }
+    }
+}
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum PlayerPosition {
@@ -757,6 +840,18 @@ pub enum PlayerPosition {
     WR,
     K,
     DEF,
+}
+impl std::fmt::Display for PlayerPosition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlayerPosition::QB => write!(f, "QB"),
+            PlayerPosition::RB => write!(f, "RB"),
+            PlayerPosition::TE => write!(f, "TE"),
+            PlayerPosition::WR => write!(f, "WR"),
+            PlayerPosition::K => write!(f, "K"),
+            PlayerPosition::DEF => write!(f, "DEF"),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash)]

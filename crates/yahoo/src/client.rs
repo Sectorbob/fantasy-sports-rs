@@ -1,7 +1,8 @@
 use crate::data::{
-    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Scoreboard,
-    Settings, Standings, Team, Token, Transaction, User,
+    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Player,
+    Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token, Transaction, User,
 };
+use chrono::NaiveDate;
 use core::str;
 use itertools::join;
 use quick_xml::de::from_str;
@@ -178,13 +179,27 @@ impl Client {
         };
     }
 
+    /// This fetches the scorebaord for the league. It defaults to the final week or day.
+    ///
+    /// use date to filter in NBA, NHL league
+    /// use week to filter in NFL league
     pub async fn get_league_scoreboard(
         &self,
         league_key: &LeagueKey,
+        week: Option<i32>,
+        date: Option<NaiveDate>,
     ) -> Result<Scoreboard, reqwest::Error> {
         let url = format!(
-            "{}/league/{}/scoreboard",
-            YAHOO_FANTASY_API_BASE_URL, league_key
+            "{}/league/{}/scoreboard{}",
+            YAHOO_FANTASY_API_BASE_URL,
+            league_key,
+            if let Some(week) = week {
+                format!(";week={}", week)
+            } else if let Some(date) = date {
+                format!(";date={}", date)
+            } else {
+                String::from("")
+            }
         );
 
         return match self.get(url.as_str()).await {
@@ -201,7 +216,7 @@ impl Client {
 
     pub async fn get_league_settings(
         &self,
-        league_key: LeagueKey,
+        league_key: &LeagueKey,
     ) -> Result<Settings, reqwest::Error> {
         let url = format!(
             "{}/league/{}/settings",
@@ -376,35 +391,90 @@ impl Client {
             }
         }
 
-        // content.users.map(|it| {
-        //     it.users.iter().map(|user| {
-        //         user.games.map(|games| {
-        //             games.games.iter().map(|game| {
-        //                 game.teams.map(|teams| {
-        //                     teams.teams.iter().map(|team| {
-        //                         return_me.push(*team.to_owned());
-        //                     })
-        //                 })
-        //             }).collect()
-        //         })
-        //     })
-        // });
-
         Ok(return_me)
+    }
 
-        // Ok(
-        //     .users
-        //     .unwrap()
-        //     .users
-        //     .first()
-        //     .unwrap().to_owned()
-        //     .games
-        //     .unwrap()
-        //     .games
-        //     .first()
-        //     .unwrap().to_owned()
-        //     .teams
-        //     .unwrap()
-        //     .teams.)
+    pub async fn get_teams_in_league(
+        &self,
+        league_key: &LeagueKey,
+    ) -> Result<Vec<Team>, reqwest::Error> {
+        let url = format!("{}/league/{}/teams", YAHOO_FANTASY_API_BASE_URL, league_key,);
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.teams {
+                    Some(teams) => Ok(teams.teams),
+                    None => Ok(vec![]),
+                },
+                _ => panic!("unsupported thinggggasdfasdf"),
+            },
+            Err(_) => todo!(),
+        }
+    }
+
+    pub async fn get_players_for_league(
+        &self,
+        league_key: &LeagueKey,
+    ) -> Result<Vec<Player>, reqwest::Error> {
+        let url = format!(
+            "{}/league/{}/players",
+            YAHOO_FANTASY_API_BASE_URL, league_key,
+        );
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.players {
+                    Some(players) => Ok(players.players),
+                    None => Ok(vec![]),
+                },
+                _ => panic!("got another fantasy content variant than expected"),
+            },
+            Err(error) => panic!("failed to fetch player in league {}: {}", league_key, error),
+        }
+    }
+
+    pub async fn get_players_for_leagues(
+        &self,
+        league_keys: Vec<&LeagueKey>,
+    ) -> Result<Vec<League>, reqwest::Error> {
+        let league_keys_str = join(league_keys, ",");
+
+        let url = format!(
+            "{}/leagues;league_keys={}/players",
+            YAHOO_FANTASY_API_BASE_URL, league_keys_str,
+        );
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Leagues(leagues) => Ok(leagues.leagues),
+                _ => panic!("got another fantasy content variant than expected"),
+            },
+            Err(error) => panic!(
+                "failed to fetch players in leagues {}: {}",
+                league_keys_str, error
+            ),
+        }
+    }
+
+    /// Documentation: https://developer.yahoo.com/fantasysports/guide/#roster-resource
+    ///
+    /// For NFL, you can specify a week parameter to retrieve a specific week – otherwise it will default to the current roster
+    /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;week=10
+    ///
+    /// For MLB, NHL, or NBA, you can specify a date parameter to retrieve a specific date – otherwise it will default to today’s roster.
+    /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
+    pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, reqwest::Error> {
+        let url = format!("{}/team/{}/roster", YAHOO_FANTASY_API_BASE_URL, team_key,);
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Team(team) => match team.roster {
+                    Some(roster) => Ok(roster),
+                    None => panic!("asdfasdfasdfasdfffffff"),
+                },
+                _ => panic!("got another fantasy content variant than expected"),
+            },
+            Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
+        }
     }
 }

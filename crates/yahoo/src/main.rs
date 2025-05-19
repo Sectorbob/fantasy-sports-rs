@@ -1,12 +1,12 @@
 mod client;
 mod data;
 
-use chrono::DateTime;
+use chrono::{DateTime};
 use client::Client;
-use data::{Game, GameCode, GameKey, LeagueKey, Token, Transaction};
+use data::{GameCode, GameKey, LeagueKey, TeamStandings, Token, Transaction};
 use serde_json;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     error::Error,
     io::{self, BufWriter, Write},
@@ -15,7 +15,7 @@ use std::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let enable_auto_token_refresh = true;
-    let enable_check_users = true;
+    let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
     let enable_check_teams = false;
@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let enable_check_league_settings = false;
     let enable_check_league_standings = false;
     let enable_league_transactions = false;
+    let enable_check_players = false;
 
     let yahoo_client_id = env::var("YAHOO_CLIENT_ID").unwrap();
     let yahoo_redirect_uri = env::var("YAHOO_REDIRECT_URI").unwrap();
@@ -96,11 +97,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if enable_check_league {
         let league = client.get_league(&ecr_2017).await.unwrap();
         println!("League: {:#?}", league);
+
+        let mut team_standings: HashMap<String, TeamStandings> = HashMap::new();
+
+        for team in client
+            .get_league_standings(&ecr_2017)
+            .await
+            .unwrap()
+            .teams
+            .teams
+        {
+            if let Some(standings) = team.team_standings {
+                team_standings.insert(team.team_key, standings);
+            }
+        }
+
+        let teams = client.get_teams_in_league(&ecr_2017).await.unwrap();
+        println!("Teams: {:#?}", teams);
+        for team in teams {
+            println!(" {}", team.name);
+            if let Some(team_points) = team.team_points {
+                println!("   Points {:?}", team_points);
+            }
+            if let Some(standings) = team_standings.get(&team.team_key) {
+                println!(
+                    "   Standings Rank={} Record={}-{}-{}",
+                    standings.rank,
+                    standings.outcome_totals.wins,
+                    standings.outcome_totals.losses,
+                    standings.outcome_totals.ties,
+                );
+            }
+
+            // let roster = client.get_roster_for_team(&TeamKey::new(&ecr_2017, team.team_id)).await.unwrap();
+            // println!("   Roster: ");
+            // for player in roster.players.players {
+            //     println!("     {} ({})", player.name.full, player.display_position);
+            // }
+        }
+
+        // let scoreboard = client.get_league_scoreboard(&ecr_2017).await.unwrap();
+        // println!("Scorebaord Week: {}", scoreboard.)
     }
 
     if enable_check_league_scoreboard {
         let scoreboard = client
-            .get_league_scoreboard(&public_league_key)
+            .get_league_scoreboard(&public_league_key, None, None)
             .await
             .unwrap();
         println!("Scoreboard: {:#?}", scoreboard);
@@ -108,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if enable_check_league_settings {
         let league_settings = client
-            .get_league_settings(LeagueKey::new("371", 20028))
+            .get_league_settings(&LeagueKey::new("371", 20028))
             .await
             .unwrap();
         println!("League Settings: {:#?}", league_settings);
@@ -125,6 +167,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap();
         fancy_navigate_transactions(&transactions);
     }
+
+    if enable_check_players {
+        let players = client.get_players_for_league(&ecr_2017).await.unwrap();
+
+        let mut player_statuses: HashSet<String> = HashSet::new();
+        for player in players {
+            if let Some(status) = player.status {
+                player_statuses.insert(status);
+            }
+        }
+        println!("Players Statuses: {:#?}", player_statuses);
+        // println!("Players: {:#?}", players);
+    }
+
     Ok(())
 }
 
