@@ -180,7 +180,7 @@ impl Client {
 
     pub async fn get_league_scoreboard(
         &self,
-        league_key: LeagueKey,
+        league_key: &LeagueKey,
     ) -> Result<Scoreboard, reqwest::Error> {
         let url = format!(
             "{}/league/{}/scoreboard",
@@ -334,7 +334,7 @@ impl Client {
     /// This function will return an error if .
     pub async fn get_league(
         &self,
-        league_key: LeagueKey,
+        league_key: &LeagueKey,
     ) -> Result<Option<League>, reqwest::Error> {
         let url = format!(
             "{}/league/{}",

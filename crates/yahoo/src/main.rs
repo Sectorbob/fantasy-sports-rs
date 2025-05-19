@@ -3,18 +3,28 @@ mod data;
 
 use chrono::DateTime;
 use client::Client;
-use data::{GameCode, GameKey, LeagueKey, Player, PlayerName, Token, Transaction, Transactions};
+use data::{Game, GameCode, GameKey, LeagueKey, Token, Transaction};
 use serde_json;
 use std::{
     collections::HashSet,
     env,
     error::Error,
-    fmt,
     io::{self, BufWriter, Write},
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let enable_auto_token_refresh = true;
+    let enable_check_users = true;
+    let enable_check_game = false;
+    let enable_check_games = false;
+    let enable_check_teams = false;
+    let enable_check_league = false;
+    let enable_check_league_scoreboard = false;
+    let enable_check_league_settings = false;
+    let enable_check_league_standings = false;
+    let enable_league_transactions = false;
+
     let yahoo_client_id = env::var("YAHOO_CLIENT_ID").unwrap();
     let yahoo_redirect_uri = env::var("YAHOO_REDIRECT_URI").unwrap();
     let yahoo_token_file = env::var("YAHOO_TOKEN_FILE").unwrap();
@@ -27,57 +37,94 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => perform_oauth_flow(&mut client).await,
     }
 
-    let new_token = client.refresh_token().await.unwrap();
-    save_token_file(&yahoo_token_file, new_token);
-
-    // let users = client.get_users(true).await.unwrap();
-    // println!("Users: {:#?}", users);
-
-    // let games = client
-    //     .get_games(
-    //         vec![GameCode::NFL],
-    //         vec![
-    //             "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018",
-    //             "2019", "2020",
-    //         ],
-    //     )
-    //     .await
-    //     .unwrap();
-
-    // println!("Games: {:#?}", games);
-
-    // client.get("https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1;/leagues").await; // can't do this
-
-    // let teams = client.get_teams_for_user(GameKey::Id(371)).await.unwrap();
-    // println!("Teams: {:#?}", teams);
-
-    // let league = client
-    //     .get_league(LeagueKey::new("371", 20028))
-    //     .await
-    //     .unwrap();
-    // println!("League: {:#?}", league);
-
-    // let league_settings = client
-    //     .get_league_settings(LeagueKey::new("371", 20028))
-    //     .await
-    //     .unwrap();
-    // println!("League Settings: {:#?}", league_settings);
+    if enable_auto_token_refresh {
+        let new_token = client.refresh_token().await.unwrap();
+        save_token_file(&yahoo_token_file, new_token);
+    }
 
     let public_league_key = LeagueKey::new(GameKey::Id(223).to_string().as_str(), 431);
-    // let ecr_2017 = LeagueKey::new("371", 20028);
+    let ecr_2017 = LeagueKey::new("371", 20028);
 
-    // let league_standings = client
-    //     .get_league_standings(&public_league_key)
-    //     .await
-    //     .unwrap();
-    // println!("League Standings: {:#?}", league_standings);
+    if enable_check_users {
+        let users = client.get_users(true).await.unwrap();
+        println!("Users: {:#?}", users);
+    }
 
-    let transactions = client
-        .get_league_transactions(&public_league_key)
-        .await
-        .unwrap();
-    fancy_navigate_transactions(&transactions);
+    if enable_check_games {
+        let mut seasons = vec![];
+        for season in 2009..2025 {
+            seasons.push(format!("{}", season));
+        }
 
+        let games = client
+            .get_games(
+                vec![GameCode::NFL],
+                seasons.iter().map(|s| s.as_str()).collect(),
+            )
+            .await
+            .unwrap();
+
+        let mut game_codes: HashSet<&GameCode> = HashSet::new();
+        for game in games.iter() {
+            game_codes.insert(&game.code);
+        }
+
+        println!(
+            "Games: {:#?}",
+            games // .iter()
+                  // .filter(|item| matches!(item.code, GameCode::OTHER(_)))
+                  // .collect::<Vec<&Game>>()
+        );
+        println!(
+            "Game Codes: {:#?}",
+            game_codes // .iter()
+                       // .filter(|item| matches!(item, GameCode::OTHER(_)))
+                       // .collect::<Vec<&&GameCode>>()
+        );
+    }
+
+    if enable_check_game {
+        let game = client.get_game(GameKey::Code(GameCode::NFL)).await.unwrap();
+        println!("Game: {:#?}", game);
+    }
+
+    if enable_check_teams {
+        let teams = client.get_teams_for_user(GameKey::Id(371)).await.unwrap();
+        println!("Teams: {:#?}", teams);
+    }
+
+    if enable_check_league {
+        let league = client.get_league(&ecr_2017).await.unwrap();
+        println!("League: {:#?}", league);
+    }
+
+    if enable_check_league_scoreboard {
+        let scoreboard = client
+            .get_league_scoreboard(&public_league_key)
+            .await
+            .unwrap();
+        println!("Scoreboard: {:#?}", scoreboard);
+    }
+
+    if enable_check_league_settings {
+        let league_settings = client
+            .get_league_settings(LeagueKey::new("371", 20028))
+            .await
+            .unwrap();
+        println!("League Settings: {:#?}", league_settings);
+    }
+
+    if enable_check_league_standings {
+        check_league_standings(&client, &public_league_key).await;
+    }
+
+    if enable_league_transactions {
+        let transactions = client
+            .get_league_transactions(&public_league_key)
+            .await
+            .unwrap();
+        fancy_navigate_transactions(&transactions);
+    }
     Ok(())
 }
 
@@ -121,6 +168,11 @@ fn receive_auth_code_from_stdin() -> String {
     io::stdin().read_line(&mut auth_code).unwrap();
 
     auth_code.trim().to_string()
+}
+
+async fn check_league_standings(client: &Client, league_key: &LeagueKey) {
+    let league_standings = client.get_league_standings(league_key).await.unwrap();
+    println!("League Standings: {:#?}", league_standings);
 }
 
 fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {

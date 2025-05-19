@@ -123,6 +123,8 @@ pub enum GameType {
     PickemTeam,
     PickemGroup,
     PickemTeamList,
+    Prediction,
+    Squares,
 }
 
 pub struct Filters {
@@ -226,62 +228,107 @@ impl std::fmt::Display for TeamKey {
     }
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum GameCode {
-    NFL,
-    NHL,
-    NBA,
-    MLB,
-    EPL,
-    MLS,
-    MLL,
-    NCAAF,
-    NCAAB,
+    NCAAF,            // NCCAF College Football Season-long
+    NFL,              // NFL Season-long
+    NHL,              // NHL Season-long
+    NBA,              // NBA Season-long
+    MLB,              // MLB Season-long
+    EPLPickem,        // sogb - english premier league pickem
+    BundesligaPickem, // sode - german bundesliga pickem
+    LaLigaPickem,     // soes - spanish la liga pickem
+    SerieAPickem,     // soit - italian Serie A pickem
+    MLSPickem,        // sous - Major League Soccer Pickem
+    NFLPickem,        // NFL Pickem
+    NFLSurvival,      // NFL Survivor Pool
+    NCAAFPickem,      // NCAAF Pickem
+    PGAPickem,        // PGA Tour Pickem
+    NASCARPickem,     // NASCAR Pickem
+    MLBPlus,          // ran from 2002-2009
+    NFLPlus,          // ran from 2001-2009
+    OTHER(String),
+}
+impl<'de> Deserialize<'de> for GameCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "nfl" => Ok(GameCode::NFL),
+            "nflp" => Ok(GameCode::NFLPickem),
+            "nfls" => Ok(GameCode::NFLSurvival),
+            "nhl" => Ok(GameCode::NHL),
+            "nba" => Ok(GameCode::NBA),
+            "mlb" => Ok(GameCode::MLB),
+            "sogb" => Ok(GameCode::EPLPickem),
+            "cfb" => Ok(GameCode::NCAAF),
+            "ncaaf" => Ok(GameCode::NCAAFPickem),
+            "pga" => Ok(GameCode::PGAPickem),
+            "nascar" => Ok(GameCode::NASCARPickem),
+            "pmlb" => Ok(GameCode::MLBPlus),
+            "pnfl" => Ok(GameCode::NFLPlus),
+            "sode" => Ok(GameCode::BundesligaPickem),
+            "soes" => Ok(GameCode::LaLigaPickem),
+            "soit" => Ok(GameCode::SerieAPickem),
+            "sous" => Ok(GameCode::MLSPickem),
+            other => Ok(GameCode::OTHER(other.to_string())),
+        }
+    }
 }
 impl fmt::Display for GameCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GameCode::NFL => write!(f, "nfl"),
+            GameCode::NFLPickem => write!(f, "nflp"),
             GameCode::NHL => write!(f, "nhl"),
             GameCode::NBA => write!(f, "nba"),
             GameCode::MLB => write!(f, "mlb"),
-            GameCode::EPL => write!(f, "epl"),
-            GameCode::MLS => write!(f, "mls"),
-            GameCode::MLL => write!(f, "mll"),
-            GameCode::NCAAF => write!(f, "ncaaf"),
-            GameCode::NCAAB => write!(f, "ncaab"),
+            GameCode::EPLPickem => write!(f, "sogb"),
+            GameCode::BundesligaPickem => write!(f, "sode"),
+            GameCode::LaLigaPickem => write!(f, "soes"),
+            GameCode::SerieAPickem => write!(f, "soit"),
+            GameCode::MLSPickem => write!(f, "sous"),
+            GameCode::NCAAF => write!(f, "cfb"),
+            GameCode::NCAAFPickem => write!(f, "ncaaf"),
+            GameCode::PGAPickem => write!(f, "pga"),
+            GameCode::NASCARPickem => write!(f, "nascar"),
+            GameCode::NFLSurvival => write!(f, "nfls"),
+            GameCode::MLBPlus => write!(f, "pmlb"),
+            GameCode::NFLPlus => write!(f, "pnfl"),
+            GameCode::OTHER(str) => write!(f, "{}", str),
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Game {
-    game_key: u32,
-    game_id: u32,
-    name: String,
-    code: GameCode,
+    pub game_key: u32,
+    pub game_id: u32,
+    pub name: String,
+    pub code: GameCode,
     #[serde(rename = "type")]
-    _type: String,
-    url: String,
-    season: String,
-    is_registration_over: u32,
-    is_game_over: u32,
-    is_offseason: u32,
+    _type: GameType,
+    pub url: String,
+    pub season: String,
+    pub is_registration_over: Option<bool>,
+    pub is_game_over: Option<bool>,
+    pub is_offseason: Option<bool>,
     pub teams: Option<Teams>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "games")]
 pub struct Games {
-    #[serde(rename = "game")]
+    #[serde(rename = "game", default)]
     pub games: Vec<Game>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "users")]
 pub struct Users {
-    #[serde(rename = "user")]
+    #[serde(rename = "user", default)]
     pub users: Vec<User>,
 }
 
@@ -289,7 +336,7 @@ pub struct Users {
 #[derive(Deserialize, Debug)]
 pub struct User {
     // user_id: String,
-    guid: String,
+    pub guid: String,
     pub games: Option<Games>,
     // nickname: String,
     // profile_url: String,
@@ -311,50 +358,50 @@ pub struct Teams {
 
 #[derive(Deserialize, Debug)]
 pub struct Team {
-    team_key: String,
-    team_id: String,
-    name: String,
-    is_owned_by_current_login: Option<u8>, // 0 or 1
-    url: String,
+    pub team_key: String,
+    pub team_id: String,
+    pub name: String,
+    pub is_owned_by_current_login: Option<u8>, // 0 or 1
+    pub url: String,
     // team_logos: TeamLogos,
-    division_id: Option<u32>,
-    waiver_priority: u32,
-    faab_balance: Option<u32>,
-    number_of_moves: u32,
-    number_of_trades: u32,
+    pub division_id: Option<u32>,
+    pub waiver_priority: u32,
+    pub faab_balance: Option<u32>,
+    pub number_of_moves: u32,
+    pub number_of_trades: u32,
     // roster_adds: RosterAdds,
-    clinched_playoffs: Option<u8>, // 0 or 1
-    league_scoring_type: String,   // knwon values: head
-    has_draft_grade: u8,           // 0 or 1
-    draft_grade: Option<String>,
-    draft_recap_url: Option<String>,
-    managers: Managers,
-    team_points: Option<TeamPoints>,
-    team_standings: Option<TeamStandings>,
+    pub clinched_playoffs: Option<bool>, // 0 or 1
+    pub league_scoring_type: String,     // knwon values: head
+    pub has_draft_grade: u8,             // 0 or 1
+    pub draft_grade: Option<String>,
+    pub draft_recap_url: Option<String>,
+    pub managers: Managers,
+    pub team_points: Option<TeamPoints>,
+    pub team_standings: Option<TeamStandings>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Managers {
     #[serde(rename = "manager")]
-    managers: Vec<Manager>,
+    pub managers: Vec<Manager>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Manager {
-    manager_id: u32,
-    nickname: String,
-    guid: String,
-    is_current_login: Option<u8>, // 0 or 1
-    image_url: Option<String>,
-    felo_score: Option<u32>,
-    felo_tier: Option<String>, // known values: gold
+    pub manager_id: u32,
+    pub nickname: String,
+    pub guid: String,
+    pub is_current_login: Option<u8>, // 0 or 1
+    pub image_url: Option<String>,
+    pub felo_score: Option<u32>,
+    pub felo_tier: Option<String>, // known values: gold
 }
 
 #[derive(Deserialize, Debug)]
 pub struct TeamPoints {
-    coverage_type: String, // knwon values: season
-    season: String,
-    total: f32,
+    pub coverage_type: String, // knwon values: season
+    pub season: String,
+    pub total: f32,
 }
 
 #[derive(Deserialize, Debug)]
