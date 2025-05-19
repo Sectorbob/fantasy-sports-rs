@@ -1,12 +1,15 @@
 mod client;
 mod data;
 
+use chrono::DateTime;
 use client::Client;
-use data::{GameCode, GameKey, LeagueKey, Token};
+use data::{GameCode, GameKey, LeagueKey, Player, PlayerName, Token, Transaction, Transactions};
 use serde_json;
 use std::{
+    collections::HashSet,
     env,
     error::Error,
+    fmt,
     io::{self, BufWriter, Write},
 };
 
@@ -24,8 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => perform_oauth_flow(&mut client).await,
     }
 
-    // let new_token = client.refresh_token().await.unwrap();
-    // save_token_file(&yahoo_token_file, new_token);
+    let new_token = client.refresh_token().await.unwrap();
+    save_token_file(&yahoo_token_file, new_token);
 
     // let users = client.get_users(true).await.unwrap();
     // println!("Users: {:#?}", users);
@@ -54,26 +57,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .unwrap();
     // println!("League: {:#?}", league);
 
-    // let league = client
+    // let league_settings = client
     //     .get_league_settings(LeagueKey::new("371", 20028))
     //     .await
     //     .unwrap();
-    // println!("League Settings: {:#?}", league);
+    // println!("League Settings: {:#?}", league_settings);
 
     let public_league_key = LeagueKey::new(GameKey::Id(223).to_string().as_str(), 431);
     // let ecr_2017 = LeagueKey::new("371", 20028);
 
-    // let league = client
-    //     .get_league_standings(public_league_key)
+    // let league_standings = client
+    //     .get_league_standings(&public_league_key)
     //     .await
     //     .unwrap();
-    // println!("League Standings: {:#?}", league);
+    // println!("League Standings: {:#?}", league_standings);
 
     let transactions = client
-        .get_league_transactions(public_league_key)
+        .get_league_transactions(&public_league_key)
         .await
         .unwrap();
-    println!("League Transactions: {:#?}", transactions);
+    fancy_navigate_transactions(&transactions);
 
     Ok(())
 }
@@ -88,7 +91,13 @@ fn load_token_file(file: &String) -> Result<Token, Box<dyn Error>> {
 }
 
 fn save_token_file(file: &String, token: Token) {
-    let f = std::fs::OpenOptions::new().write(true).open(file).unwrap();
+    // d
+
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true) // creates if not exists or opens
+        .open(file)
+        .unwrap();
     let writer = BufWriter::new(f);
 
     // Read the JSON contents of the file as an instance of `Token`.
@@ -112,4 +121,136 @@ fn receive_auth_code_from_stdin() -> String {
     io::stdin().read_line(&mut auth_code).unwrap();
 
     auth_code.trim().to_string()
+}
+
+fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
+    println!("League Transactions:");
+    let mut player_positions: HashSet<&data::PlayerPosition> = HashSet::new();
+    let mut player_position_types = HashSet::new();
+
+    for transaction in transactions {
+        let transaction_time = DateTime::from_timestamp(*transaction.timestamp(), 0).unwrap();
+        // println!("{}: {}", transaction.key(), transaction_time);
+        match transaction {
+            data::Transaction::Commish {
+                transaction_key,
+                transaction_id,
+                status,
+                timestamp,
+            } => {
+                //println!("Commish({}): {}", transaction_key, transaction_time)
+            }
+            data::Transaction::Add {
+                transaction_key,
+                transaction_id,
+                status,
+                timestamp,
+                players,
+            } => {
+                if let Some(players) = players {
+                    for player in players {
+                        match &player.display_position {
+                            data::PlayerPositions::One(position) => {
+                                player_positions.insert(position);
+                            }
+                            data::PlayerPositions::Many(positions) => {
+                                positions.into_iter().for_each(|pos| {
+                                    player_positions.insert(pos);
+                                });
+                            }
+                        }
+                        player_position_types.insert(&player.position_type);
+                    }
+                }
+            }
+            data::Transaction::Drop {
+                transaction_key,
+                transaction_id,
+                status,
+                timestamp,
+                players,
+            } => {
+                if let Some(players) = players {
+                    for player in players {
+                        match &player.display_position {
+                            data::PlayerPositions::One(position) => {
+                                player_positions.insert(position);
+                            }
+                            data::PlayerPositions::Many(positions) => {
+                                positions.into_iter().for_each(|pos| {
+                                    player_positions.insert(pos);
+                                });
+                            }
+                        }
+                        player_position_types.insert(&player.position_type);
+                    }
+                }
+            }
+            data::Transaction::AddDrop {
+                transaction_key,
+                transaction_id,
+                status,
+                timestamp,
+                players,
+            } => {
+                if let Some(players) = players {
+                    for player in players {
+                        match &player.display_position {
+                            data::PlayerPositions::One(position) => {
+                                player_positions.insert(position);
+                            }
+                            data::PlayerPositions::Many(positions) => {
+                                positions.into_iter().for_each(|pos| {
+                                    player_positions.insert(pos);
+                                });
+                            }
+                        }
+                        player_position_types.insert(&player.position_type);
+                    }
+                }
+            }
+            data::Transaction::Trade { players, .. } => {
+                // println!("trade: {:#?}", transaction);
+                if let Some(players) = players {
+                    for player in players {
+                        match &player.display_position {
+                            data::PlayerPositions::One(position) => {
+                                player_positions.insert(position);
+                            }
+                            data::PlayerPositions::Many(positions) => {
+                                positions.into_iter().for_each(|pos| {
+                                    player_positions.insert(pos);
+                                });
+                            }
+                        }
+                        player_position_types.insert(&player.position_type);
+                    }
+                }
+            }
+            data::Transaction::Other {
+                type_name,
+                transaction_key,
+                transaction_id,
+                status,
+                timestamp,
+                players,
+                rest,
+            } => println!("Other({}): {:#?}", type_name, rest),
+        }
+        // if let Some(players) = transaction.players {
+
+        //     for player in players.players {
+        //         player_positions.insert(player.display_position);
+        //         // player_position_types.insert(player.position_type);
+        //     }
+
+        // }
+        // if transaction._type != "commish" {
+        //     println!("{:#?}", transaction);
+        // }
+
+        // println!("{:#?}", transaction);
+        println!("Player Positions:      {:#?}", player_positions);
+        // println!("Player Position Types: {:#?}", player_position_types);
+    }
 }

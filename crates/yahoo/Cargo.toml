@@ -6,6 +6,7 @@ exclude = ["notes/*"]
 authors = ["Sectorbob"]
 
 [dependencies]
+chrono = "0.4.41"
 itertools = "0.14.0"
 pkce = "0.2.0" # For OAuth2
 quick-xml = { version = "0.37.5", features = ["serialize"] }

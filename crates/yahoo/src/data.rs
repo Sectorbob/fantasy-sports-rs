@@ -1,13 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{self, IntoDeserializer, MapAccess, Visitor},
+};
 use std::fmt;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename = "yahoo:error")]
 pub struct Error {
     #[serde(rename = "description")]
     // #[serde(rename = "yahoo:description")]
     pub description: String,
-
     pub detail: Option<String>,
 }
 
@@ -20,13 +22,13 @@ pub struct Token {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub(crate) struct FantasyContentWrapper {
     #[serde(rename = "$value")]
     pub content: FantasyContent,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(rename = "$value")]
 pub enum FantasyContent {
     #[serde(rename = "league")]
@@ -39,7 +41,7 @@ pub enum FantasyContent {
     Games(Games),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct League {
     league_key: String,
     league_id: String,
@@ -60,13 +62,13 @@ pub struct League {
     pub transactions: Option<Transactions>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Scoreboard {
     week: u32,
     // matchups: Vec<Matchup>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Settings {
     draft_type: String,   // known values: live
     scoring_type: String, // known values: head
@@ -83,19 +85,19 @@ pub struct Settings {
     divisions: Divisions,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Divisions {
     #[serde(rename = "division")]
     pub divisions: Vec<Division>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Division {
     division_id: u32,
     name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Standings {
     teams: Teams,
 }
@@ -114,7 +116,7 @@ pub struct Standings {
 //     week: u32,
 // }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub enum GameType {
     Full,
@@ -224,7 +226,7 @@ impl std::fmt::Display for TeamKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum GameCode {
     NFL,
@@ -253,7 +255,7 @@ impl fmt::Display for GameCode {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Game {
     game_key: u32,
     game_id: u32,
@@ -269,14 +271,14 @@ pub struct Game {
     pub teams: Option<Teams>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(rename = "games")]
 pub struct Games {
     #[serde(rename = "game")]
     pub games: Vec<Game>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(rename = "users")]
 pub struct Users {
     #[serde(rename = "user")]
@@ -284,7 +286,7 @@ pub struct Users {
 }
 
 //region User Resource
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct User {
     // user_id: String,
     guid: String,
@@ -301,13 +303,13 @@ pub struct User {
 
 //endregion
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Teams {
     #[serde(rename = "team")]
     pub teams: Vec<Team>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Team {
     team_key: String,
     team_id: String,
@@ -331,13 +333,13 @@ pub struct Team {
     team_standings: Option<TeamStandings>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Managers {
     #[serde(rename = "manager")]
     managers: Vec<Manager>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Manager {
     manager_id: u32,
     nickname: String,
@@ -348,14 +350,14 @@ pub struct Manager {
     felo_tier: Option<String>, // known values: gold
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct TeamPoints {
     coverage_type: String, // knwon values: season
     season: String,
     total: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct TeamStandings {
     rank: u32,
     outcome_totals: OutcomeTotals,
@@ -365,7 +367,7 @@ pub struct TeamStandings {
     points_against: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct OutcomeTotals {
     wins: u32,
     losses: u32,
@@ -373,50 +375,232 @@ pub struct OutcomeTotals {
     percentage: Option<f32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Streak {
     #[serde(rename = "type")]
     _type: String,
     value: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Transactions {
     #[serde(rename = "transaction")]
     pub transactions: Vec<Transaction>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Transaction {
-    transaction_key: String,
-    transaction_id: u32,
-    #[serde(rename = "type")]
-    _type: String, // known values: commish, add, drop, add/drop, pending_trade
-    status: String, // known values: successful
-    timestamp: u64, // looks to be unix epoch seconds
-    players: Option<Players>,
+#[derive(Debug)]
+pub enum Transaction {
+    Commish {
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+    },
+    Add {
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+        players: Option<Vec<Player>>,
+    },
+    Drop {
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+        players: Option<Vec<Player>>,
+    },
+    AddDrop {
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+        players: Option<Vec<Player>>,
+    },
+    Trade {
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+        players: Option<Vec<Player>>,
+    },
+    Other {
+        type_name: String,
+        transaction_key: String,
+        transaction_id: u32,
+        status: String,
+        timestamp: i64,
+        players: Option<Vec<Player>>,
+        rest: Vec<(String, String)>,
+    },
+}
+impl Transaction {
+    pub fn key(&self) -> String {
+        match self {
+            Transaction::Commish {
+                transaction_key, ..
+            } => transaction_key.clone(),
+            Transaction::Add {
+                transaction_key, ..
+            } => transaction_key.clone(),
+            Transaction::Drop {
+                transaction_key, ..
+            } => transaction_key.clone(),
+            Transaction::Other {
+                transaction_key, ..
+            } => transaction_key.clone(),
+            Transaction::AddDrop {
+                transaction_key, ..
+            } => transaction_key.clone(),
+            Transaction::Trade {
+                transaction_key, ..
+            } => transaction_key.clone(),
+        }
+    }
+    pub fn timestamp(&self) -> &i64 {
+        match self {
+            Transaction::Commish { timestamp, .. } => timestamp,
+            Transaction::Add { timestamp, .. } => timestamp,
+            Transaction::Drop { timestamp, .. } => timestamp,
+            Transaction::Other { timestamp, .. } => timestamp,
+            Transaction::AddDrop { timestamp, .. } => timestamp,
+            Transaction::Trade { timestamp, .. } => timestamp,
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Transaction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TransactionVisitor;
+
+        impl<'de> Visitor<'de> for TransactionVisitor {
+            type Value = Transaction;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("Transaction struct")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Transaction, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut tx_type = None;
+                let mut transaction_key = None;
+                let mut transaction_id = None;
+                let mut status = None;
+                let mut timestamp = None;
+                let mut players = None;
+                let mut rest = Vec::new();
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "type" => tx_type = Some(map.next_value::<String>()?),
+                        "transaction_key" => transaction_key = Some(map.next_value::<String>()?),
+                        "transaction_id" => transaction_id = Some(map.next_value::<u32>()?),
+                        "status" => status = Some(map.next_value::<String>()?),
+                        "timestamp" => timestamp = Some(map.next_value::<i64>()?),
+                        "players" => players = Some(map.next_value::<Players>()?),
+                        // Collect all other fields for the "Other" variant
+                        _ => {
+                            let value = map.next_value::<String>()?;
+                            rest.push((key, value));
+                        }
+                    }
+                }
+
+                let tx_type = tx_type.ok_or_else(|| de::Error::missing_field("Type"))?;
+                match tx_type.as_str() {
+                    "commish" => Ok(Transaction::Commish {
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                    }),
+                    "add" => Ok(Transaction::Add {
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                    }),
+                    "drop" => Ok(Transaction::Drop {
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                    }),
+                    "add/drop" => Ok(Transaction::AddDrop {
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                    }),
+                    "trade" => Ok(Transaction::Trade {
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                    }),
+                    other => Ok(Transaction::Other {
+                        type_name: other.to_string(),
+                        transaction_key: transaction_key
+                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
+                        transaction_id: transaction_id
+                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
+                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                        timestamp: timestamp
+                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                        rest,
+                    }),
+                }
+            }
+        }
+
+        deserializer.deserialize_map(TransactionVisitor)
+    }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Players {
+#[derive(Deserialize, Debug)]
+struct Players {
     #[serde(rename = "player")]
     pub players: Vec<Player>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Player {
     pub player_key: String,
     pub player_id: u32,
     pub name: PlayerName,
     pub editorial_team_abbr: String,
-    pub display_position: String, //PlayerPosition,
-    pub position_type: String, //PositionType, I'd love to figrue out how to get these to work. I am gettings some "Unsupported operation deserialize any" error
+    pub display_position: PlayerPositions, //PlayerPosition,
+    pub position_type: PositionType,
     pub transaction_data: TransactionData,
 }
 
 // pub struct PlayerKey {}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct PlayerName {
     pub full: String,
     pub first: String,
@@ -425,7 +609,7 @@ pub struct PlayerName {
     pub ascii_last: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct TransactionData {
     #[serde(rename = "type")]
     pub _type: String,
@@ -435,5 +619,127 @@ pub struct TransactionData {
     pub destination_type: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Player {}
+#[derive(Debug)]
+pub enum PlayerPositions {
+    One(PlayerPosition),
+    Many(Vec<PlayerPosition>),
+}
+impl<'de> Deserialize<'de> for PlayerPositions {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PlayerPositionsVisitor;
+
+        impl<'de> Visitor<'de> for PlayerPositionsVisitor {
+            type Value = PlayerPositions;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a comma-delimited string of colors or a single color")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                println!("Value: {}", v);
+                let items: Vec<PlayerPosition> = v
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| PlayerPosition::deserialize(s.into_deserializer()))
+                    .collect::<Result<Vec<PlayerPosition>, _>>()?;
+                match items.len() {
+                    0 => Err(E::custom("no colors found")),
+                    1 => Ok(PlayerPositions::One(items.first().unwrap().clone())),
+                    _ => Ok(PlayerPositions::Many(items)),
+                }
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut positions: Option<Result<PlayerPositions, M::Error>> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "$text" => {
+                            let v: &str = map.next_value()?;
+
+                            let items: Vec<PlayerPosition> = v
+                                .split(',')
+                                .map(|s| s.trim())
+                                .filter(|s| !s.is_empty())
+                                .map(|s| PlayerPosition::deserialize(s.into_deserializer()))
+                                .collect::<Result<Vec<PlayerPosition>, _>>()?;
+                            positions = Some(match items.len() {
+                                0 => Err(de::Error::invalid_value(
+                                    de::Unexpected::Str(""),
+                                    &"comma-delimited-list",
+                                )),
+                                1 => Ok(PlayerPositions::One(items.first().unwrap().clone())),
+                                _ => Ok(PlayerPositions::Many(items)),
+                            })
+                        }
+                        _ => {
+                            // println!("Key: {}", key);
+                            let _: de::IgnoredAny = map.next_value()?;
+                        }
+                    }
+                }
+                match positions {
+                    Some(positions) => positions,
+                    None => Err(de::Error::invalid_value(
+                        de::Unexpected::Str(""),
+                        &"comma-delimited-list",
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(PlayerPositionsVisitor)
+    }
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum PlayerPosition {
+    QB,
+    RB,
+    TE,
+    WR,
+    K,
+    DEF,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash)]
+pub enum PositionType {
+    K,
+    DT,
+    O,
+    OTHER(String),
+}
+impl<'de> Deserialize<'de> for PositionType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "K" => Ok(PositionType::K),
+            "DT" => Ok(PositionType::DT),
+            "O" => Ok(PositionType::O),
+            other => Ok(PositionType::OTHER(other.to_string())),
+        }
+    }
+}
+// impl std::fmt::Display for PositionType {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             PositionType::K => write!(f, "K"),
+//             PositionType::DT => write!(f, "DT"),
+//             PositionType::O => write!(f, "O"),
+//             PositionType::OTHER(s) => write!(f, "{}", s),
+//         }
+//     }
+// }

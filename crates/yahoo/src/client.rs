@@ -1,5 +1,6 @@
 use crate::data::{
-    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Scoreboard, Settings, Standings, Team, Token, Transaction, User
+    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Scoreboard,
+    Settings, Standings, Team, Token, Transaction, User,
 };
 use core::str;
 use itertools::join;
@@ -122,7 +123,10 @@ impl Client {
             .build()?;
         let resp = self.client.execute(req).await?;
         if !resp.status().is_success() {
-            panic!("Failed to refresh token: {}", resp.status());
+            let status = resp.status();
+            let body_text = resp.text().await.unwrap();
+            println!("Err: body: {}", body_text);
+            panic!("Failed to refresh token: {}", status);
         }
 
         let body = resp.json::<Token>().await?;
@@ -130,7 +134,7 @@ impl Client {
         return Ok(body);
     }
 
-    pub async fn get(&self, url: &str) -> Result<FantasyContent, reqwest::Error> {
+    pub async fn get(&self, url: &str) -> Result<FantasyContentWrapper, reqwest::Error> {
         println!("GET {}", url);
 
         let req = self
@@ -167,7 +171,10 @@ impl Client {
 
         return match from_str(body_text.as_str()) {
             Ok(content) => Ok(content),
-            Err(error) => panic!("unable to deserialize xml: {}", error),
+            Err(error) => {
+                println!("{:#?}", error);
+                panic!("unable to deserialize xml: {}", error)
+            }
         };
     }
 
@@ -186,7 +193,7 @@ impl Client {
                     Some(scoreboard) => Ok(scoreboard),
                     None => panic!(),
                 },
-                _ => panic!()
+                _ => panic!(),
             },
             Err(error) => panic!("{}", error),
         };
@@ -207,16 +214,15 @@ impl Client {
                     Some(settings) => Ok(settings),
                     None => panic!(),
                 },
-                _ => panic!()
+                _ => panic!(),
             },
             Err(error) => panic!("failed to fetch league settings content: {}", error),
         };
-
     }
 
     pub async fn get_league_standings(
         &self,
-        league_key: LeagueKey,
+        league_key: &LeagueKey,
     ) -> Result<Standings, reqwest::Error> {
         let url = format!(
             "{}/league/{}/standings",
@@ -229,7 +235,7 @@ impl Client {
                     Some(standings) => Ok(standings),
                     None => panic!("failed to fetch league standings: missing"),
                 },
-                _ => panic!("failed to fetch league standings content: invalid content variant: ")
+                _ => panic!("failed to fetch league standings content: invalid content variant: "),
             },
             Err(error) => panic!("failed to fetch league standings content: {}", error),
         };
@@ -237,7 +243,7 @@ impl Client {
 
     pub async fn get_league_transactions(
         &self,
-        league_key: LeagueKey,
+        league_key: &LeagueKey,
     ) -> Result<Vec<Transaction>, reqwest::Error> {
         let url = format!(
             "{}/league/{}/transactions",
@@ -250,7 +256,9 @@ impl Client {
                     Some(transactions) => Ok(transactions.transactions),
                     None => Ok(vec![]),
                 },
-                _ => panic!("failed to fetch league transactions content: invalid content variant: "),
+                _ => {
+                    panic!("failed to fetch league transactions content: invalid content variant: ")
+                }
             },
             Err(error) => panic!("failed to fetch league transactions content: {}", error),
         };
