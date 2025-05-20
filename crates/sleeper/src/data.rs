@@ -1,6 +1,7 @@
 use std::{collections::HashMap, error::Error as StdError, fmt};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Number;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -90,6 +91,40 @@ pub struct User {
     pub user_id: String,
     pub display_name: String,
     pub avatar: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct League {
+    pub total_rosters: u8,
+    pub status: LeagueStatus,
+    pub sport: Sport,
+    pub settings: HashMap<String, Number>,
+    pub season_type: SeasonType,
+    pub season: String,
+    pub scoring_settings: HashMap<String, Number>,
+    pub roster_positions: Vec<String>,
+    pub previous_league_id: String, // "0" when there is no previous league
+    pub name: String,
+    pub league_id: String,
+    pub draft_id: String,
+    pub avatar: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeagueStatus {
+    PreDraft,
+    Drafting,
+    InSeason,
+    Complete,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeasonType {
+    Regular,
+    Post,
+    Pre,
 }
 
 pub enum Error {

@@ -6,7 +6,7 @@ use data::Sport;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let sport = Sport::NBA;
+    let sport = Sport::NFL;
     let client = Client::new();
     // check_trending_players(&client, &sport).await;
 
@@ -14,6 +14,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let user = client.get_user(String::from("sectorbob")).await.unwrap();
     println!("User: {:#?}", user);
+
+    let leagues = client
+        .get_leagues_for_user(user.user_id, sport, String::from("2024"))
+        .await
+        .unwrap();
+    for league in leagues {
+        println!("{:#?}", league);
+        println!("League ({}): {}", league.season, league.name);
+    }
+
+    // check_all_ecr_leagues(&client).await;
 
     Ok(())
 }
@@ -44,5 +55,25 @@ async fn check_trending_players(client: &Client, sport: &Sport) {
                 trending_player.count
             );
         }
+    }
+}
+
+async fn check_all_ecr_leagues(client: &Client) {
+    let ecr_league_ids = vec![
+        "4581480575134427121", // 2024
+        "383786432088067320",  // 2023
+        "323299806782982483",  // 2022
+        "652490366221046118",  // 2021
+        "121226934266994911",  // 2020
+        "164974877262287888",  // 2019
+    ];
+
+    for league_id in ecr_league_ids {
+        let league = client.get_league(&String::from(league_id)).await.unwrap();
+        println!(
+            "League ({}): {} (id={} prev={}) ",
+            &league.season, &league.name, &league.league_id, &league.previous_league_id,
+        );
+        println!("{:#?}", &league);
     }
 }
