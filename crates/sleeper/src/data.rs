@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error as StdError, fmt};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Number;
+use serde_json::{Number, Value};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -77,6 +77,8 @@ pub struct Player {
 
     pub metadata: Option<HashMap<String, String>>,
     pub competitions: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub other_data: HashMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -87,12 +89,27 @@ pub struct TrendingPlayer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
-    pub username: String,
+    pub username: Option<String>, // present for get_user, but not get_users_in_league
     pub user_id: String,
     pub display_name: String,
-    pub avatar: String,
+    pub avatar: Option<String>,
+    #[serde(flatten)]
+    pub league_details: Option<LeagueUserDetails>,
+    #[serde(flatten)]
+    pub other_data: HashMap<String, Value>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LeagueUserDetails {
+    pub is_bot: bool,
+    pub is_owner: bool,
+    pub league_id: String,
+    pub metadata: HashMap<String, Value>,
+    // #[serde(default = "empty_map")]
+    pub settings: Option<HashMap<String, Value>>,
+}
+
+/// TODO: There is more to be gleaned from the data in GET /user/{user_id}/leagues/{sport}/{season}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct League {
     pub total_rosters: u8,
@@ -103,11 +120,17 @@ pub struct League {
     pub season: String,
     pub scoring_settings: HashMap<String, Number>,
     pub roster_positions: Vec<String>,
-    pub previous_league_id: String, // "0" when there is no previous league
+    pub previous_league_id: Option<String>, // "0" or null when there is no previous league
     pub name: String,
     pub league_id: String,
     pub draft_id: String,
     pub avatar: String,
+    pub last_pinned_message_id: Option<String>,
+    pub last_transaction_id: Option<i64>,
+    #[serde(flatten)]
+    pub last_message_details: Option<LastMessageDetails>,
+    #[serde(flatten)]
+    pub other_data: HashMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -125,6 +148,37 @@ pub enum SeasonType {
     Regular,
     Post,
     Pre,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LastMessageDetails {
+    pub last_read_id: String,
+    pub last_author_id: String,
+    pub last_author_display_name: String,
+    pub last_author_avatar: String,
+    pub last_author_is_bot: bool,
+    pub last_message_id: String,
+    pub last_message_time: i64,
+    pub last_message_attachment: Option<String>,
+    pub last_message_text_map: Option<Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Roster {
+    pub roster_id: u8,
+    pub owner_id: u8,
+    pub league_id: u8,
+    pub starters: Vec<String>,
+    pub settings: HashMap<String, Number>,
+    pub reserve: Option<Vec<String>>,
+    pub players: Vec<String>,
+    pub co_owners: Option<Vec<Value>>,
+    pub keepers: Option<Vec<String>>,
+    pub metadata: Option<HashMap<String, Value>>,
+    pub player_map: Option<Value>,
+    pub taxi: Option<Value>,
+    #[serde(flatten)]
+    pub other_data: HashMap<String, Value>,
 }
 
 pub enum Error {
@@ -163,4 +217,8 @@ impl fmt::Debug for Error {
 
         builder.finish()
     }
+}
+
+fn empty_map<K, V>() -> HashMap<K, V> {
+    HashMap::<K, V>::with_capacity(0)
 }

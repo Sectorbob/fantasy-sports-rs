@@ -1,30 +1,26 @@
 mod client;
 mod data;
 
+use std::ops::Deref;
+
 use client::Client;
-use data::Sport;
+use data::{Sport, User};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sport = Sport::NFL;
     let client = Client::new();
-    // check_trending_players(&client, &sport).await;
+    check_trending_players(&client, &sport).await;
 
     println!("Sport: {}", sport);
 
     let user = client.get_user(String::from("sectorbob")).await.unwrap();
     println!("User: {:#?}", user);
 
-    let leagues = client
-        .get_leagues_for_user(user.user_id, sport, String::from("2024"))
-        .await
-        .unwrap();
-    for league in leagues {
-        println!("{:#?}", league);
-        println!("League ({}): {}", league.season, league.name);
-    }
+    check_all_leagues_in(&client, "2019", &user, &sport).await;
+    check_all_leagues_in(&client, "2024", &user, &sport).await;
 
-    // check_all_ecr_leagues(&client).await;
+    check_all_ecr_leagues(&client).await;
 
     Ok(())
 }
@@ -72,8 +68,26 @@ async fn check_all_ecr_leagues(client: &Client) {
         let league = client.get_league(&String::from(league_id)).await.unwrap();
         println!(
             "League ({}): {} (id={} prev={}) ",
-            &league.season, &league.name, &league.league_id, &league.previous_league_id,
+            &league.season, &league.name, &league.league_id, &league.previous_league_id.unwrap_or(String::from("null")),
         );
-        println!("{:#?}", &league);
+
+        let users = client.get_users_for_league(&String::from(league_id)).await.unwrap();
+        println!("Users:");
+        for user in users {
+            println!(" - {}", user.display_name,)
+        }
+        // println!("{:#?}", &league);
+    }
+}
+
+async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport: &Sport) {
+    let leagues = client
+        .get_leagues_for_user(&user.user_id, sport, &String::from(season))
+        .await
+        .unwrap();
+    for league in leagues {
+        println!("{:#?}", league);
+        // println!("League ({}): {}", league.season, league.name);
+        
     }
 }

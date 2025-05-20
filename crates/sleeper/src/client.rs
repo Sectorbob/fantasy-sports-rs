@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error as StdError};
 
 use reqwest::StatusCode;
 
-use crate::data::{Error, League, Player, Sport, TrendingPlayer, User};
+use crate::data::{Error, League, Player, Roster, Sport, TrendingPlayer, User};
 
 const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
@@ -101,9 +101,9 @@ impl Client {
 
     pub async fn get_leagues_for_user(
         &self,
-        user_id: String,
-        sport: Sport,
-        season: String,
+        user_id: &String,
+        sport: &Sport,
+        season: &String,
     ) -> Result<Vec<League>, Error> {
         match self
             .client
@@ -148,6 +148,60 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<League>>().await {
                     Ok(opt_league) => match opt_league {
                         Some(league) => Ok(league),
+                        None => Err(Error::ResourceNotFound),
+                    },
+                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                },
+                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
+                code => panic!("unknown error: {}", code),
+            },
+            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => panic!("unknown error: {}", error),
+        }
+    }
+
+    pub async fn get_rosters_for_league(&self, league_id: &String) -> Result<Vec<Roster>, Error> {
+        match self
+            .client
+            .get(format!(
+                "{}/league/{}/rosters",
+                SLEEPER_API_BASE_URL,
+                league_id.trim(),
+            ))
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.status() {
+                StatusCode::OK => match resp.json::<Option<Vec<Roster>>>().await {
+                    Ok(opt_rosters) => match opt_rosters {
+                        Some(rosters) => Ok(rosters),
+                        None => Err(Error::ResourceNotFound),
+                    },
+                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                },
+                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
+                code => panic!("unknown error: {}", code),
+            },
+            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => panic!("unknown error: {}", error),
+        }
+    }
+
+    pub async fn get_users_for_league(&self, league_id: &String) -> Result<Vec<User>, Error> {
+        match self
+            .client
+            .get(format!(
+                "{}/league/{}/users",
+                SLEEPER_API_BASE_URL,
+                league_id.trim(),
+            ))
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.status() {
+                StatusCode::OK => match resp.json::<Option<Vec<User>>>().await {
+                    Ok(opt_users) => match opt_users {
+                        Some(users) => Ok(users),
                         None => Err(Error::ResourceNotFound),
                     },
                     Err(json_error) => Err(Error::DecodeError(json_error)),
