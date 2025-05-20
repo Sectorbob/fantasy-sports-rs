@@ -23,16 +23,16 @@ impl std::fmt::Display for Sport {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {
-    pub active: bool,
+    pub active: Option<bool>,
     pub player_id: String,
-    pub first_name: String,
-    pub last_name: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
     pub hashtag: Option<String>,
 
     pub status: Option<String>, // Active, Inactive, Injured Reserve, Non Football Injury
     pub sport: Sport,
     // #[serde(default)]
-    pub fantasy_positions: Option<Vec<String>>, // DL, LB, TE, DB, WR, OT, OL, OG, RB, QB, P, K, LS
+    pub fantasy_positions: Option<Vec<String>>, // NFL: DL, LB, TE, DB, WR, OT, OL, OG, RB, QB, P, K, LS
     pub number: Option<u32>,
     pub position: Option<String>,
     pub team: Option<String>,

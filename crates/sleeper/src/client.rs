@@ -19,7 +19,7 @@ impl Client {
 
     pub async fn fetch_all_players(
         &self,
-        sport: Sport,
+        sport: &Sport,
     ) -> Result<HashMap<String, Player>, reqwest::Error> {
         match self
             .client
@@ -43,7 +43,7 @@ impl Client {
 
     pub async fn get_trending_players(
         &self,
-        sport: Sport,
+        sport: &Sport,
         _type: String,
         lookback_hours: Option<u32>,
         limit: Option<u32>,
