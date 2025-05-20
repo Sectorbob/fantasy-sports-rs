@@ -477,4 +477,35 @@ impl Client {
             Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
         }
     }
+
+    pub async fn get_stats_for_team(
+        &self,
+        team_key: &TeamKey,
+        week: Option<i32>,
+        date: Option<NaiveDate>,
+    ) -> Result<Roster, reqwest::Error> {
+        let url = format!(
+            "{}/team/{}/stats{}",
+            YAHOO_FANTASY_API_BASE_URL,
+            team_key,
+            if let Some(week) = week {
+                format!(":type=week;week={}", week)
+            } else if let Some(date) = date {
+                format!(":type=date;date={}", date)
+            } else {
+                String::from("")
+            }
+        );
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::Team(team) => match team.roster {
+                    Some(roster) => Ok(roster),
+                    None => panic!("asdfasdfasdfasdfffffff"),
+                },
+                _ => panic!("got another fantasy content variant than expected"),
+            },
+            Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
+        }
+    }
 }
