@@ -77,3 +77,9 @@ pub struct Player {
     pub metadata: Option<HashMap<String, String>>,
     pub competitions: Option<Vec<String>>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrendingPlayer {
+    pub player_id: String,
+    pub count: u32,
+}
