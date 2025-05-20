@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error as StdError, fmt};
 
 use serde::{Deserialize, Serialize};
 
@@ -82,4 +82,50 @@ pub struct Player {
 pub struct TrendingPlayer {
     pub player_id: String,
     pub count: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct User {
+    pub username: String,
+    pub user_id: String,
+    pub display_name: String,
+    pub avatar: String,
+}
+
+pub enum Error {
+    ResourceNotFound,
+    ServerError(reqwest::Error),
+    DecodeError(reqwest::Error),
+    ConnectError(reqwest::Error),
+    UnknownError(reqwest::Error),
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut builder = f.debug_struct("sleeper::SleeperError");
+
+        builder.field(
+            "kind",
+            match self {
+                Error::ResourceNotFound => &"resource not found",
+                Error::ServerError(_) => &"server error",
+                Error::DecodeError(_) => &"decoding error",
+                Error::ConnectError(_) => &"connect error",
+                Error::UnknownError(_) => &"unknown error",
+            },
+        );
+
+        if let Error::ServerError(error)
+        | Error::DecodeError(error)
+        | Error::ConnectError(error)
+        | Error::UnknownError(error) = self
+        {
+            if let Some(source) = error.source() {
+                let message = source.to_string();
+                builder.field("message", &message.as_str());
+            }
+        }
+
+        builder.finish()
+    }
 }
