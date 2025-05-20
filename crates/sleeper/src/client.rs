@@ -99,3 +99,12 @@ impl Client {
         }
     }
 }
+
+
+pub fn avatar_url(avatar_id: String) -> String {
+    format!("{}/avatars/{}", SLEEPER_CDN_BASE_URL, avatar_id)
+}
+
+pub fn avatar_thumbnail_url(avatar_id: String) -> String {
+    format!("{}/avatars/thumbs/{}", SLEEPER_CDN_BASE_URL, avatar_id)
+}
