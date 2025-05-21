@@ -1,26 +1,28 @@
 mod client;
+mod custom;
 mod data;
 
-use std::ops::Deref;
-
 use client::Client;
+use custom::FantasyMatchup;
 use data::{Sport, User};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sport = Sport::NFL;
     let client = Client::new();
-    check_trending_players(&client, &sport).await;
+    // check_trending_players(&client, &sport).await;
 
     println!("Sport: {}", sport);
 
     let user = client.get_user(String::from("sectorbob")).await.unwrap();
     println!("User: {:#?}", user);
 
-    check_all_leagues_in(&client, "2019", &user, &sport).await;
-    check_all_leagues_in(&client, "2024", &user, &sport).await;
+    // check_all_leagues_in(&client, "2019", &user, &sport).await;
+    // check_all_leagues_in(&client, "2024", &user, &sport).await;
 
-    check_all_ecr_leagues(&client).await;
+    // check_all_ecr_leagues(&client).await;
+
+    check_league_matchups(&client, &String::from("4581480575134427121"), &sport).await;
 
     Ok(())
 }
@@ -68,10 +70,16 @@ async fn check_all_ecr_leagues(client: &Client) {
         let league = client.get_league(&String::from(league_id)).await.unwrap();
         println!(
             "League ({}): {} (id={} prev={}) ",
-            &league.season, &league.name, &league.league_id, &league.previous_league_id.unwrap_or(String::from("null")),
+            &league.season,
+            &league.name,
+            &league.league_id,
+            &league.previous_league_id.unwrap_or(String::from("null")),
         );
 
-        let users = client.get_users_for_league(&String::from(league_id)).await.unwrap();
+        let users = client
+            .get_users_for_league(&String::from(league_id))
+            .await
+            .unwrap();
         println!("Users:");
         for user in users {
             println!(" - {}", user.display_name,)
@@ -88,6 +96,26 @@ async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport:
     for league in leagues {
         println!("{:#?}", league);
         // println!("League ({}): {}", league.season, league.name);
-        
+    }
+}
+
+async fn check_league_matchups(client: &Client, league_id: &String, sport: &Sport) {
+    let players = client.fetch_all_players(sport).await.unwrap();
+    let mut owners = client.get_users_for_league(league_id).await.unwrap();
+    owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
+    let mut rosters = client.get_rosters_for_league(league_id).await.unwrap();
+    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
+
+    for week in 1..18 {
+        println!("Week: {}", week);
+        let matchups = client
+            .get_matchups(league_id, &week.to_string())
+            .await
+            .unwrap();
+        let fantasy_matchups = FantasyMatchup::from_stuff(&players, matchups, &rosters, &owners);
+        for matchup in fantasy_matchups.iter() {
+            matchup.printy(50);
+            println!();
+        }
     }
 }

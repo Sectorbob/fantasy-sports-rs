@@ -80,6 +80,20 @@ pub struct Player {
     #[serde(flatten)]
     pub other_data: HashMap<String, Value>,
 }
+impl fmt::Display for Player {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.first_name {
+            Some(first_name) => match &self.last_name {
+                Some(last_name) => write!(f, "{} {}", first_name, last_name),
+                None => write!(f, "{}", first_name),
+            },
+            None => match &self.last_name {
+                Some(last_name) => write!(f, "{}", last_name),
+                None => write!(f, "N/A"),
+            },
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrendingPlayer {
@@ -97,6 +111,20 @@ pub struct User {
     pub league_details: Option<LeagueUserDetails>,
     #[serde(flatten)]
     pub other_data: HashMap<String, Value>,
+}
+impl User {
+    pub fn team_name(&self) -> String {
+        match &self.league_details {
+            Some(league_user_details) => match league_user_details.metadata.get("team_name") {
+                Some(raw_team_name) => match raw_team_name.as_str() {
+                    Some(team_name) => String::from(team_name),
+                    None => todo!(), // data error
+                },
+                None => format!("Team {}", &self.display_name.as_str()),
+            },
+            None => format!("Team {}", &self.display_name.as_str()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -166,8 +194,8 @@ pub struct LastMessageDetails {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Roster {
     pub roster_id: u8,
-    pub owner_id: u8,
-    pub league_id: u8,
+    pub owner_id: String,
+    pub league_id: String,
     pub starters: Vec<String>,
     pub settings: HashMap<String, Number>,
     pub reserve: Option<Vec<String>>,
@@ -179,6 +207,18 @@ pub struct Roster {
     pub taxi: Option<Value>,
     #[serde(flatten)]
     pub other_data: HashMap<String, Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Matchup {
+    pub points: f32,
+    pub players: Vec<String>,
+    pub roster_id: u8,
+    pub custom_points: Option<Value>,
+    pub matchup_id: Option<u8>, // can be missing when a team has a bye week or doesn't player due to playoff elimination
+    pub starters: Vec<String>,
+    pub starters_points: Vec<f32>,
+    pub players_points: HashMap<String, f32>,
 }
 
 pub enum Error {
