@@ -4,7 +4,7 @@ mod data;
 
 use client::Client;
 use custom::FantasyMatchup;
-use data::{Sport, User};
+use data::{Player, Roster, Sport, User};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,9 +22,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // check_all_ecr_leagues(&client).await;
 
-    check_league_matchups(&client, &String::from("4581480575134427121"), &sport).await;
+    // check_league_matchups(&client, &String::from("4581480575134427121"), &sport).await;
+
+    check_transactions(&client, &String::from("4581480575134427121"), &sport).await;
 
     Ok(())
+}
+
+async fn check_transactions(client: &Client, league_id: &String, sport: &Sport) {
+    let players = client.fetch_all_players(sport).await.unwrap();
+    let mut owners = client.get_users_for_league(league_id).await.unwrap();
+    owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
+    let mut rosters = client.get_rosters_for_league(league_id).await.unwrap();
+    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
+
+    let transactions = client
+        .get_transactions(league_id, &String::from("1"))
+        .await
+        .unwrap();
+    for transaction in transactions.iter() {
+        let added: Vec<(&Player, &Roster)> = transaction
+            .adds
+            .iter()
+            .map(|add| {
+                (
+                    players.get(add.0).unwrap(),
+                    rosters
+                        .iter()
+                        .find(|roster| &roster.roster_id == add.1)
+                        .unwrap(),
+                )
+            })
+            .collect();
+        let dropped: Vec<(&Player, &Roster)> = transaction
+            .drops
+            .iter()
+            .map(|drop| {
+                (
+                    players.get(drop.0).unwrap(),
+                    rosters
+                        .iter()
+                        .find(|roster| &roster.roster_id == drop.1)
+                        .unwrap(),
+                )
+            })
+            .collect();
+
+        println!(
+            "[{}] ({}) - {} Added: {:?} Dropped: {:?}",
+            transaction.status_updated,
+            transaction.status,
+            transaction._type,
+            added
+                .iter()
+                .map(|t| t.0.to_string())
+                .collect::<Vec<String>>(),
+            dropped
+                .iter()
+                .map(|t| t.0.to_string())
+                .collect::<Vec<String>>()
+        );
+    }
 }
 
 async fn check_trending_players(client: &Client, sport: &Sport) {

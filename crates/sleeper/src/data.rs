@@ -1,6 +1,7 @@
 use std::{collections::HashMap, error::Error as StdError, fmt};
 
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Number, Value};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,8 +43,10 @@ pub struct Player {
     pub injury_start_date: Option<String>,
     pub practice_participation: Option<String>,
     pub practice_description: Option<String>,
-    pub news_updated: Option<i64>, // epoch millis
-    pub team_changed_at: Option<i64>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option", default)]
+    pub news_updated: Option<DateTime<Utc>>, // epoch millis
+    #[serde(with = "chrono::serde::ts_milliseconds_option", default)]
+    pub team_changed_at: Option<DateTime<Utc>>,
 
     pub search_first_name: Option<String>,
     pub search_last_name: Option<String>,
@@ -186,7 +189,8 @@ pub struct LastMessageDetails {
     pub last_author_avatar: String,
     pub last_author_is_bot: bool,
     pub last_message_id: String,
-    pub last_message_time: i64,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub last_message_time: DateTime<Utc>,
     pub last_message_attachment: Option<String>,
     pub last_message_text_map: Option<Value>,
 }
@@ -219,6 +223,66 @@ pub struct Matchup {
     pub starters: Vec<String>,
     pub starters_points: Vec<f32>,
     pub players_points: HashMap<String, f32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Transaction {
+    pub status: TransactionStatus,
+    #[serde(rename = "type")]
+    pub _type: TransactionType,
+    #[serde(default, deserialize_with = "null_to_empty_map")]
+    pub metadata: HashMap<String, String>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub created: DateTime<Utc>,
+    #[serde(default, deserialize_with = "null_to_empty_map")]
+    pub settings: HashMap<String, Option<Value>>,
+    pub leg: u8,
+    pub draft_picks: Vec<Value>,
+    pub creator: String,
+    pub transaction_id: String,
+    #[serde(default, deserialize_with = "null_to_empty_map")]
+    pub adds: HashMap<String, u8>,
+    pub consenter_ids: Vec<u8>,
+    #[serde(default, deserialize_with = "null_to_empty_map")]
+    pub drops: HashMap<String, u8>,
+    pub roster_ids: Vec<u8>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub status_updated: DateTime<Utc>,
+    pub waiver_budget: Vec<Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionType {
+    Waiver,
+    FreeAgent,
+    Trade,
+}
+impl fmt::Display for TransactionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TransactionType::Waiver => write!(f, "Waiver"),
+            TransactionType::FreeAgent => write!(f, "FreeAgent"),
+            TransactionType::Trade => write!(f, "Trade"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionStatus {
+    Complete,
+    Failed,
+    Other(String), // need
+}
+impl fmt::Display for TransactionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TransactionStatus::Complete => write!(f, "Complete"),
+            TransactionStatus::Failed => write!(f, "Failed"),
+            TransactionStatus::Other(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 pub enum Error {
@@ -259,6 +323,11 @@ impl fmt::Debug for Error {
     }
 }
 
-fn empty_map<K, V>() -> HashMap<K, V> {
-    HashMap::<K, V>::with_capacity(0)
+fn null_to_empty_map<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: std::cmp::Eq + std::hash::Hash + Deserialize<'de>,
+    V: Deserialize<'de>,
+{
+    Option::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
 }

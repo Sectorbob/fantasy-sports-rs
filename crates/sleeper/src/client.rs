@@ -2,7 +2,9 @@ use std::{collections::HashMap, error::Error as StdError};
 
 use reqwest::StatusCode;
 
-use crate::data::{Error, League, Matchup, Player, Roster, Sport, TrendingPlayer, User};
+use crate::data::{
+    Error, League, Matchup, Player, Roster, Sport, Transaction, TrendingPlayer, User,
+};
 
 const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
@@ -214,7 +216,11 @@ impl Client {
         }
     }
 
-    pub async fn get_matchups(&self, league_id: &String, week: &String) -> Result<Vec<Matchup>, Error> {
+    pub async fn get_matchups(
+        &self,
+        league_id: &String,
+        week: &String,
+    ) -> Result<Vec<Matchup>, Error> {
         match self
             .client
             .get(format!(
@@ -230,6 +236,38 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<Vec<Matchup>>>().await {
                     Ok(opt_matchups) => match opt_matchups {
                         Some(matchups) => Ok(matchups),
+                        None => Err(Error::ResourceNotFound),
+                    },
+                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                },
+                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
+                code => panic!("unknown error: {}", code),
+            },
+            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => panic!("unknown error: {}", error),
+        }
+    }
+
+    pub async fn get_transactions(
+        &self,
+        league_id: &String,
+        week: &String,
+    ) -> Result<Vec<Transaction>, Error> {
+        match self
+            .client
+            .get(format!(
+                "{}/league/{}/transactions/{}",
+                SLEEPER_API_BASE_URL,
+                league_id.trim(),
+                week,
+            ))
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.status() {
+                StatusCode::OK => match resp.json::<Option<Vec<Transaction>>>().await {
+                    Ok(opt_transactions) => match opt_transactions {
+                        Some(transactions) => Ok(transactions),
                         None => Err(Error::ResourceNotFound),
                     },
                     Err(json_error) => Err(Error::DecodeError(json_error)),
