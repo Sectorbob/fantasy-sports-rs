@@ -116,6 +116,7 @@ pub struct User {
     pub other_data: HashMap<String, Value>,
 }
 impl User {
+    /// Returns the team name of this [`User`].
     pub fn team_name(&self) -> String {
         match &self.league_details {
             Some(league_user_details) => match league_user_details.metadata.get("team_name") {

@@ -87,7 +87,7 @@ impl FantasyMatchup<'_> {
     }
 
     pub fn printy(&self, width: usize) {
-        let delim = String::from(" ").repeat(if width % 2 == 0 { 2 } else { 1 });
+        // let delim = String::from(" ").repeat(if width % 2 == 0 { 2 } else { 1 });
         let col_width = width / 2;
 
         println!(
