@@ -9,7 +9,7 @@ use data::{Player, Roster, Sport, User};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sport = Sport::NFL;
-    let client = Client::new();
+    let client = Client::new(None);
     // check_trending_players(&client, &sport).await;
 
     println!("Sport: {}", sport);

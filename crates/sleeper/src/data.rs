@@ -130,6 +130,34 @@ impl User {
     }
 }
 
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_team_name() {
+        use super::{LeagueUserDetails, User};
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        let user_1 = User {
+            username: Some("bob_barker_123".to_string()),
+            user_id: "3969562440090994".to_string(),
+            display_name: "Bob Barker".to_string(),
+            avatar: None,
+            league_details: Some(LeagueUserDetails {
+                is_bot: false,
+                is_owner: true,
+                league_id: "".to_string(),
+                metadata: HashMap::from([("team_name".to_string(), json!("The Glorious One"))]),
+                settings: None,
+            }),
+            other_data: HashMap::with_capacity(0),
+        };
+
+        assert_eq!("The Glorious One", user_1.team_name());
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LeagueUserDetails {
     pub is_bot: bool,
