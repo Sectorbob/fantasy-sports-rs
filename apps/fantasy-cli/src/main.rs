@@ -1,5 +1,6 @@
 use std::env;
 
+mod config;
 mod leagues_page;
 mod sleeper_utils;
 mod tui;
@@ -13,8 +14,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("BOOM!")
     }
     match args[1].to_lowercase().as_str() {
-        "yahoo" => sleeper_utils::exec().await,
-        "sleeper" => yahoo_utils::exec().await,
+        "yahoo" => yahoo_utils::exec().await,
+        "sleeper" => sleeper_utils::exec().await,
         "tui" => tui::exec().await,
         _ => panic!("BOOM!"),
     }

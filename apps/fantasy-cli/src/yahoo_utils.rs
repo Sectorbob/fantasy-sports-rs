@@ -8,8 +8,8 @@ use std::{
 };
 
 use yahoo_fantasy_rs::{
-    Client, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions, TeamStandings, Token,
-    Transaction,
+    Client, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions, Team, TeamStandings,
+    Token, Transaction,
 };
 
 pub async fn build_client() -> Result<Client, Box<dyn std::error::Error>> {
@@ -32,12 +32,13 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let enable_check_game = false;
     let enable_check_games = false;
     let enable_check_teams = false;
-    let enable_check_league = true;
+    let enable_check_league = false;
     let enable_check_league_scoreboard = false;
     let enable_check_league_settings = false;
     let enable_check_league_standings = false;
     let enable_league_transactions = false;
     let enable_check_players = false;
+    let enable_check_team_in_seasons = true;
 
     let client = build_client().await?;
 
@@ -177,6 +178,24 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         }
         println!("Players Statuses: {:#?}", player_statuses);
         // println!("Players: {:#?}", players);
+    }
+
+    if enable_check_team_in_seasons {
+        let teams = get_teams_for_seasons(
+            &client,
+            vec![
+                "2015".to_string(),
+                "2016".to_string(),
+                "2017".to_string(),
+                "2018".to_string(),
+                "2019".to_string(),
+            ],
+            GameCode::NFL,
+        )
+        .await?;
+        for team in teams {
+            println!("{}", team.name)
+        }
     }
 
     Ok(())
@@ -359,4 +378,28 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
         println!("Player Positions:      {:#?}", player_positions);
         // println!("Player Position Types: {:#?}", player_position_types);
     }
+}
+
+async fn get_teams_for_seasons(
+    client: &Client,
+    seasons: Vec<String>,
+    game_code: GameCode,
+) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
+    let games = client
+        .get_games(
+            vec![game_code],
+            seasons.iter().map(|s| s.as_str()).collect(),
+        )
+        .await
+        .unwrap();
+
+    let mut yahoo_teams: Vec<Team> = vec![];
+    for game in games {
+        let game_key: GameKey = GameKey::Id(game.game_id);
+        let teams_in_season = client.get_teams_for_user(game_key).await?;
+        for team in teams_in_season {
+            yahoo_teams.push(team);
+        }
+    }
+    Ok(yahoo_teams)
 }

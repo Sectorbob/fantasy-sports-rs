@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 chrono = "0.4.41"
 crossterm = "0.29.0"
+dirs = "6.0.0"
 serde_json = "1.0.140"
 sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
 tokio = "1.45.0"

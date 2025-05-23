@@ -32,14 +32,16 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let mut leagues_page = LeaguesPage::new();
 
     let mut leagues_future = Some(get_all_leagues(vec![
+        "2015".to_string(),
+        "2016".to_string(),
         "2017".to_string(),
         "2018".to_string(),
         "2019".to_string(),
         "2020".to_string(),
-        // "2021".to_string(),
-        // "2022".to_string(),
-        // "2023".to_string(),
-        // "2024".to_string(),
+        "2021".to_string(),
+        "2022".to_string(),
+        "2023".to_string(),
+        "2024".to_string(),
     ]));
 
     // leagues_page.add_league(League::Sleeper("blerp".to_string()));
@@ -156,7 +158,10 @@ async fn get_all_leagues(seasons: Vec<String>) -> Result<Vec<League>, Box<dyn st
 
     let mut yahoo_teams: Vec<Team> = vec![];
     for game in games {
-        let game_key: GameKey = GameKey::Code(game.code);
+        if game.game_id == 390 {
+            continue; // TODO due to data issue
+        }
+        let game_key: GameKey = GameKey::Id(game.game_id);
         let teams_in_season = yahoo_client.get_teams_for_user(game_key).await?;
         for team in teams_in_season {
             yahoo_teams.push(team);
