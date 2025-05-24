@@ -1,8 +1,10 @@
+use chrono::NaiveDate;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, IntoDeserializer, MapAccess, Visitor},
 };
-use std::fmt;
+use serde_json::Value;
+use std::{fmt, str::FromStr};
 
 #[derive(Deserialize)]
 #[serde(rename = "yahoo:error")]
@@ -46,32 +48,56 @@ pub enum FantasyContent {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Leagues {
+pub(crate) struct Leagues {
     #[serde(rename = "league")]
     pub leagues: Vec<League>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct League {
-    pub league_key: String,
+    pub league_key: LeagueKey,
     pub league_id: String,
     pub name: String,
     pub url: String,
-    pub draft_status: String,
+    pub draft_status: DraftStatus, // known values: predraft, postdraft
     pub num_teams: u32,
     pub edit_key: u32,
-    pub league_update_timestamp: u64,
+    #[serde(deserialize_with = "empty_string_as_none")]
+    pub league_update_timestamp: Option<u64>,
     pub scoring_type: String,
     pub current_week: String,
     pub start_week: u32,
     pub end_week: u32,
-    pub is_finished: u32,
+    pub is_finished: Option<bool>,
     pub players: Option<Players>,
     pub scoreboard: Option<Scoreboard>,
     pub settings: Option<Settings>,
     pub standings: Option<Standings>,
     pub teams: Option<Teams>,
     pub transactions: Option<Transactions>,
+    pub league_type: String, // TODO: make this into am enum
+    #[serde(deserialize_with = "deserialize_naive_date")]
+    pub start_date: NaiveDate,
+    #[serde(deserialize_with = "deserialize_naive_date")]
+    pub end_date: NaiveDate,
+    pub season: String,
+    pub game_code: GameCode,
+    pub is_plus_league: bool,
+    pub is_pro_league: bool,
+    pub is_cash_league: bool,
+    pub renewed: Option<Value>,
+    pub renew: Option<String>, // I think this is a reference to the previous year league (if exists)
+    pub weekly_deadline: Option<Value>,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DraftStatus {
+    PreDraft,
+    PostDraft,
+    // TODO: Handle fallback case with value
+    // #[serde(untagged)]
+    // Other(String),
 }
 
 #[derive(Deserialize, Debug)]
@@ -98,7 +124,7 @@ pub struct Settings {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Divisions {
+pub(crate) struct Divisions {
     #[serde(rename = "division")]
     pub divisions: Vec<Division>,
 }
@@ -192,7 +218,7 @@ impl Filters {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum GameKey {
     Code(GameCode),
     Id(u32),
@@ -206,7 +232,7 @@ impl std::fmt::Display for GameKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeagueKey {
     game_key: String,
     league_id: u32,
@@ -222,6 +248,14 @@ impl LeagueKey {
 impl std::fmt::Display for LeagueKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.l.{}", self.game_key, self.league_id)
+    }
+}
+impl<'de> Deserialize<'de> for LeagueKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserialize_league_key(deserializer)
     }
 }
 
@@ -335,14 +369,14 @@ pub struct Game {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "games")]
-pub struct Games {
+pub(crate) struct Games {
     #[serde(rename = "game", default)]
     pub games: Vec<Game>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "users")]
-pub struct Users {
+pub(crate) struct Users {
     #[serde(rename = "user", default)]
     pub users: Vec<User>,
 }
@@ -366,7 +400,7 @@ pub struct User {
 //endregion
 
 #[derive(Deserialize, Debug, PartialEq)]
-pub struct Teams {
+pub(crate) struct Teams {
     #[serde(rename = "team", default)]
     pub teams: Vec<Team>,
 }
@@ -434,7 +468,17 @@ pub struct Manager {
     pub is_current_login: Option<bool>, // 0 or 1
     pub image_url: Option<String>,
     pub felo_score: Option<u32>,
-    pub felo_tier: Option<String>, // known values: gold
+    pub felo_tier: Option<FeloTier>,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum FeloTier {
+    Diamond,
+    Platinum,
+    Gold,
+    Silver,
+    Bronze,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -912,14 +956,55 @@ impl<'de> Deserialize<'de> for PositionType {
 // }
 
 // Custom deserializer to treat empty string as None, otherwise parse as u32
-fn empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+fn empty_string_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: FromStr,
+    T::Err: std::fmt::Display,
 {
     let opt = Option::<String>::deserialize(deserializer)?;
     match opt.as_deref() {
         Some("") => Ok(None),
-        Some(s) => s.parse::<u32>().map(Some).map_err(serde::de::Error::custom),
+        Some(s) => T::from_str(s)
+            .map(Some)
+            .map_err(|e| de::Error::custom(format!("parse error: {}", e))),
         None => Ok(None),
     }
+}
+
+fn deserialize_naive_date<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(serde::de::Error::custom)
+}
+
+fn deserialize_league_key<'de, D>(deserializer: D) -> Result<LeagueKey, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let mut parts = s.split('.');
+
+    let game_key = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing game_key"))?
+        .to_string();
+
+    // skip the middle "l"
+    let _ = parts.next();
+
+    let league_id_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing league_id"))?;
+
+    let league_id = league_id_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("league_id parse error: {}", e)))?;
+
+    Ok(LeagueKey {
+        game_key,
+        league_id,
+    })
 }

@@ -22,7 +22,12 @@ pub struct Client {
     pub token: Option<Token>,
 }
 impl Client {
-    pub fn with_token(token: Token, base_url: Option<String>) -> Self {
+    pub fn with_token(
+        client_id: String,
+        redirect_uri: String,
+        token: Token,
+        base_url: Option<String>,
+    ) -> Self {
         let client = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .build()
@@ -36,8 +41,8 @@ impl Client {
             base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
             client,
             client_no_redirects,
-            client_id: "".to_string(),
-            redirect_uri: "".to_string(),
+            client_id,
+            redirect_uri,
             code_verifier: Option::None,
             token: Some(token),
         }
@@ -521,7 +526,8 @@ impl Client {
 mod tests {
     use std::fs;
 
-    use crate::{Client, GameCode, GameKey, Token};
+    use crate::{Client, GameCode, GameKey, LeagueKey, Token, data::DraftStatus};
+    use chrono::NaiveDate;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path},
@@ -559,6 +565,8 @@ mod tests {
             .await;
 
         let fixture = Client::with_token(
+            "".to_string(),
+            "".to_string(),
             Token {
                 access_token: "foo".to_string(),
                 token_type: "bearer".to_string(),
@@ -660,7 +668,72 @@ mod tests {
             teams[0].managers()[0].image_url
         );
         assert_eq!(Some(580), teams[0].managers()[0].felo_score);
-        assert_eq!(Some("bronze".to_string()), teams[0].managers()[0].felo_tier);
+        assert_eq!(
+            Some(crate::data::FeloTier::Bronze),
+            teams[0].managers()[0].felo_tier
+        );
         assert_eq!(None, teams[0].waiver_priority); // tests that <waiver_priority/> is serialized to None
+    }
+
+    #[tokio::test]
+    async fn test_get_league_complete() {
+        let league_key = LeagueKey::new(GameKey::Id(380).to_string().as_str(), 129397);
+        let (fixture, _mock_server) = setup_with_200("/league/380.l.129397").await;
+        let opt_league = fixture
+            .get_league(
+                &league_key, // 2018 nfl
+            )
+            .await
+            .expect("should return ok");
+
+        let league = opt_league.expect("should be there");
+        assert_eq!(league_key, league.league_key);
+        assert_eq!(Some("371_20028".to_string()), league.renew);
+        assert_eq!("private", league.league_type);
+        assert_eq!(false, league.is_pro_league);
+        assert_eq!(false, league.is_cash_league);
+        assert_eq!(false, league.is_plus_league);
+        assert_eq!(
+            NaiveDate::from_ymd_opt(2018, 9, 6).unwrap(),
+            league.start_date
+        );
+        assert_eq!(
+            NaiveDate::from_ymd_opt(2018, 12, 24).unwrap(),
+            league.end_date
+        );
+        assert_eq!(DraftStatus::PostDraft, league.draft_status); // here it is
+        assert_eq!(Some(true), league.is_finished); // here it is
+    }
+
+    #[tokio::test]
+    async fn test_get_league_incomplete() {
+        let (fixture, _mock_server) = setup_with_200("/league/390.l.299227").await;
+        let opt_league = fixture
+            .get_league(
+                &LeagueKey::new(GameKey::Id(390).to_string().as_str(), 299227), // 2019 nfl
+            )
+            .await
+            .expect("should return ok");
+
+        let league = opt_league.expect("should be there");
+        assert_eq!(
+            LeagueKey::new(GameKey::Id(390).to_string().as_str(), 299227),
+            league.league_key
+        );
+        assert_eq!(Some("380_129397".to_string()), league.renew);
+        assert_eq!("private", league.league_type);
+        assert_eq!(false, league.is_pro_league);
+        assert_eq!(false, league.is_cash_league);
+        assert_eq!(false, league.is_plus_league);
+        assert_eq!(
+            NaiveDate::from_ymd_opt(2019, 9, 5).unwrap(),
+            league.start_date
+        );
+        assert_eq!(
+            NaiveDate::from_ymd_opt(2019, 12, 23).unwrap(),
+            league.end_date
+        );
+        assert_eq!(DraftStatus::PreDraft, league.draft_status); // here it is
+        assert_eq!(None, league.is_finished); // here it is
     }
 }
