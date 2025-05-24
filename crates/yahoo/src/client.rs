@@ -526,7 +526,7 @@ impl Client {
 mod tests {
     use std::fs;
 
-    use crate::{Client, GameCode, GameKey, LeagueKey, Token, data::DraftStatus};
+    use crate::{Client, GameCode, GameKey, LeagueKey, TeamKey, Token, data::DraftStatus};
     use chrono::NaiveDate;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
@@ -643,7 +643,10 @@ mod tests {
 
         assert_eq!(1, teams.len());
 
-        assert_eq!("390.l.299227.t.1", teams[0].team_key);
+        assert_eq!(
+            TeamKey::new(LeagueKey::new(GameKey::Id(390), 299227), 1),
+            teams[0].team_key
+        );
         assert_eq!(1, teams[0].team_id);
         assert_eq!("Stormy Badgers 01", teams[0].name);
         assert_eq!(None, teams[0].clinched_playoffs);
@@ -677,7 +680,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_league_complete() {
-        let league_key = LeagueKey::new(GameKey::Id(380).to_string().as_str(), 129397);
+        let league_key = LeagueKey::new(GameKey::Id(380), 129397);
         let (fixture, _mock_server) = setup_with_200("/league/380.l.129397").await;
         let opt_league = fixture
             .get_league(
@@ -710,16 +713,13 @@ mod tests {
         let (fixture, _mock_server) = setup_with_200("/league/390.l.299227").await;
         let opt_league = fixture
             .get_league(
-                &LeagueKey::new(GameKey::Id(390).to_string().as_str(), 299227), // 2019 nfl
+                &LeagueKey::new(GameKey::Id(390), 299227), // 2019 nfl
             )
             .await
             .expect("should return ok");
 
         let league = opt_league.expect("should be there");
-        assert_eq!(
-            LeagueKey::new(GameKey::Id(390).to_string().as_str(), 299227),
-            league.league_key
-        );
+        assert_eq!(LeagueKey::new(GameKey::Id(390), 299227), league.league_key);
         assert_eq!(Some("380_129397".to_string()), league.renew);
         assert_eq!("private", league.league_type);
         assert_eq!(false, league.is_pro_league);
@@ -735,5 +735,18 @@ mod tests {
         );
         assert_eq!(DraftStatus::PreDraft, league.draft_status); // here it is
         assert_eq!(None, league.is_finished); // here it is
+    }
+
+    #[tokio::test]
+    async fn test_get_league_standings_incomplete() {
+        let league_key = LeagueKey::new(GameKey::Id(390), 299227);
+        let (fixture, _mock_server) = setup_with_200("/league/390.l.299227/standings").await;
+        let standings = fixture
+            .get_league_standings(
+                &league_key, // 2019 nfl
+            )
+            .await
+            .expect("should return ok");
+        assert_eq!(1, standings.teams().len())
     }
 }

@@ -137,7 +137,13 @@ pub struct Division {
 
 #[derive(Deserialize, Debug)]
 pub struct Standings {
-    pub teams: Teams,
+    #[serde(rename = "teams")]
+    _teams: Teams,
+}
+impl Standings {
+    pub fn teams(&self) -> &Vec<Team> {
+        &self._teams.teams
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -218,7 +224,7 @@ impl Filters {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GameKey {
     Code(GameCode),
     Id(u32),
@@ -234,13 +240,13 @@ impl std::fmt::Display for GameKey {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeagueKey {
-    game_key: String,
+    game_key: GameKey,
     league_id: u32,
 }
 impl LeagueKey {
-    pub fn new(game_key: &str, league_id: u32) -> Self {
+    pub fn new(game_key: GameKey, league_id: u32) -> Self {
         LeagueKey {
-            game_key: String::from(game_key),
+            game_key,
             league_id,
         }
     }
@@ -259,12 +265,13 @@ impl<'de> Deserialize<'de> for LeagueKey {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TeamKey {
     pub league_key: LeagueKey,
     pub team_id: u32,
 }
 impl TeamKey {
-    pub fn new(league_key: &LeagueKey, team_id: u32) -> Self {
+    pub fn new(league_key: LeagueKey, team_id: u32) -> Self {
         TeamKey {
             league_key: league_key.clone(),
             team_id,
@@ -274,6 +281,14 @@ impl TeamKey {
 impl std::fmt::Display for TeamKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.t.{}", self.league_key, self.team_id)
+    }
+}
+impl<'de> Deserialize<'de> for TeamKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserialize_team_key(deserializer)
     }
 }
 
@@ -407,7 +422,7 @@ pub(crate) struct Teams {
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Team {
-    pub team_key: String,
+    pub team_key: TeamKey,
     pub team_id: u32,
     pub name: String,
     pub is_owned_by_current_login: Option<bool>, // 0 or 1
@@ -486,15 +501,17 @@ pub struct TeamPoints {
     pub coverage_type: String, // known values: season, week
     pub season: Option<String>,
     pub week: Option<i32>,
-    pub total: f32,
+    #[serde(deserialize_with = "empty_string_as_none")]
+    pub total: Option<f32>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TeamStandings {
-    pub rank: u32,
+    #[serde(deserialize_with = "empty_string_as_none")]
+    pub rank: Option<u32>,
     pub outcome_totals: OutcomeTotals,
-    pub divisional_outcome_totals: OutcomeTotals,
-    pub streak: Streak,
+    pub divisional_outcome_totals: Option<OutcomeTotals>,
+    pub streak: Option<Streak>,
     pub points_for: f32,
     pub points_against: f32,
 }
@@ -514,6 +531,7 @@ pub struct OutcomeTotals {
     pub wins: u32,
     pub losses: u32,
     pub ties: u32,
+    #[serde(deserialize_with = "empty_string_as_none", default)]
     pub percentage: Option<f32>,
 }
 
@@ -987,10 +1005,13 @@ where
     let s = String::deserialize(deserializer)?;
     let mut parts = s.split('.');
 
-    let game_key = parts
+    let game_key_str = parts
         .next()
         .ok_or_else(|| de::Error::custom("missing game_key"))?
         .to_string();
+    let game_key = game_key_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("game_key parse error: {}", e)))?;
 
     // skip the middle "l"
     let _ = parts.next();
@@ -1004,7 +1025,53 @@ where
         .map_err(|e| de::Error::custom(format!("league_id parse error: {}", e)))?;
 
     Ok(LeagueKey {
-        game_key,
+        game_key: GameKey::Id(game_key),
         league_id,
+    })
+}
+
+fn deserialize_team_key<'de, D>(deserializer: D) -> Result<TeamKey, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let mut parts = s.split('.');
+
+    let game_key_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing game_key"))?
+        .to_string();
+    let game_key = game_key_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("game_key parse error: {}", e)))?;
+
+    // skip the middle "l"
+    let _ = parts.next();
+
+    let league_id_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing league_id"))?;
+
+    let league_id = league_id_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("league_id parse error: {}", e)))?;
+
+    // skip the middle "t"
+    let _ = parts.next();
+
+    let team_id_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing team_id"))?;
+
+    let team_id = team_id_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("team_id parse error: {}", e)))?;
+
+    Ok(TeamKey {
+        league_key: LeagueKey {
+            game_key: GameKey::Id(game_key),
+            league_id,
+        },
+        team_id,
     })
 }
