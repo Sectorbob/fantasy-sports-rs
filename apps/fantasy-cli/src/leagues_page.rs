@@ -1,6 +1,7 @@
 use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
+use sleeper_fantasy_rs;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -92,14 +93,127 @@ impl<'a> LeaguesPage {
 }
 
 pub enum League {
-    Sleeper(String),
-    Yahoo(String),
+    Sleeper {
+        league: sleeper_fantasy_rs::League,
+        rosters: Vec<sleeper_fantasy_rs::Roster>,
+        user_id: String,
+    },
+    Yahoo {
+        team: yahoo_fantasy_rs::Team,
+        league: yahoo_fantasy_rs::League,
+        standings: yahoo_fantasy_rs::Standings,
+    },
+}
+impl League {
+    pub fn season(&self) -> String {
+        match self {
+            League::Sleeper {
+                league,
+                rosters,
+                user_id: _,
+            } => league.season.clone(),
+            League::Yahoo {
+                team: _,
+                league,
+                standings: _,
+            } => league.season.clone(),
+        }
+    }
+    pub fn record(&self) -> String {
+        match self {
+            League::Sleeper {
+                league: _,
+                rosters,
+                user_id,
+            } => match rosters.iter().find(|r| &r.owner_id == user_id) {
+                Some(roster) => format!(
+                    "{}-{}-{}",
+                    match roster.settings.get("wins") {
+                        Some(n) => n.to_string(),
+                        None => "0".to_string(),
+                    },
+                    match roster.settings.get("losses") {
+                        Some(n) => n.to_string(),
+                        None => "0".to_string(),
+                    },
+                    match roster.settings.get("ties") {
+                        Some(n) => n.to_string(),
+                        None => "0".to_string(),
+                    }
+                ),
+                None => "n/a".to_string(),
+            },
+            League::Yahoo {
+                team,
+                league: _,
+                standings,
+            } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
+                Some(team_w_standings) => match &team_w_standings.team_standings {
+                    Some(team_standings) => format!(
+                        "{}-{}-{}",
+                        team_standings.outcome_totals.wins,
+                        team_standings.outcome_totals.losses,
+                        team_standings.outcome_totals.ties
+                    ),
+                    None => "n/a".to_string(),
+                },
+                None => "n/a".to_string(),
+            },
+        }
+    }
+    pub fn team_name(&self) -> String {
+        match self {
+            League::Sleeper {
+                league,
+                rosters: _,
+                user_id: _,
+            } => "".to_string(),
+            League::Yahoo {
+                team,
+                league: _,
+                standings: _,
+            } => team.name.clone(),
+        }
+    }
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            League::Sleeper(name) => write!(f, "{} (Sleeper)", name),
-            League::Yahoo(name) => write!(f, "{} (Yahoo)", name),
+            League::Sleeper {
+                league,
+                rosters,
+                user_id: _,
+            } => write!(
+                f,
+                "[{}] {} (Sleeper) - {}    Record: {}",
+                season = league.season,
+                name = league.name,
+                status = match league.status {
+                    sleeper_fantasy_rs::LeagueStatus::PreDraft => "predraft",
+                    sleeper_fantasy_rs::LeagueStatus::Drafting => "drafting",
+                    sleeper_fantasy_rs::LeagueStatus::InSeason => "inseason",
+                    sleeper_fantasy_rs::LeagueStatus::Complete => "complete",
+                },
+                record = self.record(),
+            ),
+            League::Yahoo {
+                team: _,
+                league,
+                standings,
+            } => write!(
+                f,
+                "[{}] {} (Yahoo) - {}       Record: {}",
+                league.season,
+                league.name,
+                match league.is_finished {
+                    Some(is_finished) => match is_finished {
+                        true => "complete",
+                        false => "in-progress",
+                    },
+                    None => "incomplete",
+                },
+                self.record(),
+            ),
         }
     }
 }

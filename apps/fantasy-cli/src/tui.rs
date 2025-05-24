@@ -158,9 +158,6 @@ async fn get_all_leagues(seasons: Vec<String>) -> Result<Vec<League>, Box<dyn st
 
     let mut yahoo_teams: Vec<Team> = vec![];
     for game in games {
-        if game.game_id == 390 {
-            continue; // TODO due to data issue
-        }
         let game_key: GameKey = GameKey::Id(game.game_id);
         let teams_in_season = yahoo_client.get_teams_for_user(game_key).await?;
         for team in teams_in_season {
@@ -170,17 +167,43 @@ async fn get_all_leagues(seasons: Vec<String>) -> Result<Vec<League>, Box<dyn st
 
     let mut leagues: Vec<League> = vec![];
     for yahoo_team in yahoo_teams {
-        leagues.push(League::Yahoo(format!(
-            "{} ({})",
-            yahoo_team.name, yahoo_team.team_key
-        )));
+        let yahoo_league = yahoo_client
+            .get_league(&yahoo_team.team_key.league_key)
+            .await
+            .unwrap()
+            .unwrap();
+        let standings = yahoo_client
+            .get_league_standings(&yahoo_team.team_key.league_key)
+            .await
+            .unwrap();
+
+        leagues.push(League::Yahoo {
+            team: yahoo_team,
+            league: yahoo_league,
+            standings,
+        });
     }
     for sleeper_league in sleeper_leagues {
-        leagues.push(League::Sleeper(format!(
-            "{} ({})",
-            sleeper_league.name, sleeper_league.season
-        )));
+        // let sleeper_user = sleeper_client
+        //     .get_users_for_league(&sleeper_league.league_id)
+        //     .await
+        //     .unwrap()
+        //     .iter()
+        //     .find(|u| u.user_id == sleeper_user_id)
+        //     .unwrap();
+        // sleeper_user.league_details.unwrap();
+        let rosters = sleeper_client
+            .get_rosters_for_league(&sleeper_league.league_id)
+            .await
+            .unwrap();
+        leagues.push(League::Sleeper {
+            league: sleeper_league,
+            rosters,
+            user_id: sleeper_user_id.clone(),
+        });
     }
+
+    leagues.sort_by(|a, b| b.season().cmp(&a.season()));
 
     Ok(leagues)
 }
