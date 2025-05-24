@@ -7,10 +7,13 @@ use core::str;
 use itertools::join;
 use quick_xml::de::from_str;
 
+const USER_AGENT: &str = "reqwest";
+
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
 const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fantasy/v2";
 
 pub struct Client {
+    base_url: String,
     client: reqwest::Client,
     client_no_redirects: reqwest::Client,
     client_id: String,
@@ -19,7 +22,28 @@ pub struct Client {
     pub token: Option<Token>,
 }
 impl Client {
-    pub fn new(client_id: String, redirect_uri: String) -> Self {
+    pub fn with_token(token: Token, base_url: Option<String>) -> Self {
+        let client = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .unwrap();
+        let client_no_redirects = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        Client {
+            base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
+            client,
+            client_no_redirects,
+            client_id: "".to_string(),
+            redirect_uri: "".to_string(),
+            code_verifier: Option::None,
+            token: Some(token),
+        }
+    }
+
+    pub fn new(client_id: String, redirect_uri: String, base_url: Option<String>) -> Self {
         let client = reqwest::Client::builder()
             .user_agent("reqwest")
             .build()
@@ -30,6 +54,7 @@ impl Client {
             .build()
             .unwrap();
         Client {
+            base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
             client,
             client_no_redirects,
             client_id,
@@ -135,7 +160,7 @@ impl Client {
         return Ok(body);
     }
 
-    pub async fn get(&self, url: &str) -> Result<FantasyContentWrapper, reqwest::Error> {
+    pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, reqwest::Error> {
         println!("GET {}", url);
 
         let req = self
@@ -191,7 +216,7 @@ impl Client {
     ) -> Result<Scoreboard, reqwest::Error> {
         let url = format!(
             "{}/league/{}/scoreboard{}",
-            YAHOO_FANTASY_API_BASE_URL,
+            self.base_url,
             league_key,
             if let Some(week) = week {
                 format!(";week={}", week)
@@ -218,10 +243,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Settings, reqwest::Error> {
-        let url = format!(
-            "{}/league/{}/settings",
-            YAHOO_FANTASY_API_BASE_URL, league_key
-        );
+        let url = format!("{}/league/{}/settings", self.base_url, league_key);
 
         return match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -239,10 +261,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Standings, reqwest::Error> {
-        let url = format!(
-            "{}/league/{}/standings",
-            YAHOO_FANTASY_API_BASE_URL, league_key
-        );
+        let url = format!("{}/league/{}/standings", self.base_url, league_key);
 
         return match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -260,10 +279,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Vec<Transaction>, reqwest::Error> {
-        let url = format!(
-            "{}/league/{}/transactions",
-            YAHOO_FANTASY_API_BASE_URL, league_key
-        );
+        let url = format!("{}/league/{}/transactions", self.base_url, league_key);
 
         return match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -280,11 +296,7 @@ impl Client {
     }
 
     pub async fn get_game(&self, game_key: GameKey) -> Result<Game, reqwest::Error> {
-        let url = format!(
-            "{}/game/{}",
-            YAHOO_FANTASY_API_BASE_URL,
-            game_key.to_string()
-        );
+        let url = format!("{}/game/{}", self.base_url, game_key.to_string());
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Game(game) => return Ok(game),
@@ -310,7 +322,9 @@ impl Client {
             filter.push_str(seasons.join(",").as_str());
         }
 
-        let url = format!("{}/games{}", YAHOO_FANTASY_API_BASE_URL, filter);
+        let url = format!("{}/games{}", self.base_url, filter);
+
+        println!("GET {}", url);
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -327,7 +341,7 @@ impl Client {
             query = ";use_login=1";
         }
 
-        let url = format!("{}/users{}", YAHOO_FANTASY_API_BASE_URL, query);
+        let url = format!("{}/users{}", self.base_url, query);
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -351,11 +365,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Option<League>, reqwest::Error> {
-        let url = format!(
-            "{}/league/{}",
-            YAHOO_FANTASY_API_BASE_URL,
-            league_key.to_string()
-        );
+        let url = format!("{}/league/{}", self.base_url, league_key.to_string());
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -369,7 +379,7 @@ impl Client {
     pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, reqwest::Error> {
         let url = format!(
             "{}/users;use_login=1/games;game_keys={}/teams",
-            YAHOO_FANTASY_API_BASE_URL,
+            self.base_url,
             game_key.to_string()
         );
 
@@ -398,7 +408,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Vec<Team>, reqwest::Error> {
-        let url = format!("{}/league/{}/teams", YAHOO_FANTASY_API_BASE_URL, league_key,);
+        let url = format!("{}/league/{}/teams", self.base_url, league_key,);
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -416,10 +426,7 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Vec<Player>, reqwest::Error> {
-        let url = format!(
-            "{}/league/{}/players",
-            YAHOO_FANTASY_API_BASE_URL, league_key,
-        );
+        let url = format!("{}/league/{}/players", self.base_url, league_key,);
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -441,7 +448,7 @@ impl Client {
 
         let url = format!(
             "{}/leagues;league_keys={}/players",
-            YAHOO_FANTASY_API_BASE_URL, league_keys_str,
+            self.base_url, league_keys_str,
         );
 
         match self.get(url.as_str()).await {
@@ -464,7 +471,7 @@ impl Client {
     /// For MLB, NHL, or NBA, you can specify a date parameter to retrieve a specific date – otherwise it will default to today’s roster.
     /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
     pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, reqwest::Error> {
-        let url = format!("{}/team/{}/roster", YAHOO_FANTASY_API_BASE_URL, team_key,);
+        let url = format!("{}/team/{}/roster", self.base_url, team_key,);
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -486,7 +493,7 @@ impl Client {
     ) -> Result<Roster, reqwest::Error> {
         let url = format!(
             "{}/team/{}/stats{}",
-            YAHOO_FANTASY_API_BASE_URL,
+            self.base_url,
             team_key,
             if let Some(week) = week {
                 format!(":type=week;week={}", week)
@@ -507,5 +514,153 @@ impl Client {
             },
             Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use crate::{Client, GameCode, GameKey, Token};
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+
+    async fn setup_with_200(p: &str) -> (Client, MockServer) {
+        let mock_server = wiremock::MockServer::builder().start().await;
+        Mock::given(method("GET"))
+            .and(path(p))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(
+                        fs::read_to_string(format!("tests/data/fantasy/v2{}.xml", p)).unwrap(),
+                    )
+                    .insert_header("Content-Type", "application/xml"),
+                // < date: Sat, 24 May 2025 03:40:09 GMT
+                // < p3p: policyref="https://policies.yahoo.com/w3c/p3p.xml", CP="CAO DSP COR CUR ADM DEV TAI PSA PSD IVAi IVDi CONi TELo OTPi OUR DELi SAMi OTRi UNRi PUBi IND PHY ONL UNI PUR FIN COM NAV INT DEM CNT STA POL HEA PRE LOC GOV"
+                // < x-yahoo-request-id: 07pu1ftk32fsp
+                // < x-yahoo-host: fantasy-sports-api--public-production-bf1-7dbb5fc5b6-4tqfj
+                // < x-frame-options: SAMEORIGIN
+                // < vary: Origin,Accept-Encoding
+                // < set-cookie: SPTB=d=tYJxGqs8o7ItEP3yKz.Sq_ZumH4_fU_hbwnv3zGMBxqOoti45lmLsWkck6obDC7Xz5chDIx1HsP.O9LWhI6DRTy.w.8e6k3sKt0X3yZgf4g-&v=1; expires=Mon, 23-Jun-2025 03:40:09 GMT; Max-Age=2592000; path=/; domain=fantasysports.yahooapis.com
+                // < cache-control: private,max-age=0,stale-while-revalidate=0,stale-if-error=0
+                // < content-length: 881
+                // < content-type: application/xml; charset=utf-8
+                // < x-envoy-upstream-service-time: 33
+                // < server: ATS
+                // < age: 0
+                // < strict-transport-security: max-age=31536000
+                // < referrer-policy: strict-origin-when-cross-origin
+                // < x-content-type-options: nosniff
+                // < x-xss-protection: 1; mode=block
+            )
+            .mount(&mock_server)
+            .await;
+
+        let fixture = Client::with_token(
+            Token {
+                access_token: "foo".to_string(),
+                token_type: "bearer".to_string(),
+                expires_in: 3600,
+                refresh_token: "bar".to_string(),
+                scope: None,
+            },
+            Some(mock_server.uri()),
+        );
+        (fixture, mock_server)
+    }
+
+    #[tokio::test]
+    async fn test_get_games_2019_nfl_happy() {
+        let (fixture, _mock_server) = setup_with_200("/games;game_codes=nfl;seasons=2019").await;
+
+        let games = fixture
+            .get_games(vec![GameCode::NFL], vec!["2019"])
+            .await
+            .expect("should pass");
+
+        assert_eq!(1, games.len());
+        assert_eq!(GameCode::NFL, games[0].code);
+        assert_eq!(390, games[0].game_id);
+        assert_eq!(390, games[0].game_key);
+        assert_eq!("Football", games[0].name);
+        assert_eq!("2019", games[0].season);
+        assert_eq!(None, games[0].teams);
+    }
+
+    #[tokio::test]
+    async fn test_get_games_2019_poo_none_found() {
+        let (fixture, _mock_server) = setup_with_200("/games;game_codes=poo;seasons=2019").await;
+        let games = fixture
+            .get_games(vec![GameCode::OTHER("poo".to_string())], vec!["2019"])
+            .await
+            .expect("should return ok (although should be empty)");
+
+        assert_eq!(0, games.len());
+    }
+
+    #[tokio::test]
+    async fn test_get_games_2009_2025_nfl() {
+        let (fixture, _mock_server) = setup_with_200("/games;game_codes=nfl;seasons=2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025").await;
+        let games = fixture
+            .get_games(
+                vec![GameCode::NFL],
+                vec![
+                    "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018",
+                    "2019", "2020", "2021", "2022", "2023", "2024", "2025",
+                ],
+            )
+            .await
+            .expect("should return ok (although should be empty)");
+
+        assert_eq!(17, games.len());
+        // all are NFL
+        for game in &games {
+            assert_eq!(GameCode::NFL, game.code);
+            assert_eq!("Football", game.name);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_teams() {
+        let (fixture, _mock_server) =
+            setup_with_200("/users;use_login=1/games;game_keys=390/teams").await;
+        let teams = fixture
+            .get_teams_for_user(
+                GameKey::Id(390), // 2019 nfl
+            )
+            .await
+            .expect("should return ok");
+
+        assert_eq!(1, teams.len());
+
+        assert_eq!("390.l.299227.t.1", teams[0].team_key);
+        assert_eq!(1, teams[0].team_id);
+        assert_eq!("Stormy Badgers 01", teams[0].name);
+        assert_eq!(None, teams[0].clinched_playoffs);
+        assert_eq!(Some(1), teams[0].division_id);
+        assert_eq!(Some(100), teams[0].faab_balance);
+        assert_eq!(false, teams[0].has_draft_grade);
+        assert_eq!(Some(true), teams[0].is_owned_by_current_login);
+        assert_eq!("head", teams[0].league_scoring_type);
+        assert_eq!(0, teams[0].number_of_moves);
+        assert_eq!(0, teams[0].number_of_trades);
+        assert_eq!(1, teams[0].team_logos().len());
+        assert_eq!("large", teams[0].team_logos()[0].size);
+        assert_eq!(
+            "https://yahoofantasysports-res.cloudinary.com/image/upload/t_s192sq/fantasy-logos/30368783128_2bdfc8.jpg",
+            teams[0].team_logos()[0].url
+        );
+        assert_eq!(1, teams[0].managers().len());
+        assert_eq!(Some(true), teams[0].managers()[0].is_commissioner);
+        assert_eq!(Some(true), teams[0].managers()[0].is_current_login);
+        assert_eq!(
+            Some("https://example.invalid/ade39e2a327f69f0.png".to_string()),
+            teams[0].managers()[0].image_url
+        );
+        assert_eq!(Some(580), teams[0].managers()[0].felo_score);
+        assert_eq!(Some("bronze".to_string()), teams[0].managers()[0].felo_tier);
+        assert_eq!(None, teams[0].waiver_priority); // tests that <waiver_priority/> is serialized to None
     }
 }

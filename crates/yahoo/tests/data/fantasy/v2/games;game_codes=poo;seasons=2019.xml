@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fantasy_content xml:lang="en-US" yahoo:uri="http://fantasysports.yahooapis.com/fantasy/v2/games;game_codes=poo;seasons=2019" time="15.052080154419ms" copyright="Certain Data by Sportradar, Stats Perform and Rotowire" refresh_rate="60" xmlns:yahoo="http://www.yahooapis.com/v1/base.rng" xmlns="http://fantasysports.yahooapis.com/fantasy/v2/base.rng">
+ <games/>
+</fantasy_content>
+<!-- fantasy-sports-api- -public-production-bf1-7dbb5fc5b6-rwlrm Sat May 24 04:04:49 UTC 2025 -->
