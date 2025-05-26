@@ -31,6 +31,14 @@ impl<'a> LeaguesPage {
             .collect()
     }
 
+    pub fn selected(&self) -> Option<&League> {
+        if self.leagues.is_empty() || self.selected >= self.leagues.len() {
+            None
+        } else {
+            Some(&self.leagues[self.selected])
+        }
+    }
+
     pub fn draw(
         &'a mut self,
         terminal: &'a mut Terminal<CrosstermBackend<Stdout>>, // items: &Vec<ListItem<'a>>,
@@ -69,29 +77,31 @@ impl<'a> LeaguesPage {
         self.leagues.push(value);
     }
 
-    pub fn handle_key(&mut self, key_code: &KeyCode) -> bool {
+    pub fn handle_key(&mut self, key_code: &KeyCode) -> KeyHandleResult {
         match key_code {
             KeyCode::Down => {
                 if self.selected < self.leagues.len() - 1 {
                     self.selected += 1;
                 }
-                true
+                KeyHandleResult::NOOP
             }
             KeyCode::Up => {
                 if self.selected > 0 {
                     self.selected -= 1;
                 }
-                true
+                KeyHandleResult::NOOP
             }
             KeyCode::Enter => {
-                println!("Do Something");
-                true
+                // Here you can handle the Enter key, e.g., show league details
+
+                KeyHandleResult::GoToLeagueSummary
             }
-            _ => false,
+            _ => KeyHandleResult::Unhandled,
         }
     }
 }
 
+// #[derive(Debug, Clone)]
 pub enum League {
     Sleeper {
         league: sleeper_fantasy_rs::League,
@@ -105,6 +115,20 @@ pub enum League {
     },
 }
 impl League {
+    pub fn name(&self) -> String {
+        match self {
+            League::Sleeper {
+                league,
+                rosters: _,
+                user_id: _,
+            } => league.name.clone(),
+            League::Yahoo {
+                team: _,
+                league,
+                standings: _,
+            } => league.name.clone(),
+        }
+    }
     pub fn season(&self) -> String {
         match self {
             League::Sleeper {
@@ -175,6 +199,47 @@ impl League {
             } => team.name.clone(),
         }
     }
+    pub fn total_points(&self) -> f64 {
+        match self {
+            League::Sleeper {
+                league: _,
+                rosters,
+                user_id,
+            } => match rosters.iter().find(|r| &r.owner_id == user_id) {
+                Some(roster) => roster
+                    .settings
+                    .get("points")
+                    .and_then(|p| p.as_f64())
+                    .unwrap_or(-2.0) as f64,
+                None => -1.0,
+            },
+            League::Yahoo {
+                team,
+                league: _,
+                standings,
+            } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
+                Some(team_w_standings) => match &team_w_standings.team_standings {
+                    Some(team_standings) => team_standings.points_for as f64,
+                    None => -1.0,
+                },
+                None => -2.0,
+            },
+        }
+    }
+    pub fn raw_standings(&self) -> String {
+        match self {
+            League::Sleeper {
+                league: _,
+                rosters,
+                user_id: _,
+            } => format!("Rosters: {:#?}", rosters),
+            League::Yahoo {
+                team: _,
+                league: _,
+                standings,
+            } => format!("Standings: {:#?}", standings),
+        }
+    }
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -216,4 +281,10 @@ impl std::fmt::Display for League {
             ),
         }
     }
+}
+
+pub enum KeyHandleResult {
+    Unhandled,
+    NOOP,
+    GoToLeagueSummary,
 }

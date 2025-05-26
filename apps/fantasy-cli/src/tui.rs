@@ -1,5 +1,6 @@
-use crate::{leagues_page, yahoo_utils};
+use crate::{league_summary_page, leagues_page, yahoo_utils};
 use futures::{TryStreamExt, stream::FuturesUnordered};
+use league_summary_page::LeagueSummaryPage;
 use leagues_page::{League, LeaguesPage};
 use log::*;
 
@@ -103,11 +104,13 @@ async fn render_loop(
     let mut terminal = Terminal::new(backend).unwrap();
     let mut page = 0;
     let mut leagues_page = LeaguesPage::new();
+    // let mut navi_stack = vec![];
+    // navi_stack.push(page);
 
     let mut i = 0;
     loop {
         i += 1;
-        info!("Render loop iteration: {}", i);
+        // info!("Render loop iteration: {}", i);
 
         // Poll channel for new value (non-blocking)
         while let Ok(Some(new_leagues_state)) =
@@ -125,6 +128,11 @@ async fn render_loop(
             1 => {
                 leagues_page.draw(&mut terminal).unwrap();
             }
+            2 => {
+                LeagueSummaryPage::new(leagues_page.selected())
+                    .draw(&mut terminal)
+                    .unwrap();
+            }
             _ => {}
         }
 
@@ -133,7 +141,30 @@ async fn render_loop(
             if let Event::Key(key) = event::read()? {
                 let handled = match page {
                     0 => false,
-                    1 => leagues_page.handle_key(&key.code),
+                    1 => match leagues_page.handle_key(&key.code) {
+                        leagues_page::KeyHandleResult::NOOP => true,
+                        leagues_page::KeyHandleResult::GoToLeagueSummary => {
+                            // info!("Selected league: {:?}", leagues_page.selected().);
+                            if let Some(selected_league) = leagues_page.selected() {
+                                // Here you can handle the selected league, e.g., navigate to a summary page
+                                // For example, you might want to set the league in a summary page struct
+                                // league_summary_page.set_league(selected_league.clone());
+                                info!("Navigating to summary for league: {}", selected_league);
+                            } else {
+                                error!("No league selected.");
+                            }
+                            // Here you can handle the selected league, e.g., navigate to a summary page
+                            page = 2; // Example: go to a summary page
+                            true
+                        }
+                        leagues_page::KeyHandleResult::Unhandled => false,
+                    },
+                    2 => {
+                        // Here you can handle the summary page key events
+                        // For example, if you have a summary page struct, you might call its handle_key method
+                        // league_summary_page.handle_key(&key.code);
+                        false // Example: no handling for now
+                    }
                     _ => false,
                 };
 
