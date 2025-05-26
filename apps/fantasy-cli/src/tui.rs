@@ -1,5 +1,6 @@
 use crate::{leagues_page, yahoo_utils};
 use leagues_page::{League, LeaguesPage};
+use log::*;
 
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -7,7 +8,11 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use sleeper_fantasy_rs::{self as sleeper, Sport};
-use std::io::{self, Stdout};
+use std::{
+    io::{self, Stdout},
+    time::Duration,
+};
+use tokio::time::sleep;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -24,72 +29,105 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
 
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let handle = tokio::spawn(async {
+        let _ = do_it(stdout).await;
+    });
 
-    let mut page = 0;
+    match handle.await {
+        Ok(_) => {}
+        Err(err) if err.is_panic() => {
+            // Handle panic
+            eprintln!("Caught a panic in the future: {}", err);
+        }
+        Err(err) => {
+            // Handle cancellation or other errors
+            eprintln!("Future was cancelled or errored: {}", err);
+        }
+    }
 
-    let mut leagues_page = LeaguesPage::new();
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(io::stdout(), LeaveAlternateScreen)?;
+    Ok(())
+}
 
-    let mut leagues_future = Some(get_all_leagues(vec![
-        "2015".to_string(),
-        "2016".to_string(),
-        "2017".to_string(),
-        "2018".to_string(),
-        "2019".to_string(),
-        "2020".to_string(),
-        "2021".to_string(),
-        "2022".to_string(),
-        "2023".to_string(),
-        "2024".to_string(),
-    ]));
+async fn do_it(stdout: Stdout) -> Result<(), Box<dyn std::error::Error>> {
+    let (mut tx, mut rx) = tokio::sync::mpsc::channel::<Vec<League>>(100);
 
-    // leagues_page.add_league(League::Sleeper("blerp".to_string()));
-    // leagues_page.add_league(League::Sleeper("blarp".to_string()));
-    // leagues_page.add_league(League::Yahoo("flarp".to_string()));
+    // let mut errors: Vec<String> = vec![];
 
-    let mut errors: Vec<String> = vec![];
-    let mut updated_leagues = match leagues_future {
-        Some(lf) => match lf.await {
-            Ok(leagues) => Some(leagues),
-            Err(err) => panic!("fffff: {}", err),
-        },
-        None => None,
-    };
+    let _handle = tokio::spawn(async move {
+        info!("Fetching leagues...");
+        // let tx_clone = tx.clone();
+
+        match get_all_leagues(vec![
+            "2015".to_string(),
+            "2016".to_string(),
+            "2017".to_string(),
+            "2018".to_string(),
+            "2019".to_string(),
+            "2020".to_string(),
+            "2021".to_string(),
+            "2022".to_string(),
+            "2023".to_string(),
+            "2024".to_string(),
+        ])
+        .await
+        {
+            Ok(leagues) => {
+                if tx.send(leagues).await.is_err() {
+                    eprintln!("Failed to send leagues through channel.");
+                }
+            }
+            Err(err) => {
+                error!("Error fetching leagues: {:?}", err);
+                eprintln!("Error fetching leagues: {:?}", err);
+            }
+        };
+    });
 
     // Main loop
+    render_loop(stdout, &mut rx).await?;
+    _handle.await?;
+
+    Ok(())
+}
+
+async fn render_loop(
+    stdout: Stdout,
+    rx: &mut tokio::sync::mpsc::Receiver<Vec<League>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut page = 0;
+    let mut leagues_page = LeaguesPage::new();
+
+    let mut i = 0;
     loop {
-        if let Some(new_leagues_state) = updated_leagues {
+        i += 1;
+        info!("Render loop iteration: {}", i);
+
+        // Poll channel for new value (non-blocking)
+        while let Ok(Some(new_leagues_state)) =
+            rx.try_recv().map(Some).or::<Option<Vec<League>>>(Ok(None))
+        {
             for league in new_leagues_state {
                 leagues_page.add_league(league);
             }
-            updated_leagues = None;
         }
-        // if let Some(f) = leagues_future {
-        //     tokio::spawn(async {
-        //         let l = match f.await {
-        //             Ok(leagues) => {
-        //                 updated_leagues = Some(leagues);
-        //             }
-        //             Err(error) => errors.push(format!("{}", error)),
-        //         };
-        //         ()
-        //     });
-        //     leagues_future = None;
-        // }
 
         match page {
             0 => {
-                draw_blank_screen_with_q_exit(&mut terminal)?;
+                draw_blank_screen_with_q_exit(&mut terminal).unwrap();
             }
             1 => {
-                leagues_page.draw(&mut terminal)?;
+                leagues_page.draw(&mut terminal).unwrap();
             }
             _ => {}
         }
 
         // Exit on 'q'
-        if event::poll(std::time::Duration::from_millis(100))? {
+        if event::poll(std::time::Duration::from_millis(99))? {
             if let Event::Key(key) = event::read()? {
                 let handled = match page {
                     0 => false,
@@ -107,11 +145,9 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        sleep(Duration::from_millis(1)).await;
     }
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
     Ok(())
 }
 
@@ -128,13 +164,18 @@ fn draw_blank_screen_with_q_exit(
     })
 }
 
-async fn get_all_leagues(seasons: Vec<String>) -> Result<Vec<League>, Box<dyn std::error::Error>> {
+async fn get_all_leagues(
+    seasons: Vec<String>,
+) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
     let sleeper_user_id = "727598467304811923".to_string();
     let sleeper_sport = Sport::NFL;
 
     let yahoo_game_code = GameCode::NFL;
 
-    let yahoo_client = yahoo_utils::build_client().await?;
+    let yahoo_client = match yahoo_utils::build_client().await {
+        Ok(client) => client,
+        Err(err) => return Err(Box::new(err)),
+    };
     let sleeper_client = sleeper_fantasy_rs::Client::new(None);
 
     let mut sleeper_leagues: Vec<sleeper::League> = vec![];

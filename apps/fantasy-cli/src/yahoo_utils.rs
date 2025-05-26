@@ -1,4 +1,5 @@
 use chrono::DateTime;
+use log::*;
 use serde_json;
 use std::{
     collections::{HashMap, HashSet},
@@ -12,20 +13,65 @@ use yahoo_fantasy_rs::{
     Token, Transaction,
 };
 
-pub async fn build_client() -> Result<Client, Box<dyn std::error::Error>> {
-    let yahoo_client_id = env::var("YAHOO_CLIENT_ID")?;
-    let yahoo_redirect_uri = env::var("YAHOO_REDIRECT_URI")?;
-    let yahoo_token_file = env::var("YAHOO_TOKEN_FILE")?;
+const DEBUG_ENABLE: bool = false;
+
+pub async fn build_client() -> Result<Client, yahoo_fantasy_rs::Error> {
+    let yahoo_client_id = match env::var("YAHOO_CLIENT_ID") {
+        Ok(id) => id,
+        Err(_) => {
+            return Err(yahoo_fantasy_rs::Error::UnknownError(
+                "YAHOO_CLIENT_ID environment variable not set".to_string(),
+            ));
+        }
+    };
+    let yahoo_redirect_uri = match env::var("YAHOO_REDIRECT_URI") {
+        Ok(uri) => uri,
+        Err(_) => {
+            return Err(yahoo_fantasy_rs::Error::UnknownError(
+                "YAHOO_REDIRECT_URI environment variable not set".to_string(),
+            ));
+        }
+    };
+    let yahoo_token_file = match env::var("YAHOO_TOKEN_FILE") {
+        Ok(file) => file,
+        Err(_) => {
+            return Err(yahoo_fantasy_rs::Error::UnknownError(
+                "YAHOO_TOKEN_FILE environment variable not set".to_string(),
+            ));
+        }
+    };
     let mut client = Client::new(yahoo_client_id, yahoo_redirect_uri, None);
+
+    debug!("loading token file: {}", yahoo_token_file);
 
     let token = match load_token_file(&yahoo_token_file) {
         Ok(token) => token,
         // If fails, perform auth flow
-        Err(_) => perform_oauth_flow(&mut client).await,
+        Err(err) => {
+            return Err(yahoo_fantasy_rs::Error::UnknownError(format!(
+                "Failed to load token file: {}",
+                err
+            )));
+            // println!(
+            //     "No token found or failed to load ({}). Performing OAuth flow...",
+            //     err
+            // );
+            // match perform_oauth_flow(&mut client).await {
+            //     Ok(token) => token,
+            //     Err(_) => {
+            //         println!("Failed to perform OAuth flow. Exiting.");
+            //         return Err(yahoo_fantasy_rs::Error::UnknownError(
+            //             "Failed to perform OAuth flow".to_string(),
+            //         ));
+            //     }
+
+            // }
+        }
     };
     client.token = Some(token);
-
-    let new_token = client.refresh_token().await.unwrap();
+    debug!("loaded token: {:#?}", client.token);
+    info!("refreshing token");
+    let new_token = client.refresh_token().await?;
     save_token_file(&yahoo_token_file, new_token);
     Ok(client)
 }
@@ -42,15 +88,21 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let enable_league_transactions = false;
     let enable_check_players = false;
     let enable_check_team_in_seasons = true;
+    if DEBUG_ENABLE {
+        println!("Building Yahoo Fantasy Client...");
+    }
 
     let client = build_client().await?;
+    if DEBUG_ENABLE {
+        println!("Yahoo Fantasy Client built");
+    }
 
     let public_league_key = LeagueKey::new(GameKey::Id(223), 431);
     let ecr_2017 = LeagueKey::new(GameKey::Id(371), 20028);
 
     if enable_check_users {
         let users = client.get_users(true).await.unwrap();
-        println!("Users: {:#?}", users);
+        info!("Users: {:#?}", users);
     }
 
     if enable_check_games {
@@ -223,7 +275,7 @@ fn save_token_file(file: &String, token: Token) {
     serde_json::to_writer_pretty(writer, &token).unwrap();
 }
 
-async fn perform_oauth_flow(client: &mut Client) -> Token {
+async fn perform_oauth_flow(client: &mut Client) -> Result<Token, ()> {
     let auth_request_url = client.get_request_auth_url().await.unwrap();
     println!("Auth request URL: {}", auth_request_url);
 
@@ -231,7 +283,7 @@ async fn perform_oauth_flow(client: &mut Client) -> Token {
     println!("Auth code: {}", auth_code);
     let token = client.get_token(&auth_code).await.unwrap();
     println!("Token: {:#?}", token);
-    token
+    Ok(token)
 }
 
 fn receive_auth_code_from_stdin() -> String {
