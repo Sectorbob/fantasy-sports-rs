@@ -6,13 +6,22 @@ use serde::{
 use serde_json::Value;
 use std::{fmt, str::FromStr};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename = "yahoo:error")]
-pub struct Error {
+pub(crate) struct Error {
     #[serde(rename = "description")]
-    // #[serde(rename = "yahoo:description")]
-    pub description: String,
+    pub description: Option<String>,
+    #[serde(rename = "yahoo:description")]
+    pub yahoo_description: Option<String>,
     pub detail: Option<String>,
+}
+impl Error {
+    pub fn description(&self) -> String {
+        self.description
+            .clone()
+            .or_else(|| self.yahoo_description.clone())
+            .unwrap_or_else(|| "Unknown error".to_string())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

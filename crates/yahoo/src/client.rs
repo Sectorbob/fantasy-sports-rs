@@ -6,11 +6,14 @@ use chrono::NaiveDate;
 use core::str;
 use itertools::join;
 use quick_xml::de::from_str;
+use std::error::Error as _;
 
 const USER_AGENT: &str = "reqwest";
 
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
 const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fantasy/v2";
+
+const DEBUG_ENABLED: bool = false;
 
 pub struct Client {
     base_url: String,
@@ -69,12 +72,12 @@ impl Client {
         }
     }
 
-    pub async fn get_request_auth_url(&mut self) -> Result<String, reqwest::Error> {
+    pub async fn get_request_auth_url(&mut self) -> Result<String, Error> {
         let code_verifier = pkce::code_verifier(43);
         let code_challenge = pkce::code_challenge(&code_verifier);
         let code_challenge_method = "S256";
 
-        let req = self
+        let req = match self
             .client_no_redirects
             .get(format!("{}/request_auth", YAHOO_API_AUTH_BASE_URL).as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -86,25 +89,41 @@ impl Client {
                 ("code_challenge", &code_challenge),
                 ("code_challenge_method", code_challenge_method),
             ])
-            .build()?;
-        let resp = self.client_no_redirects.execute(req).await?;
-        if resp.status().is_redirection() {
-            println!("Success!");
-        } else {
+            .build()
+        {
+            Ok(request) => request,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to build GET /request_auth request: {}",
+                    err
+                )));
+            }
+        };
+        let resp = match self.client_no_redirects.execute(req).await {
+            Ok(response) => response,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to execute GET /request_auth request: {}",
+                    err
+                )));
+            }
+        };
+        if !resp.status().is_redirection() {
             println!("Failed: {}", resp.status());
+            return Err(Error::UnknownError(format!(
+                "Got unexpected response for GET /request_auth. Code {}",
+                resp.status(),
+            )));
         }
 
-        // println!("Response: {:#?}", resp);
-
         let location = resp.headers().get("location").unwrap();
-        // println!("Location: {}", location.to_str().unwrap());
 
         self.code_verifier = Some(String::from_utf8(code_verifier).unwrap());
 
         return Ok(location.to_str().unwrap().to_string());
     }
 
-    pub async fn get_token(&mut self, code: &str) -> Result<Token, reqwest::Error> {
+    pub async fn get_token(&mut self, code: &str) -> Result<Token, Error> {
         let code_verifier = self.code_verifier.as_ref().unwrap();
 
         let form = [
@@ -114,29 +133,50 @@ impl Client {
             ("grant_type", "authorization_code"),
             ("redirect_uri", "oob"),
         ];
-        let req = self
+        let req = match self
             .client
             .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(&form)
-            .build()?;
-        let resp = self.client.execute(req).await?;
-        if resp.status().is_success() {
-            println!("Success!");
-        } else {
-            println!("Failed: {}", resp.status());
+            .build()
+        {
+            Ok(request) => request,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to build token request: {}",
+                    err
+                )));
+            }
+        };
+        let resp = match self.client.execute(req).await {
+            Ok(response) => response,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to execute token request: {}",
+                    err
+                )));
+            }
+        };
+        if !resp.status().is_success() {
+            return Err(Error::UnknownError(format!(
+                "Failed to get token: {}",
+                resp.status()
+            )));
         }
 
-        // println!("Response: {:#?}", resp);
-
-        // println!("Status: {}", resp.status());
-
-        let body = resp.json::<Token>().await?;
-        self.token = Some(body.clone());
-        return Ok(body);
+        match resp.json::<Token>().await {
+            Ok(token) => {
+                self.token = Some(token.clone());
+                Ok(token)
+            }
+            Err(err) => Err(Error::UnknownError(format!(
+                "Failed to parse response body as Token: {}",
+                err
+            ))),
+        }
     }
 
-    pub async fn refresh_token(&mut self) -> Result<Token, reqwest::Error> {
+    pub async fn refresh_token(&mut self) -> Result<Token, Error> {
         let form = [
             ("client_id", self.client_id.as_str()),
             (
@@ -146,29 +186,58 @@ impl Client {
             ("grant_type", "refresh_token"),
             ("redirect_uri", "oob"),
         ];
-        let req = self
+        let req = match self
             .client
             .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(&form)
-            .build()?;
-        let resp = self.client.execute(req).await?;
+            .build()
+        {
+            Ok(request) => request,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to build refresh token request: {}",
+                    err
+                )));
+            }
+        };
+        let resp = match self.client.execute(req).await {
+            Ok(response) => response,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to execute refresh token request: {:?}",
+                    err.source().unwrap()
+                )));
+            }
+        };
         if !resp.status().is_success() {
             let status = resp.status();
             let body_text = resp.text().await.unwrap();
             println!("Err: body: {}", body_text);
-            panic!("Failed to refresh token: {}", status);
+            return Err(Error::UnknownError(format!(
+                "Failed to refresh token: {}",
+                status
+            )));
         }
 
-        let body = resp.json::<Token>().await?;
-        self.token = Some(body.clone());
-        return Ok(body);
+        match resp.json::<Token>().await {
+            Ok(token) => {
+                self.token = Some(token.clone());
+                Ok(token)
+            }
+            Err(err) => Err(Error::UnknownError(format!(
+                "Failed to parse response body as Token: {}",
+                err
+            ))),
+        }
     }
 
-    pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, reqwest::Error> {
-        println!("GET {}", url);
+    pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, Error> {
+        if DEBUG_ENABLED {
+            println!("GET {}", url);
+        }
 
-        let req = self
+        let req = match self
             .client
             .get(url)
             .header("Accept", "application/xml")
@@ -176,29 +245,115 @@ impl Client {
                 "Authorization",
                 format!("Bearer {}", self.token.as_ref().unwrap().access_token),
             )
-            .build()?;
-        let resp = self.client.execute(req).await?;
+            .build()
+        {
+            Ok(req) => req,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to build GET request for URL: {}. Err: {}",
+                    url, err,
+                )));
+            }
+        };
+        let resp = match self.client.execute(req).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to execute GET request for URL: {}. Err: {}",
+                    url, err,
+                )));
+            }
+        };
 
         if resp.status().is_client_error() {
             let code = resp.status().as_u16();
-            let body = resp.text().await.expect("couldn't read response body");
-            println!("Status:   {}", code);
-            println!("Raw Body: {}", body);
+            let body = match resp.text().await {
+                Ok(text) => text,
+                Err(err) => {
+                    return Err(Error::UnknownError(format!(
+                        "resp code: {}; failed to read response body: {}",
+                        code, err
+                    )));
+                }
+            };
+            if DEBUG_ENABLED {
+                println!("Status:   {}", code);
+                println!("Raw Body: {}", body);
+            }
             match serde_xml_rs::from_str::<crate::data::Error>(body.as_str()) {
                 Ok(yahoo_error) => {
-                    // OAuth oauth_problem="token_expired", realm="yahooapis.com"
-                    panic!("Got client error: {}", yahoo_error.description)
+                    if DEBUG_ENABLED {
+                        println!("Yahoo Error: {:?}", yahoo_error);
+                    }
+                    if code == 401
+                        && yahoo_error
+                            .description()
+                            .contains("oauth_problem=\"token_expired\"")
+                    {
+                        // This is a special case where the token has expired.
+                        // We should refresh the token and try again.
+                        // println!("Token expired, refreshing...");
+                        // match self.refresh_token().await {
+                        //     Ok(new_token) => {
+                        //         println!("New token: {:?}", new_token);
+                        //         // Update the token in the client
+                        //         self.token = Some(new_token);
+                        //         // Retry the request with the new token
+                        //         return self.get(url).await; // ooooh rescursions
+                        //     }
+                        //     Err(e) => {
+                        //         return Err(Error::UnknownError(format!(
+                        //             "Failed to refresh token: {}",
+                        //             e
+                        //         )));
+                        //     }
+                        // }
+                        return Err(Error::TokenExpired);
+                    } else if code == 401
+                        && yahoo_error
+                            .description()
+                            .contains("oauth_problem=\"unable_to_determine_oauth_type\"")
+                    {
+                        return Err(Error::OAuthError(
+                            "unable_to_determine_oauth_type".to_string(),
+                        ));
+                    } else {
+                        // OAuth oauth_problem="token_expired", realm="yahooapis.com"
+                        return Err(Error::UnknownError(format!(
+                            "Got client error ({}): {}",
+                            code,
+                            yahoo_error.description(),
+                        )));
+                    }
                 }
-                Err(error) => panic!("Got unknown error: {}", error),
+                Err(_) => {
+                    return Err(Error::UnknownError(format!(
+                        "status code ({}): {}",
+                        code, body
+                    )));
+                }
             }
         } else if resp.status().is_server_error() {
             let code = resp.status().as_u16();
             let body = resp.text().await.expect("couldn't read response body");
-            panic!("Got server error ({}): {}", code, body)
+            return Err(Error::UnknownError(format!(
+                "Got server error ({}): {}",
+                code, body
+            )));
         }
 
-        let body_text = resp.text().await?;
-        println!("Body: {}", body_text);
+        let body_text = match resp.text().await {
+            Ok(text) => text,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "Failed to read response body: {}",
+                    err
+                )));
+            }
+        };
+        if DEBUG_ENABLED {
+            println!("Body: {}", body_text);
+        }
 
         return match from_str(body_text.as_str()) {
             Ok(content) => Ok(content),
@@ -218,7 +373,7 @@ impl Client {
         league_key: &LeagueKey,
         week: Option<i32>,
         date: Option<NaiveDate>,
-    ) -> Result<Scoreboard, reqwest::Error> {
+    ) -> Result<Scoreboard, Error> {
         let url = format!(
             "{}/league/{}/scoreboard{}",
             self.base_url,
@@ -232,40 +387,46 @@ impl Client {
             }
         );
 
-        return match self.get(url.as_str()).await {
+        match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.scoreboard {
                     Some(scoreboard) => Ok(scoreboard),
-                    None => panic!(),
+                    None => Err(Error::NotFound),
                 },
-                _ => panic!(),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("{}", error),
-        };
+            Err(err) => Err(Error::UnknownError(format!(
+                "failed to fetch league scoreboard: {}",
+                err
+            ))),
+        }
     }
 
-    pub async fn get_league_settings(
-        &self,
-        league_key: &LeagueKey,
-    ) -> Result<Settings, reqwest::Error> {
+    pub async fn get_league_settings(&self, league_key: &LeagueKey) -> Result<Settings, Error> {
         let url = format!("{}/league/{}/settings", self.base_url, league_key);
 
-        return match self.get(url.as_str()).await {
+        match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.settings {
                     Some(settings) => Ok(settings),
-                    None => panic!(),
+                    None => Err(Error::NotFound),
                 },
-                _ => panic!(),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch league settings content: {}", error),
-        };
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to fetch league settings: {}",
+                error
+            ))),
+        }
     }
 
-    pub async fn get_league_standings(
-        &self,
-        league_key: &LeagueKey,
-    ) -> Result<Standings, reqwest::Error> {
+    pub async fn get_league_standings(&self, league_key: &LeagueKey) -> Result<Standings, Error> {
         let url = format!("{}/league/{}/standings", self.base_url, league_key);
 
         return match self.get(url.as_str()).await {
@@ -274,16 +435,18 @@ impl Client {
                     Some(standings) => Ok(standings),
                     None => panic!("failed to fetch league standings: missing"),
                 },
-                _ => panic!("failed to fetch league standings content: invalid content variant: "),
+                other => {
+                    panic!("failed to fetch league standings content: invalid content variant: ")
+                }
             },
-            Err(error) => panic!("failed to fetch league standings content: {}", error),
+            Err(err) => Err(err),
         };
     }
 
     pub async fn get_league_transactions(
         &self,
         league_key: &LeagueKey,
-    ) -> Result<Vec<Transaction>, reqwest::Error> {
+    ) -> Result<Vec<Transaction>, Error> {
         let url = format!("{}/league/{}/transactions", self.base_url, league_key);
 
         return match self.get(url.as_str()).await {
@@ -315,7 +478,7 @@ impl Client {
         &self,
         game_codes: Vec<GameCode>,
         seasons: Vec<&str>,
-    ) -> Result<Vec<Game>, reqwest::Error> {
+    ) -> Result<Vec<Game>, Error> {
         let mut filter = String::new();
 
         if !game_codes.is_empty() {
@@ -329,18 +492,19 @@ impl Client {
 
         let url = format!("{}/games{}", self.base_url, filter);
 
-        println!("GET {}", url);
-
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Games(games) => return Ok(games.games),
-                _ => panic!("failed to fetch users content: invalid content variant: "),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Games, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch games content: {}", error),
+            Err(error) => Err(error),
         }
     }
 
-    pub async fn get_users(&self, use_login: bool) -> Result<Vec<User>, reqwest::Error> {
+    pub async fn get_users(&self, use_login: bool) -> Result<Vec<User>, Error> {
         let mut query = "";
         if use_login {
             query = ";use_login=1";
@@ -351,9 +515,12 @@ impl Client {
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Users(users) => return Ok(users.users),
-                _ => panic!("failed to fetch users content: invalid content variant: "),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Users, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch users content: {}", error),
+            Err(error) => Err(error),
         }
     }
 
@@ -366,29 +533,29 @@ impl Client {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub async fn get_league(
-        &self,
-        league_key: &LeagueKey,
-    ) -> Result<Option<League>, reqwest::Error> {
+    pub async fn get_league(&self, league_key: &LeagueKey) -> Result<Option<League>, Error> {
         let url = format!("{}/league/{}", self.base_url, league_key.to_string());
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => return Ok(Some(league)),
-                _ => panic!("failed to fetch league content: invalid content variant: "),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch league content: {}", error),
+            Err(error) => Err(error),
         }
     }
 
-    pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, reqwest::Error> {
+    pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, Error> {
         let url = format!(
             "{}/users;use_login=1/games;game_keys={}/teams",
             self.base_url,
             game_key.to_string()
         );
 
-        let content = self.get(url.as_str()).await.unwrap();
+        let content = self.get(url.as_str()).await?;
 
         let mut return_me: Vec<Team> = vec![];
 
@@ -404,15 +571,17 @@ impl Client {
                     }
                 }
             }
+        } else {
+            return Err(Error::UnexpectedContentVariant(format!(
+                "expected FantasyContent::Users, got: {:?}",
+                content.content
+            )));
         }
 
         Ok(return_me)
     }
 
-    pub async fn get_teams_in_league(
-        &self,
-        league_key: &LeagueKey,
-    ) -> Result<Vec<Team>, reqwest::Error> {
+    pub async fn get_teams_in_league(&self, league_key: &LeagueKey) -> Result<Vec<Team>, Error> {
         let url = format!("{}/league/{}/teams", self.base_url, league_key,);
 
         match self.get(url.as_str()).await {
@@ -421,16 +590,19 @@ impl Client {
                     Some(teams) => Ok(teams.teams),
                     None => Ok(vec![]),
                 },
-                _ => panic!("unsupported thinggggasdfasdf"),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(_) => todo!(),
+            Err(err) => Err(err),
         }
     }
 
     pub async fn get_players_for_league(
         &self,
         league_key: &LeagueKey,
-    ) -> Result<Vec<Player>, reqwest::Error> {
+    ) -> Result<Vec<Player>, Error> {
         let url = format!("{}/league/{}/players", self.base_url, league_key,);
 
         match self.get(url.as_str()).await {
@@ -439,16 +611,19 @@ impl Client {
                     Some(players) => Ok(players.players),
                     None => Ok(vec![]),
                 },
-                _ => panic!("got another fantasy content variant than expected"),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch player in league {}: {}", league_key, error),
+            Err(err) => Err(err),
         }
     }
 
     pub async fn get_players_for_leagues(
         &self,
         league_keys: Vec<&LeagueKey>,
-    ) -> Result<Vec<League>, reqwest::Error> {
+    ) -> Result<Vec<League>, Error> {
         let league_keys_str = join(league_keys, ",");
 
         let url = format!(
@@ -459,12 +634,12 @@ impl Client {
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Leagues(leagues) => Ok(leagues.leagues),
-                _ => panic!("got another fantasy content variant than expected"),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Leagues, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!(
-                "failed to fetch players in leagues {}: {}",
-                league_keys_str, error
-            ),
+            Err(err) => Err(err),
         }
     }
 
@@ -475,7 +650,7 @@ impl Client {
     ///
     /// For MLB, NHL, or NBA, you can specify a date parameter to retrieve a specific date – otherwise it will default to today’s roster.
     /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
-    pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, reqwest::Error> {
+    pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, Error> {
         let url = format!("{}/team/{}/roster", self.base_url, team_key,);
 
         match self.get(url.as_str()).await {
@@ -484,7 +659,10 @@ impl Client {
                     Some(roster) => Ok(roster),
                     None => panic!("asdfasdfasdfasdfffffff"),
                 },
-                _ => panic!("got another fantasy content variant than expected"),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Team, got: {:?}",
+                    other
+                ))),
             },
             Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
         }
@@ -495,7 +673,7 @@ impl Client {
         team_key: &TeamKey,
         week: Option<i32>,
         date: Option<NaiveDate>,
-    ) -> Result<Roster, reqwest::Error> {
+    ) -> Result<Roster, Error> {
         let url = format!(
             "{}/team/{}/stats{}",
             self.base_url,
@@ -560,6 +738,50 @@ mod tests {
                 // < referrer-policy: strict-origin-when-cross-origin
                 // < x-content-type-options: nosniff
                 // < x-xss-protection: 1; mode=block
+            )
+            .mount(&mock_server)
+            .await;
+
+        let fixture = Client::with_token(
+            "".to_string(),
+            "".to_string(),
+            Token {
+                access_token: "foo".to_string(),
+                token_type: "bearer".to_string(),
+                expires_in: 3600,
+                refresh_token: "bar".to_string(),
+                scope: None,
+            },
+            Some(mock_server.uri()),
+        );
+        (fixture, mock_server)
+    }
+    async fn setup_with_error(p: &str, code: u16, error: &str) -> (Client, MockServer) {
+        let mock_server = wiremock::MockServer::builder().start().await;
+        Mock::given(method("GET"))
+            .and(path(p))
+            .respond_with(
+                ResponseTemplate::new(code)
+                    .set_body_string(
+                        fs::read_to_string(format!("tests/data/fantasy/v2/errors/{}.xml", error))
+                            .unwrap(),
+                    )
+                    .insert_header("Content-Type", "application/xml"),
+                // < HTTP/2 401
+                // < date: Sun, 25 May 2025 14:51:07 GMT
+                // < server: ATS
+                // < www-authenticate: OAuth oauth_problem="token_expired", realm="yahooapis.com"
+                // < content-length: 268
+                // < content-type: application/xml
+                // < x-envoy-upstream-service-time: 1
+                // < cache-control: max-age=0, private
+                // < expires: -1
+                // < age: 0
+                // < strict-transport-security: max-age=31536000
+                // < referrer-policy: strict-origin-when-cross-origin
+                // < x-content-type-options: nosniff
+                // < x-xss-protection: 1; mode=block
+                // < x-frame-options: SAMEORIGIN
             )
             .mount(&mock_server)
             .await;
@@ -749,4 +971,37 @@ mod tests {
             .expect("should return ok");
         assert_eq!(1, standings.teams().len())
     }
+
+    #[tokio::test]
+    async fn test_get_league_standings_token_expired() {
+        let league_key = LeagueKey::new(GameKey::Id(390), 299227);
+        let (fixture, _mock_server) =
+            setup_with_error("/league/390.l.299227/standings", 401, "token_expired").await;
+        let resp = fixture
+            .get_league_standings(
+                &league_key, // 2019 nfl
+            )
+            .await;
+        assert!(resp.is_err());
+        let error = resp.err().unwrap();
+        assert_eq!(crate::client::Error::TokenExpired, error);
+    }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum Error {
+    // #[error("Request error: {0}")]
+    // RequestError(#[from] reqwest::Error),
+    // #[error("Deserialization error: {0}")]
+    // DeserializationError(#[from] serde_xml_rs::Error),
+    #[error("Unexpected content variant: {0}")]
+    UnexpectedContentVariant(String),
+    #[error("token expired, please refresh")]
+    TokenExpired,
+    #[error("OAuth error: {0}")]
+    OAuthError(String),
+    #[error("resource not found")]
+    NotFound,
+    #[error("unknown error: {0}")]
+    UnknownError(String),
 }
