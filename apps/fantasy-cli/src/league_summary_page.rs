@@ -105,9 +105,10 @@ fn render_league_details(
         league.record(),
     );
     let text_2 = format!(
-        "Total Points: {}\nDetails: {}",
-        league.total_points(),
-        league.raw_standings(),
+        "Total Points: {total_points}\n{settings:#?}\n{raw}",
+        total_points = league.total_points(),
+        settings = league.settings(),
+        raw = league.raw(),
     );
     let text = Text::from(format!("{}\n{}", text_1, text_2));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));

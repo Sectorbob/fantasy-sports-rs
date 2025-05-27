@@ -336,11 +336,13 @@ async fn get_yahoo_leagues(
                 .into_iter()
                 .map(|team| (team.team_id, team.roster.unwrap()))
                 .collect::<HashMap<u32, Roster>>();
+            let settings = yahoo_client.get_league_settings(&yahoo_team.team_key.league_key).await.unwrap();
             Ok::<League, yahoo_fantasy_rs::Error>(League::Yahoo {
                 team: yahoo_team,
                 league: yahoo_league,
                 standings,
                 rosters,
+                settings,
             })
         });
     }

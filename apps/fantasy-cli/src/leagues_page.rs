@@ -4,6 +4,7 @@ use std::{
 };
 
 use crossterm::event::KeyCode;
+use serde_json::Number;
 use sleeper_fantasy_rs;
 use tui::{
     Terminal,
@@ -118,6 +119,7 @@ pub enum League {
         league: yahoo_fantasy_rs::League,
         standings: yahoo_fantasy_rs::Standings,
         rosters: HashMap<u32, yahoo_fantasy_rs::Roster>,
+        settings: yahoo_fantasy_rs::Settings,
     },
 }
 impl League {
@@ -133,6 +135,7 @@ impl League {
                 league,
                 standings: _,
                 rosters: _,
+                settings: _,
             } => league.name.clone(),
         }
     }
@@ -148,6 +151,7 @@ impl League {
                 league,
                 standings: _,
                 rosters: _,
+                settings: _,
             } => league.season.clone(),
         }
     }
@@ -180,6 +184,7 @@ impl League {
                 league: _,
                 standings,
                 rosters: _,
+                settings: _,
             } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => format!(
@@ -206,6 +211,7 @@ impl League {
                 league: _,
                 standings: _,
                 rosters: _,
+                settings: _,
             } => team.name.clone(),
         }
     }
@@ -228,6 +234,7 @@ impl League {
                 league: _,
                 standings,
                 rosters: _,
+                settings: _,
             } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => team_standings.points_for as f64,
@@ -237,19 +244,36 @@ impl League {
             },
         }
     }
-    pub fn raw_standings(&self) -> String {
+    pub fn settings(&self) -> LeagueSettings {
         match self {
             League::Sleeper {
-                league: _,
-                rosters,
+                league,
+                rosters: _,
                 user_id: _,
-            } => format!("Rosters: {:#?}", rosters),
+            } => LeagueSettings::from_sleeper(&league.settings),
             League::Yahoo {
                 team: _,
                 league: _,
-                standings,
+                standings: _,
                 rosters: _,
-            } => format!("Standings: {:#?}", standings),
+                settings,
+            } => LeagueSettings::from_yahoo(settings),
+        }
+    }
+    pub fn raw(&self) -> String {
+        match self {
+            League::Sleeper {
+                league,
+                rosters: _,
+                user_id: _,
+            } => format!("Raw: {:#?}", league.settings),
+            League::Yahoo {
+                team: _,
+                league: _,
+                standings: _,
+                rosters: _,
+                settings,
+            } => format!("Raw: {:#?}", settings),
         }
     }
     pub fn roster(&self) -> Option<Roster> {
@@ -267,6 +291,7 @@ impl League {
                 league: _,
                 standings: _,
                 rosters,
+                settings: _,
             } => Roster::from_yahoo(team, rosters.get(&team.team_id).unwrap()).into(),
         }
     }
@@ -296,6 +321,7 @@ impl std::fmt::Display for League {
                 league,
                 standings: _,
                 rosters: _,
+                settings: _,
             } => write!(
                 f,
                 "[{}] {} (Yahoo) - {}       Record: {}",
@@ -318,4 +344,24 @@ pub enum KeyHandleResult {
     Unhandled,
     NOOP,
     GoToLeagueSummary,
+}
+
+#[derive(Debug)]
+pub struct LeagueSettings {
+    pub playoff_start_week: u32,
+}
+impl LeagueSettings {
+    pub fn from_yahoo(yahoo_settings: &yahoo_fantasy_rs::Settings) -> Self {
+        LeagueSettings {
+            playoff_start_week: yahoo_settings.playoff_start_week,
+        }
+    }
+    pub fn from_sleeper(sleeper_settings: &HashMap<String, Number>) -> Self {
+        LeagueSettings {
+            playoff_start_week: sleeper_settings
+                .get("playoff_week_start")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+        }
+    }
 }
