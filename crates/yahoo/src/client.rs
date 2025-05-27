@@ -652,7 +652,6 @@ impl Client {
     /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
     pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, Error> {
         let url = format!("{}/team/{}/roster", self.base_url, team_key,);
-
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Team(team) => match team.roster {
@@ -665,6 +664,28 @@ impl Client {
                 ))),
             },
             Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
+        }
+    }
+
+    pub async fn get_rosters_in_league(&self, league_key: &LeagueKey) -> Result<Vec<Team>, Error> {
+        let url = format!("{}/league/{}/teams/roster", self.base_url, league_key,);
+        // println!("GET {}", url);
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.teams {
+                    Some(teams) => Ok(teams.teams),
+                    None => Ok(vec![]),
+                },
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Team, got: {:?}",
+                    other
+                ))),
+            },
+            Err(error) => panic!(
+                "failed to fetch team rosters for league {}: {}",
+                league_key, error
+            ),
         }
     }
 
@@ -990,16 +1011,23 @@ mod tests {
     #[tokio::test]
     async fn test_get_roster_players_for_team() {
         let league_key = LeagueKey::new(GameKey::Id(390), 299227);
-        let (fixture, _mock_server) =
-            setup_with_200("/team/390.l.299227.t.1/roster").await;
+        let (fixture, _mock_server) = setup_with_200("/team/390.l.299227.t.1/roster").await;
         let resp = fixture
-            .get_roster_for_team(
-                &TeamKey::new(league_key, 1),
-            )
+            .get_roster_for_team(&TeamKey::new(league_key, 1))
             .await;
         assert!(resp.is_ok());
         let roster = resp.unwrap();
         assert_eq!(Some("16".to_string()), roster.week);
+    }
+    #[tokio::test]
+    async fn test_get_rosters_for_league() {
+        let league_key = LeagueKey::new(GameKey::Id(380), 129397);
+        let (fixture, _mock_server) = setup_with_200("/league/380.l.129397/teams/roster").await;
+        let resp = fixture.get_rosters_in_league(&league_key).await;
+        assert!(resp.is_ok());
+        let teams_w_roster = resp.unwrap();
+        assert_eq!(12, teams_w_roster.len());
+        // assert_eq!(Some("16".to_string()), roster.week);
     }
 }
 

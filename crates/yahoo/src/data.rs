@@ -117,19 +117,19 @@ pub struct Scoreboard {
 
 #[derive(Deserialize, Debug)]
 pub struct Settings {
-    draft_type: String,   // known values: live
-    scoring_type: String, // known values: head
-    uses_playoff: u8,     // 0 or 1
-    playoff_start_week: u32,
-    uses_playoff_reseeding: u8,     // 0 or 1
-    uses_lock_eliminated_teams: u8, // 0 or 1
-    uses_faab: u8,                  // 0 or 1
-    trade_end_date: String,         // format: 2009-11-27
-    trade_ratify_type: String,      // knwon values: commish
-    trade_reject_time: u32,
+    pub draft_type: String,   // known values: live
+    pub scoring_type: String, // known values: head
+    pub uses_playoff: u8,     // 0 or 1
+    pub playoff_start_week: u32,
+    pub uses_playoff_reseeding: u8,     // 0 or 1
+    pub uses_lock_eliminated_teams: u8, // 0 or 1
+    pub uses_faab: u8,                  // 0 or 1
+    pub trade_end_date: String,         // format: 2009-11-27
+    pub trade_ratify_type: String,      // knwon values: commish
+    pub trade_reject_time: u32,
     // roster_positions: RosterPositions,
     // stat_categories: StatCategories,
-    divisions: Divisions,
+    pub divisions: Option<Divisions>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -274,6 +274,9 @@ impl<'de> Deserialize<'de> for LeagueKey {
     }
 }
 
+///
+/// Deserialize a TeamKey from a string in the format `league_key.t.team_id`
+/// where the format for league key is `game_key.l.league_id`.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TeamKey {
     pub league_key: LeagueKey,
