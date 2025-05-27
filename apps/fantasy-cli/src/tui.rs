@@ -20,7 +20,6 @@ use tokio::time::sleep;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     terminal::CompletedFrame,
     widgets::{Block, Borders},
@@ -56,7 +55,7 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn do_it(stdout: Stdout) -> Result<(), Box<dyn std::error::Error>> {
-    let (mut tx, mut rx) = tokio::sync::mpsc::channel::<Vec<League>>(100);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<League>>(100);
 
     // let mut errors: Vec<String> = vec![];
 
@@ -108,11 +107,7 @@ async fn render_loop(
     // let mut navi_stack = vec![];
     // navi_stack.push(page);
 
-    let mut i = 0;
     loop {
-        i += 1;
-        // info!("Render loop iteration: {}", i);
-
         // Poll channel for new value (non-blocking)
         while let Ok(Some(new_leagues_state)) =
             rx.try_recv().map(Some).or::<Option<Vec<League>>>(Ok(None))

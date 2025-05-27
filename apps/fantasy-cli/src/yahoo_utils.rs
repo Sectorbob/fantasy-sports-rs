@@ -1,4 +1,3 @@
-use chrono::DateTime;
 use log::*;
 use serde_json;
 use std::{
@@ -306,22 +305,20 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
     let mut player_position_types = HashSet::new();
 
     for transaction in transactions {
-        let transaction_time = DateTime::from_timestamp(*transaction.timestamp(), 0).unwrap();
-        // println!("{}: {}", transaction.key(), transaction_time);
         match transaction {
             Transaction::Commish {
-                transaction_key,
-                transaction_id,
-                status,
-                timestamp,
+                transaction_key: _,
+                transaction_id: _,
+                status: _,
+                timestamp: _,
             } => {
                 //println!("Commish({}): {}", transaction_key, transaction_time)
             }
             Transaction::Add {
-                transaction_key,
-                transaction_id,
-                status,
-                timestamp,
+                transaction_key: _,
+                transaction_id: _,
+                status: _,
+                timestamp: _,
                 players,
             } => {
                 if let Some(players) = players {
@@ -341,10 +338,10 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                 }
             }
             Transaction::Drop {
-                transaction_key,
-                transaction_id,
-                status,
-                timestamp,
+                transaction_key: _,
+                transaction_id: _,
+                status: _,
+                timestamp: _,
                 players,
             } => {
                 if let Some(players) = players {
@@ -364,10 +361,10 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                 }
             }
             Transaction::AddDrop {
-                transaction_key,
-                transaction_id,
-                status,
-                timestamp,
+                transaction_key: _,
+                transaction_id: _,
+                status: _,
+                timestamp: _,
                 players,
             } => {
                 if let Some(players) = players {
@@ -406,11 +403,11 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
             }
             Transaction::Other {
                 type_name,
-                transaction_key,
-                transaction_id,
-                status,
-                timestamp,
-                players,
+                transaction_key: _,
+                transaction_id: _,
+                status: _,
+                timestamp: _,
+                players: _,
                 rest,
             } => println!("Other({}): {:#?}", type_name, rest),
         }

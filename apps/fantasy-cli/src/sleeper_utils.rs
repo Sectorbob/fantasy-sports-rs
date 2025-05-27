@@ -3,14 +3,14 @@ use sleeper_fantasy_rs::{Client, Player, Roster, Sport, User, custom::FantasyMat
 pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let sport = Sport::NFL;
     let client = Client::new(None);
-    // check_trending_players(&client, &sport).await;
-    // println!("Sport: {}", sport);
-    // let user = client.get_user(String::from("sectorbob")).await.unwrap();
-    // println!("User: {:#?}", user);
-    // check_all_leagues_in(&client, "2019", &user, &sport).await;
-    // check_all_leagues_in(&client, "2024", &user, &sport).await;
-    // check_all_ecr_leagues(&client).await;
-    // check_league_matchups(&client, &String::from("4581480575134427121"), &sport).await;
+    check_trending_players(&client, &sport).await;
+    println!("Sport: {}", sport);
+    let user = client.get_user(String::from("sectorbob")).await.unwrap();
+    println!("User: {:#?}", user);
+    check_all_leagues_in(&client, "2019", &user, &sport).await;
+    check_all_leagues_in(&client, "2024", &user, &sport).await;
+    check_all_ecr_leagues(&client).await;
+    check_league_matchups(&client, &String::from("4581480575134427121"), &sport).await;
     check_transactions(&client, &String::from("4581480575134427121"), &sport).await;
 
     Ok(())
