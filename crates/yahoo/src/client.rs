@@ -1,6 +1,6 @@
 use crate::data::{
-    FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey, Player,
-    Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token, Transaction, User,
+    DraftResult, FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey,
+    Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token, Transaction, User,
 };
 use chrono::NaiveDate;
 use core::str;
@@ -719,6 +719,27 @@ impl Client {
             Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
         }
     }
+
+    pub async fn get_draft_results(
+        &self,
+        league_key: &LeagueKey,
+    ) -> Result<Vec<DraftResult>, Error> {
+        let url = format!("{}/league/{}/draftresults", self.base_url, league_key);
+
+        match self.get(url.as_str()).await {
+            Ok(content) => match content.content {
+                FantasyContent::League(league) => match league.draft_results {
+                    Some(draft_results) => Ok(draft_results.draft_results),
+                    None => Err(Error::NotFound),
+                },
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
+            },
+            Err(error) => Err(error),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1019,6 +1040,7 @@ mod tests {
         let roster = resp.unwrap();
         assert_eq!(Some("16".to_string()), roster.week);
     }
+
     #[tokio::test]
     async fn test_get_rosters_for_league() {
         let league_key = LeagueKey::new(GameKey::Id(380), 129397);
@@ -1028,6 +1050,20 @@ mod tests {
         let teams_w_roster = resp.unwrap();
         assert_eq!(12, teams_w_roster.len());
         // assert_eq!(Some("16".to_string()), roster.week);
+    }
+
+    #[tokio::test]
+    async fn test_get_draft_results_for_league() {
+        let league_key = LeagueKey::new(GameKey::Id(380), 129397);
+        let (fixture, _mock_server) = setup_with_200("/league/380.l.129397/draftresults").await;
+        let resp = fixture.get_draft_results(&league_key).await;
+        assert!(resp.is_ok());
+        let draft_results = resp.unwrap();
+        assert_eq!(204, draft_results.len());
+        for draft_result in draft_results.iter() {
+            println!("{:?}", draft_result);
+        }
+        assert_eq!(20, draft_results[0].pick);
     }
 }
 

@@ -90,6 +90,7 @@ pub struct League {
     #[serde(deserialize_with = "deserialize_naive_date")]
     pub end_date: NaiveDate,
     pub season: String,
+    pub draft_results: Option<DraftResults>,
     pub game_code: GameCode,
     pub is_plus_league: bool,
     pub is_pro_league: bool,
@@ -107,6 +108,41 @@ pub enum DraftStatus {
     // TODO: Handle fallback case with value
     // #[serde(untagged)]
     // Other(String),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DraftResults {
+    #[serde(rename = "draft_result")]
+    pub draft_results: Vec<DraftResult>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DraftResult {
+    pub pick: u32,
+    pub round: u32,
+    pub team_key: TeamKey,
+    pub player_key: PlayerKey, // e.g. nfl.p.7241
+}
+
+///
+/// e.g. nfl.p.7241
+#[derive(Debug)]
+pub struct PlayerKey {
+    pub game_key: GameKey, // e.g. 7241
+    pub player_id: u32,
+}
+impl std::fmt::Display for PlayerKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.p.{}", self.game_key, self.player_id)
+    }
+}
+impl<'de> Deserialize<'de> for PlayerKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserialize_player_key(deserializer)
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -427,7 +463,7 @@ pub struct User {
 //endregion
 
 #[derive(Deserialize, Debug, PartialEq)]
-pub(crate) struct Teams {
+pub struct Teams {
     #[serde(rename = "team", default)]
     pub teams: Vec<Team>,
 }
@@ -1039,6 +1075,38 @@ where
     Ok(LeagueKey {
         game_key: GameKey::Id(game_key),
         league_id,
+    })
+}
+
+fn deserialize_player_key<'de, D>(deserializer: D) -> Result<PlayerKey, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let mut parts = s.split('.');
+
+    let game_key_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing game_key"))?
+        .to_string();
+    let game_key = game_key_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("game_key parse error: {}", e)))?;
+
+    // skip the middle "l"
+    let _ = parts.next();
+
+    let player_id_str = parts
+        .next()
+        .ok_or_else(|| de::Error::custom("missing player_id"))?;
+
+    let player_id = player_id_str
+        .parse::<u32>()
+        .map_err(|e| de::Error::custom(format!("player_id parse error: {}", e)))?;
+
+    Ok(PlayerKey {
+        game_key: GameKey::Id(game_key),
+        player_id,
     })
 }
 
