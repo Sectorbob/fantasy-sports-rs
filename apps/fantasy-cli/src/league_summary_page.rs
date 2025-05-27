@@ -34,9 +34,9 @@ impl<'a> LeagueSummaryPage<'a> {
                     .direction(Direction::Horizontal)
                     .constraints(
                         [
-                            Constraint::Percentage(100),
-                            // Constraint::Percentage(50),
-                            // Constraint::Percentage(50),
+                            // Constraint::Percentage(100),
+                            Constraint::Percentage(50),
+                            Constraint::Percentage(50),
                         ]
                         .as_ref(),
                     )
@@ -57,28 +57,27 @@ impl<'a> LeagueSummaryPage<'a> {
                         .split(*col);
 
                     for (j, row) in rows.iter().enumerate() {
-                        let title = format!(
-                            "{} League Summary (↑/↓, 'q' to quit, 'w' to welcome 'l' to leagues)",
-                            league.name()
-                        );
-                        let text_1 = format!(
-                            "Team Name: {}\nSeason:    {}\nRecord:    {}",
-                            league.team_name(),
-                            league.season(),
-                            league.record(),
-                        );
-                        let text_2 = format!(
-                            "Total Points: {}\nDetails: {}",
-                            league.total_points(),
-                            league.raw_standings(),
-                        );
-                        let text = Text::from(format!("{}\n{}", text_1, text_2));
-                        let paragraph = Paragraph::new(text)
-                            .block(Block::default().title(title).borders(Borders::ALL));
-
-                        // let para = Paragraph::new(format!("Paragraph {},{}", i + 1, j + 1))
-                        //     .block(Block::default().borders(Borders::ALL));
-                        f.render_widget(paragraph, *row);
+                        if i == 0 && j == 0 {
+                            // Render league details in the first column
+                            render_league_details(league, f, row);
+                        } else if i == 1 && j == 0 {
+                            if let Some(roster) = &league.roster() {
+                                // Render roster in the second column
+                                roster.draw(f, row);
+                            } else {
+                                // Render empty paragraph if no roster
+                                let text = Text::from("No roster available.");
+                                let paragraph = Paragraph::new(text)
+                                    .block(Block::default().borders(Borders::ALL));
+                                f.render_widget(paragraph, *row);
+                            }
+                        } else {
+                            // Render empty paragraph in other cells
+                            let text = Text::from(format!("Column {}, Row {}", i + 1, j + 1));
+                            let paragraph =
+                                Paragraph::new(text).block(Block::default().borders(Borders::ALL));
+                            f.render_widget(paragraph, *row);
+                        }
                     }
                 }
             } else {
@@ -88,4 +87,32 @@ impl<'a> LeagueSummaryPage<'a> {
             }
         })
     }
+}
+
+fn render_league_details(
+    league: &League,
+    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
+    row: &tui::layout::Rect,
+) {
+    let title = format!(
+        "{} League Summary (↑/↓, 'q' to quit, 'w' to welcome 'l' to leagues)",
+        league.name()
+    );
+    let text_1 = format!(
+        "Team Name: {}\nSeason:    {}\nRecord:    {}",
+        league.team_name(),
+        league.season(),
+        league.record(),
+    );
+    let text_2 = format!(
+        "Total Points: {}\nDetails: {}",
+        league.total_points(),
+        league.raw_standings(),
+    );
+    let text = Text::from(format!("{}\n{}", text_1, text_2));
+    let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
+
+    // let para = Paragraph::new(format!("Paragraph {},{}", i + 1, j + 1))
+    //     .block(Block::default().borders(Borders::ALL));
+    f.render_widget(paragraph, *row);
 }

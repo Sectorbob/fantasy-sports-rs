@@ -12,6 +12,7 @@ use crossterm::{
 };
 use sleeper_fantasy_rs::{self as sleeper, Sport};
 use std::{
+    collections::HashMap,
     io::{self, Stdout},
     time::Duration,
 };
@@ -24,7 +25,7 @@ use tui::{
     terminal::CompletedFrame,
     widgets::{Block, Borders},
 };
-use yahoo_fantasy_rs::{GameCode, GameKey, Team};
+use yahoo_fantasy_rs::{GameCode, GameKey, Roster, Team};
 
 pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal in raw mode
@@ -333,10 +334,18 @@ async fn get_yahoo_leagues(
                 .get_league_standings(&yahoo_team.team_key.league_key)
                 .await
                 .unwrap();
+            let rosters = yahoo_client
+                .get_rosters_in_league(&yahoo_team.team_key.league_key)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|team| (team.team_id, team.roster.unwrap()))
+                .collect::<HashMap<u32, Roster>>();
             Ok::<League, yahoo_fantasy_rs::Error>(League::Yahoo {
                 team: yahoo_team,
                 league: yahoo_league,
                 standings,
+                rosters,
             })
         });
     }

@@ -1,4 +1,7 @@
-use std::io::{self, Stdout};
+use std::{
+    collections::HashMap,
+    io::{self, Stdout},
+};
 
 use crossterm::event::KeyCode;
 use sleeper_fantasy_rs;
@@ -9,6 +12,8 @@ use tui::{
     terminal::CompletedFrame,
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+
+use crate::roster_widget::Roster;
 
 pub struct LeaguesPage {
     leagues: Vec<League>,
@@ -112,6 +117,7 @@ pub enum League {
         team: yahoo_fantasy_rs::Team,
         league: yahoo_fantasy_rs::League,
         standings: yahoo_fantasy_rs::Standings,
+        rosters: HashMap<u32, yahoo_fantasy_rs::Roster>,
     },
 }
 impl League {
@@ -126,6 +132,7 @@ impl League {
                 team: _,
                 league,
                 standings: _,
+                rosters: _,
             } => league.name.clone(),
         }
     }
@@ -133,13 +140,14 @@ impl League {
         match self {
             League::Sleeper {
                 league,
-                rosters,
+                rosters: _,
                 user_id: _,
             } => league.season.clone(),
             League::Yahoo {
                 team: _,
                 league,
                 standings: _,
+                rosters: _,
             } => league.season.clone(),
         }
     }
@@ -171,6 +179,7 @@ impl League {
                 team,
                 league: _,
                 standings,
+                rosters: _,
             } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => format!(
@@ -188,7 +197,7 @@ impl League {
     pub fn team_name(&self) -> String {
         match self {
             League::Sleeper {
-                league,
+                league: _,
                 rosters: _,
                 user_id: _,
             } => "".to_string(),
@@ -196,6 +205,7 @@ impl League {
                 team,
                 league: _,
                 standings: _,
+                rosters: _,
             } => team.name.clone(),
         }
     }
@@ -217,6 +227,7 @@ impl League {
                 team,
                 league: _,
                 standings,
+                rosters: _,
             } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => team_standings.points_for as f64,
@@ -237,7 +248,26 @@ impl League {
                 team: _,
                 league: _,
                 standings,
+                rosters: _,
             } => format!("Standings: {:#?}", standings),
+        }
+    }
+    pub fn roster(&self) -> Option<Roster> {
+        match self {
+            League::Sleeper {
+                league: _,
+                rosters,
+                user_id,
+            } => rosters
+                .iter()
+                .find(|r| &r.owner_id == user_id)
+                .map(Roster::from_sleeper),
+            League::Yahoo {
+                team,
+                league: _,
+                standings: _,
+                rosters,
+            } => Roster::from_yahoo(team, rosters.get(&team.team_id).unwrap()).into(),
         }
     }
 }
@@ -246,11 +276,11 @@ impl std::fmt::Display for League {
         match self {
             League::Sleeper {
                 league,
-                rosters,
+                rosters: _,
                 user_id: _,
             } => write!(
                 f,
-                "[{}] {} (Sleeper) - {}    Record: {}",
+                "[{season}] {name} (Sleeper) - {status}    Record: {record}",
                 season = league.season,
                 name = league.name,
                 status = match league.status {
@@ -264,7 +294,8 @@ impl std::fmt::Display for League {
             League::Yahoo {
                 team: _,
                 league,
-                standings,
+                standings: _,
+                rosters: _,
             } => write!(
                 f,
                 "[{}] {} (Yahoo) - {}       Record: {}",

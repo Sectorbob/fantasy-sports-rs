@@ -6,6 +6,7 @@ use log::*;
 mod config;
 mod league_summary_page;
 mod leagues_page;
+mod roster_widget;
 mod sleeper_utils;
 mod tui;
 mod yahoo_utils;
