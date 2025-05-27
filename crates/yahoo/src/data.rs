@@ -752,7 +752,7 @@ impl<'de> Deserialize<'de> for Transaction {
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Players {
-    #[serde(rename = "player")]
+    #[serde(rename = "player", default)]
     pub players: Vec<Player>,
 }
 

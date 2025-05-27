@@ -986,6 +986,21 @@ mod tests {
         let error = resp.err().unwrap();
         assert_eq!(crate::client::Error::TokenExpired, error);
     }
+
+    #[tokio::test]
+    async fn test_get_roster_players_for_team() {
+        let league_key = LeagueKey::new(GameKey::Id(390), 299227);
+        let (fixture, _mock_server) =
+            setup_with_200("/team/390.l.299227.t.1/roster").await;
+        let resp = fixture
+            .get_roster_for_team(
+                &TeamKey::new(league_key, 1),
+            )
+            .await;
+        assert!(resp.is_ok());
+        let roster = resp.unwrap();
+        assert_eq!(Some("16".to_string()), roster.week);
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
