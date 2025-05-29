@@ -6,18 +6,19 @@ use crate::data::{Matchup, Player, Roster, User};
 ///
 ///
 
-pub struct FantasyMatchup<'a> {
-    pub left: FantasyMatchupSide<'a>,
-    pub right: FantasyMatchupSide<'a>,
+pub struct FantasyMatchup {
+    pub week: usize,
+    pub left: FantasyMatchupSide,
+    pub right: FantasyMatchupSide,
 }
 
-impl FantasyMatchup<'_> {
-    pub fn from_stuff<'a>(
-        players: &'a HashMap<String, Player>,
+impl FantasyMatchup {
+    pub fn from_stuff(
+        week: usize,
         matchups: Vec<Matchup>,
-        rosters: &'a Vec<Roster>,
-        owners: &'a Vec<User>,
-    ) -> Vec<FantasyMatchup<'a>> {
+        rosters: &Vec<Roster>,
+        owners: &Vec<User>,
+    ) -> Result<Vec<FantasyMatchup>, Box<dyn std::error::Error + Send + Sync>> {
         let mut games: Vec<(Matchup, Matchup)> = Vec::with_capacity(matchups.len() / 2);
         let mut wip: Vec<Matchup> = vec![];
         let mut orphaned: Vec<Matchup> = vec![];
@@ -35,58 +36,99 @@ impl FantasyMatchup<'_> {
             }
         }
         if !wip.is_empty() {
-            panic!("wip was not empty: {}", wip.len());
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("wip was not empty: {}", wip.len()),
+            )));
         }
         if !orphaned.is_empty() {
-            println!("had {} orphaned statlines", orphaned.len());
+            // info!("had {} orphaned statlines", orphaned.len());
         }
 
-        let mut new_fantasy_matchups: Vec<FantasyMatchup<'a>> = vec![];
+        let mut new_fantasy_matchups: Vec<FantasyMatchup> = vec![];
 
         for game in games {
             let roster_0 =
                 match rosters.binary_search_by_key(&game.0.roster_id, |roster| roster.roster_id) {
-                    Ok(index) => &rosters[index],
-                    Err(_) => panic!("invalid roster {}", &game.0.roster_id),
+                    Ok(index) => rosters[index].clone(),
+                    Err(_) => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("invalid roster {}", &game.0.roster_id),
+                        )));
+                    }
                 };
             let roster_1 =
                 match rosters.binary_search_by_key(&game.1.roster_id, |roster| roster.roster_id) {
-                    Ok(index) => &rosters[index],
-                    Err(_) => panic!("invalid roster {}", &game.1.roster_id),
+                    Ok(index) => rosters[index].clone(),
+                    Err(_) => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("invalid roster {}", &game.1.roster_id),
+                        )));
+                    }
                 };
             let owner_0 =
                 match owners.binary_search_by_key(&(&roster_0.owner_id), |user| &user.user_id) {
-                    Ok(index) => &owners[index],
-                    Err(_) => panic!("invalid owner '{}'", &roster_0.owner_id),
+                    Ok(index) => owners[index].clone(),
+                    Err(_) => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("invalid owner '{}'", &roster_0.owner_id),
+                        )));
+                    }
                 };
             let owner_1 =
                 match owners.binary_search_by_key(&(&roster_1.owner_id), |user| &user.user_id) {
-                    Ok(index) => &owners[index],
-                    Err(_) => panic!("invalid owner '{}'", &roster_1.owner_id),
+                    Ok(index) => owners[index].clone(),
+                    Err(_) => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("invalid owner '{}'", &roster_1.owner_id),
+                        )));
+                    }
                 };
 
+            let players_0 = game.0.players.clone();
+            let players_1 = game.1.players.clone();
+            let starters_0 = game.0.starters.clone();
+            let starters_1 = game.1.starters.clone();
+
             let f = FantasyMatchup {
+                week: week,
                 left: FantasyMatchupSide {
                     matchup: game.0,
                     roster: roster_0,
                     owner: owner_0,
-                    players: players,
+                    starters: starters_0.clone(),
+                    bench: players_0
+                        .into_iter()
+                        .filter(|p| starters_0.contains(p))
+                        .collect(),
+                    ir: vec![],
+                    // players: players,
                 },
                 right: FantasyMatchupSide {
                     matchup: game.1,
                     roster: roster_1,
                     owner: owner_1,
-                    players: players,
+                    starters: starters_1.clone(),
+                    bench: players_1
+                        .into_iter()
+                        .filter(|p| starters_1.contains(p))
+                        .collect(),
+                    ir: vec![],
+                    // players: players,
                 },
             };
 
             new_fantasy_matchups.push(f);
         }
 
-        new_fantasy_matchups
+        Ok(new_fantasy_matchups)
     }
 
-    pub fn printy(&self, width: usize) {
+    pub fn printy(&self, width: usize, players: &HashMap<String, Player>) {
         // let delim = String::from(" ").repeat(if width % 2 == 0 { 2 } else { 1 });
         let col_width = width / 2;
 
@@ -105,16 +147,8 @@ impl FantasyMatchup<'_> {
             col_width = col_width,
         );
         for i in 0..self.left.matchup.starters.len() {
-            let left_player = self
-                .left
-                .players
-                .get(&self.left.matchup.starters[i])
-                .unwrap();
-            let right_player = self
-                .right
-                .players
-                .get(&self.right.matchup.starters[i])
-                .unwrap();
+            let left_player = players.get(&self.left.matchup.starters[i]).unwrap();
+            let right_player = players.get(&self.right.matchup.starters[i]).unwrap();
 
             let left_max_player_points_width = self.left.max_player_score_width();
             let left_player_name_width = col_width - left_max_player_points_width;
@@ -140,14 +174,22 @@ impl FantasyMatchup<'_> {
     }
 }
 
-pub struct FantasyMatchupSide<'a> {
+pub struct FantasyMatchupSide {
     pub matchup: Matchup,
-    pub roster: &'a Roster,
-    pub owner: &'a User,
-    pub players: &'a HashMap<String, Player>,
+    pub roster: Roster,
+    pub starters: Vec<String>,
+    pub bench: Vec<String>,
+    pub ir: Vec<String>,
+    pub owner: User,
 }
-impl<'a> FantasyMatchupSide<'a> {
-    pub fn max_player_score_width(&'a self) -> usize {
+impl FantasyMatchupSide {
+    pub fn players(&self) -> Vec<String> {
+        let mut players = self.starters.clone();
+        players.append(&mut self.bench.clone());
+        players.append(&mut self.ir.clone());
+        players
+    }
+    pub fn max_player_score_width(&self) -> usize {
         self.matchup
             .starters_points
             .iter()

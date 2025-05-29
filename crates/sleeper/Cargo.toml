@@ -8,6 +8,7 @@ chrono = { version = "0.4.41", features = [ "serde" ] }
 reqwest = { version = "0.12.15", features = [ "json" ] }
 serde = { version = "1.0.219", features = [ "derive" ] }
 serde_json = { version = "1.0.140" }
+thiserror = "2.0.12"
 tokio = { version = "1.45.0", features = [ "full" ] }
 
 [features]

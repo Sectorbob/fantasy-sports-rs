@@ -2,9 +2,8 @@ use std::{collections::HashMap, error::Error as StdError};
 
 use reqwest::StatusCode;
 
-use crate::data::{
-    Error, League, Matchup, Player, Roster, Sport, Transaction, TrendingPlayer, User,
-};
+use crate::data::{League, Matchup, Player, Roster, Sport, Transaction, TrendingPlayer, User};
+use thiserror;
 
 const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
@@ -23,10 +22,7 @@ impl Client {
         }
     }
 
-    pub async fn fetch_all_players(
-        &self,
-        sport: &Sport,
-    ) -> Result<HashMap<String, Player>, reqwest::Error> {
+    pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
         match self
             .client
             .get(format!("{}/players/{}", self.base_url, sport))
@@ -37,13 +33,21 @@ impl Client {
                 true => match resp.json::<HashMap<String, Player>>().await {
                     Ok(players) => Ok(players),
                     Err(json_error) => {
-                        println!("failed to parse json: {:#?}", json_error);
-                        panic!("{}: {:?}", json_error, json_error.source())
+                        return Err(Error::UnknownError(format!(
+                            "failed to parse json: {:?}",
+                            json_error,
+                        )));
                     }
                 },
-                false => panic!("got error response: {}", resp.status()),
+                false => Err(Error::UnknownError(format!(
+                    "got unexpected status: {}",
+                    resp.status()
+                ))),
             },
-            Err(error) => Err(error),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
@@ -53,7 +57,7 @@ impl Client {
         _type: String,
         lookback_hours: Option<u32>,
         limit: Option<u32>,
-    ) -> Result<Vec<TrendingPlayer>, reqwest::Error> {
+    ) -> Result<Vec<TrendingPlayer>, Error> {
         let mut req = self.client.get(format!(
             "{}/players/{}/trending/{}",
             self.base_url, sport, _type
@@ -69,14 +73,21 @@ impl Client {
             Ok(resp) => match resp.status().is_success() {
                 true => match resp.json::<Vec<TrendingPlayer>>().await {
                     Ok(players) => Ok(players),
-                    Err(json_error) => {
-                        println!("failed to parse json: {:#?}", json_error);
-                        panic!("{}: {:?}", json_error, json_error.source())
-                    }
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {}: {:?}",
+                        json_error,
+                        json_error.source()
+                    ))),
                 },
-                false => panic!("got error response: {}", resp.status()),
+                false => Err(Error::UnknownError(format!(
+                    "got error response: {}",
+                    resp.status()
+                ))),
             },
-            Err(error) => Err(error),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {}",
+                error.to_string()
+            ))),
         }
     }
 
@@ -91,15 +102,22 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<User>>().await {
                     Ok(opt_user) => match opt_user {
                         Some(user) => Ok(user),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {}: {:?}",
+                        json_error,
+                        json_error.source()
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unknown error: {:?}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
@@ -125,15 +143,21 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<Vec<League>>>().await {
                     Ok(opt_league) => match opt_league {
                         Some(leagues) => Ok(leagues),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
@@ -148,15 +172,21 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<League>>().await {
                     Ok(opt_league) => match opt_league {
                         Some(league) => Ok(league),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
@@ -175,43 +205,54 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<Vec<Roster>>>().await {
                     Ok(opt_rosters) => match opt_rosters {
                         Some(rosters) => Ok(rosters),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
     pub async fn get_users_for_league(&self, league_id: &String) -> Result<Vec<User>, Error> {
-        let url = format!("{}/league/{}/users", self.base_url, league_id.trim(),);
-        println!("GET {}", url);
-
+        let url = format!("{}/league/{}/users", self.base_url, league_id.trim());
+        // debug!("GET {}", url);
         match self.client.get(url).send().await {
             Ok(resp) => match resp.status() {
                 StatusCode::OK => match resp.json::<Option<Vec<User>>>().await {
                     Ok(opt_users) => match opt_users {
                         Some(users) => Ok(users),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
     pub async fn get_matchups(
         &self,
-        league_id: &String,
-        week: &String,
+        league_id: String,
+        week: String,
     ) -> Result<Vec<Matchup>, Error> {
         match self
             .client
@@ -228,15 +269,21 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<Vec<Matchup>>>().await {
                     Ok(opt_matchups) => match opt_matchups {
                         Some(matchups) => Ok(matchups),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 
@@ -260,15 +307,21 @@ impl Client {
                 StatusCode::OK => match resp.json::<Option<Vec<Transaction>>>().await {
                     Ok(opt_transactions) => match opt_transactions {
                         Some(transactions) => Ok(transactions),
-                        None => Err(Error::ResourceNotFound),
+                        None => Err(Error::NotFound),
                     },
-                    Err(json_error) => Err(Error::DecodeError(json_error)),
+                    Err(json_error) => Err(Error::UnknownError(format!(
+                        "failed to parse json: {:?}",
+                        json_error
+                    ))),
                 },
-                StatusCode::NOT_FOUND => Err(Error::ResourceNotFound),
-                code => panic!("unknown error: {}", code),
+                StatusCode::NOT_FOUND => Err(Error::NotFound),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
-            Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => panic!("unknown error: {}", error),
+            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to send request: {:?}",
+                error
+            ))),
         }
     }
 }
@@ -357,7 +410,7 @@ mod tests {
             .await;
 
         let matchups = client
-            .get_matchups(&String::from(TEST_LEAGUE_ID), &week.to_string())
+            .get_matchups(String::from(TEST_LEAGUE_ID), week.to_string())
             .await
             .unwrap();
         assert_eq!(12, matchups.len());
@@ -460,4 +513,16 @@ mod tests {
                 .collect::<HashSet<String>>()
         );
     }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum Error {
+    // #[error("Request error: {0}")]
+    // RequestError(#[from] reqwest::Error),
+    // #[error("Deserialization error: {0}")]
+    // DeserializationError(#[from] serde_xml_rs::Error),
+    #[error("resource not found")]
+    NotFound,
+    #[error("unknown error: {0}")]
+    UnknownError(String),
 }

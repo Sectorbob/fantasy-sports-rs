@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Number, Value};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum Sport {
     MLB,
@@ -23,7 +23,7 @@ impl std::fmt::Display for Sport {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Player {
     pub active: Option<bool>,
     pub player_id: String,
@@ -104,7 +104,7 @@ pub struct TrendingPlayer {
     pub count: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub username: Option<String>, // present for get_user, but not get_users_in_league
     pub user_id: String,
@@ -159,7 +159,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LeagueUserDetails {
     pub is_bot: bool,
     pub is_owner: bool,
@@ -224,7 +224,7 @@ pub struct LastMessageDetails {
     pub last_message_text_map: Option<Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Roster {
     pub roster_id: u8,
     pub owner_id: String,
