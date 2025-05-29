@@ -314,6 +314,20 @@ impl fmt::Display for TransactionStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TrendType {
+    ADD,
+    DROP,
+}
+impl fmt::Display for TrendType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TrendType::ADD => write!(f, "add"),
+            TrendType::DROP => write!(f, "drop"),
+        }
+    }
+}
+
 pub enum Error {
     ResourceNotFound,
     ServerError(reqwest::Error),

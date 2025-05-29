@@ -1,10 +1,14 @@
-use std::{collections::HashMap, error::Error as StdError};
+use std::collections::HashMap;
 
-use reqwest::StatusCode;
+use reqwest::{Request, StatusCode};
+use serde::de::DeserializeOwned;
 
-use crate::data::{League, Matchup, Player, Roster, Sport, Transaction, TrendingPlayer, User};
+use crate::data::{
+    League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer, User,
+};
 use thiserror;
 
+// const SLEEPER_API_BASE_URL_UNPUBLISHED: &str = "https://api.sleeper.app";
 const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
 
@@ -17,101 +21,58 @@ impl Client {
         Client {
             base_url: base_url.unwrap_or(SLEEPER_API_BASE_URL.to_string()),
             client: reqwest::ClientBuilder::new()
+                .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
+                // .default_headers(headers)
                 .build()
                 .expect("dev error while building http client"),
         }
     }
 
-    pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
-        match self
-            .client
-            .get(format!("{}/players/{}", self.base_url, sport))
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.status().is_success() {
-                true => match resp.json::<HashMap<String, Player>>().await {
-                    Ok(players) => Ok(players),
-                    Err(json_error) => {
-                        return Err(Error::UnknownError(format!(
-                            "failed to parse json: {:?}",
-                            json_error,
-                        )));
-                    }
-                },
-                false => Err(Error::UnknownError(format!(
-                    "got unexpected status: {}",
-                    resp.status()
-                ))),
-            },
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
-    }
-
-    pub async fn get_trending_players(
+    pub(crate) fn build_get_json_request(
         &self,
-        sport: &Sport,
-        _type: String,
-        lookback_hours: Option<u32>,
-        limit: Option<u32>,
-    ) -> Result<Vec<TrendingPlayer>, Error> {
-        let mut req = self.client.get(format!(
-            "{}/players/{}/trending/{}",
-            self.base_url, sport, _type
-        ));
-        if let Some(lookback_hours) = lookback_hours {
-            req = req.query(&[("lookback_hours", lookback_hours.to_string().as_str())]);
-        }
-        if let Some(limit) = limit {
-            req = req.query(&[("limit", limit.to_string().as_str())]);
-        }
+        path: String,
+        filters: Option<Vec<(&str, String)>>,
+    ) -> Result<Request, reqwest::Error> {
+        let url = format!("{}{}", self.base_url, path);
 
-        match req.send().await {
-            Ok(resp) => match resp.status().is_success() {
-                true => match resp.json::<Vec<TrendingPlayer>>().await {
-                    Ok(players) => Ok(players),
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {}: {:?}",
-                        json_error,
-                        json_error.source()
-                    ))),
-                },
-                false => Err(Error::UnknownError(format!(
-                    "got error response: {}",
-                    resp.status()
-                ))),
-            },
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {}",
-                error.to_string()
-            ))),
+        let mut request_builder = self.client.get(&url).header("Accept", "application/json");
+
+        if let Some(filters) = filters {
+            request_builder = request_builder.query(&filters)
         }
+        request_builder.build()
     }
 
-    pub async fn get_user(&self, user: String) -> Result<User, Error> {
-        match self
-            .client
-            .get(format!("{}/user/{}", self.base_url, user.trim()))
-            .send()
-            .await
-        {
+    pub(crate) async fn get_json<T: DeserializeOwned>(
+        &self,
+        path: String,
+        filters: Option<Vec<(&str, String)>>,
+    ) -> Result<T, Error> {
+        let req = match self.build_get_json_request(path, filters) {
+            Ok(req) => req,
+            Err(err) => {
+                return Err(Error::UnknownError(format!(
+                    "failed to build request: {:?}",
+                    err
+                )));
+            }
+        };
+        let url = req.url().to_string();
+
+        match self.client.execute(req).await {
             Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<User>>().await {
-                    Ok(opt_user) => match opt_user {
-                        Some(user) => Ok(user),
-                        None => Err(Error::NotFound),
+                StatusCode::OK => match resp.json::<Option<T>>().await {
+                    Ok(opt_t) => match opt_t {
+                        Some(t) => Ok(t),
+                        None => Err(Error::NotFound(url)),
                     },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {}: {:?}",
-                        json_error,
-                        json_error.source()
-                    ))),
+                    Err(err) => Err(Error::ResponseDeserializationError {
+                        message: format!("{:?}", err),
+                        url,
+                    }),
                 },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unknown error: {:?}", code))),
+                StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
+                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
             // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
             Err(error) => Err(Error::UnknownError(format!(
@@ -119,6 +80,39 @@ impl Client {
                 error
             ))),
         }
+    }
+
+    pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
+        self.get_json(format!("/players/{}", sport), None).await
+    }
+
+    pub async fn get_trending_players(
+        &self,
+        sport: &Sport,
+        _type: TrendType,
+        lookback_hours: Option<u32>, //TODO: implement this filter
+        limit: Option<u32>,          //TODO: implement this filter
+    ) -> Result<Vec<TrendingPlayer>, Error> {
+        let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
+            .into_iter()
+            .filter_map(|(k, v)| match v {
+                Some(0) => None,
+                Some(value) => Some((k, value.to_string())),
+                None => None,
+            })
+            .collect::<Vec<(&str, String)>>();
+        let filters = if filters_vec.is_empty() {
+            None
+        } else {
+            Some(filters_vec)
+        };
+
+        self.get_json(format!("/players/{}/trending/{}", sport, _type), filters)
+            .await
+    }
+
+    pub async fn get_user(&self, user: String) -> Result<User, Error> {
+        self.get_json(format!("/user/{}", user.trim()), None).await
     }
 
     pub async fn get_leagues_for_user(
@@ -127,126 +121,26 @@ impl Client {
         sport: &Sport,
         season: &String,
     ) -> Result<Vec<League>, Error> {
-        match self
-            .client
-            .get(format!(
-                "{}/user/{}/leagues/{}/{}",
-                self.base_url,
-                user_id.trim(),
-                sport,
-                season
-            ))
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<Vec<League>>>().await {
-                    Ok(opt_league) => match opt_league {
-                        Some(leagues) => Ok(leagues),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
+        self.get_json(
+            format!("/user/{}/leagues/{}/{}", user_id.trim(), sport, season),
+            None,
+        )
+        .await
     }
 
     pub async fn get_league(&self, league_id: &String) -> Result<League, Error> {
-        match self
-            .client
-            .get(format!("{}/league/{}", self.base_url, league_id.trim(),))
-            .send()
+        self.get_json(format!("/league/{}", league_id.trim()), None)
             .await
-        {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<League>>().await {
-                    Ok(opt_league) => match opt_league {
-                        Some(league) => Ok(league),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
     }
 
     pub async fn get_rosters_for_league(&self, league_id: &String) -> Result<Vec<Roster>, Error> {
-        match self
-            .client
-            .get(format!(
-                "{}/league/{}/rosters",
-                self.base_url,
-                league_id.trim(),
-            ))
-            .send()
+        self.get_json(format!("/league/{}/rosters", league_id.trim()), None)
             .await
-        {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<Vec<Roster>>>().await {
-                    Ok(opt_rosters) => match opt_rosters {
-                        Some(rosters) => Ok(rosters),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
     }
 
     pub async fn get_users_for_league(&self, league_id: &String) -> Result<Vec<User>, Error> {
-        let url = format!("{}/league/{}/users", self.base_url, league_id.trim());
-        // debug!("GET {}", url);
-        match self.client.get(url).send().await {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<Vec<User>>>().await {
-                    Ok(opt_users) => match opt_users {
-                        Some(users) => Ok(users),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
+        self.get_json(format!("/league/{}/users", league_id.trim()), None)
+            .await
     }
 
     pub async fn get_matchups(
@@ -254,37 +148,11 @@ impl Client {
         league_id: String,
         week: String,
     ) -> Result<Vec<Matchup>, Error> {
-        match self
-            .client
-            .get(format!(
-                "{}/league/{}/matchups/{}",
-                self.base_url,
-                league_id.trim(),
-                week,
-            ))
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<Vec<Matchup>>>().await {
-                    Ok(opt_matchups) => match opt_matchups {
-                        Some(matchups) => Ok(matchups),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
+        self.get_json(
+            format!("/league/{}/matchups/{}", league_id.trim(), week),
+            None,
+        )
+        .await
     }
 
     pub async fn get_transactions(
@@ -292,38 +160,31 @@ impl Client {
         league_id: &String,
         week: &String,
     ) -> Result<Vec<Transaction>, Error> {
-        match self
-            .client
-            .get(format!(
-                "{}/league/{}/transactions/{}",
-                self.base_url,
-                league_id.trim(),
-                week,
-            ))
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<Vec<Transaction>>>().await {
-                    Ok(opt_transactions) => match opt_transactions {
-                        Some(transactions) => Ok(transactions),
-                        None => Err(Error::NotFound),
-                    },
-                    Err(json_error) => Err(Error::UnknownError(format!(
-                        "failed to parse json: {:?}",
-                        json_error
-                    ))),
-                },
-                StatusCode::NOT_FOUND => Err(Error::NotFound),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
+        self.get_json(
+            format!("/league/{}/transactions/{}", league_id.trim(), week),
+            None,
+        )
+        .await
     }
+
+    // user with baseketball league: ManagerSilent58
+    // https://api.sleeper.com/v1/user/267506301905934815/leagues/nba/2023
+    // pub async fn get_stats(sport: Sport) {
+    //     let season = "2022";
+    //     let week = 18;
+
+    //     let url = format!(
+    //         "{SLEEPER_API_BASE_URL_UNPUBLISHED}/stats/{sport}/{season}/{week}?season_type=regular"
+    //     );
+    // }
+    // pub async fn get_projections(sport: Sport) {
+    //     let season = "2022";
+    //     let week = 18;
+
+    //     let url = format!(
+    //         "{SLEEPER_API_BASE_URL_UNPUBLISHED}/projections/{sport}/{season}/{week}?season_type=regular"
+    //     );
+    // }
 }
 
 pub fn avatar_url(avatar_id: String) -> String {
@@ -336,7 +197,7 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::Sport;
+    use crate::{Sport, TrendType};
 
     use super::Client;
     use flate2::read::GzDecoder;
@@ -356,6 +217,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         let client = Client::new(Some(mock_server.uri()));
         (mock_server, client)
+    }
+
+    fn load_json_gz_file_raw(filename: &str) -> std::io::Result<Vec<u8>> {
+        let file = File::open(filename)?;
+        let mut buf_reader = BufReader::new(file);
+
+        // Read decompressed contents into a String
+        let mut contents = Vec::new();
+        buf_reader.read_to_end(&mut contents)?;
+        Ok(contents)
     }
 
     fn load_json_gz_file(filename: &str) -> std::io::Result<String> {
@@ -378,10 +249,26 @@ mod tests {
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
             .and(path(format!("/players/{}", sport)))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let players = client.fetch_all_players(&sport).await.unwrap();
+        assert_eq!(11360, players.len());
+    }
+
+    #[tokio::test]
+    async fn test_get_players_nfl_gzip() {
+        let sport = Sport::NFL;
+        let raw_compressed_json_body =
+            load_json_gz_file_raw("testdata/players_nfl.json.gz").unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/players/{}", sport)))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string(json_body)
-                    .insert_header("Content-Type", "application/json"),
+                    .set_body_raw(raw_compressed_json_body, "application/json")
+                    .insert_header("Content-Encoding", "gzip"),
             )
             .mount(&mock_server)
             .await;
@@ -513,16 +400,76 @@ mod tests {
                 .collect::<HashSet<String>>()
         );
     }
+
+    #[tokio::test]
+    async fn test_get_trending_players_nfl() {
+        let sport = Sport::NFL;
+        let trending_type = TrendType::DROP;
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/players/{}/trending/{}",
+                sport, trending_type
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("[]", "application/json"))
+            .mount(&mock_server)
+            .await;
+        let players = client
+            .get_trending_players(&sport, trending_type, None, None)
+            .await
+            .unwrap();
+        assert_eq!(0, players.len());
+
+        let request_with_lookback = client
+            .build_get_json_request(
+                format!("/players/{}/trending/{}", sport, trending_type),
+                Some(vec![("lookback_hours", "6".to_string())]),
+            )
+            .expect("should work fine");
+        assert_eq!(
+            format!(
+                "{}/players/nfl/trending/drop?lookback_hours=6",
+                mock_server.uri()
+            ),
+            request_with_lookback.url().to_string()
+        );
+        let request_with_limit = client
+            .build_get_json_request(
+                format!("/players/{}/trending/{}", sport, trending_type),
+                Some(vec![("limit", "100".to_string())]),
+            )
+            .expect("should work fine");
+        assert_eq!(
+            format!("{}/players/nfl/trending/drop?limit=100", mock_server.uri()),
+            request_with_limit.url().to_string()
+        );
+        let request_with_limit_and_lookback = client
+            .build_get_json_request(
+                format!("/players/{}/trending/{}", sport, trending_type),
+                Some(vec![
+                    ("lookback_hours", "10".to_string()),
+                    ("limit", "100".to_string()),
+                ]),
+            )
+            .expect("should work fine");
+        assert_eq!(
+            format!(
+                "{}/players/nfl/trending/drop?lookback_hours=10&limit=100",
+                mock_server.uri()
+            ),
+            request_with_limit_and_lookback.url().to_string()
+        );
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum Error {
     // #[error("Request error: {0}")]
     // RequestError(#[from] reqwest::Error),
-    // #[error("Deserialization error: {0}")]
-    // DeserializationError(#[from] serde_xml_rs::Error),
-    #[error("resource not found")]
-    NotFound,
+    #[error("Response Deserialization error: {message} url: {url}")]
+    ResponseDeserializationError { message: String, url: String },
+    #[error("resource not found: {0}")]
+    NotFound(String),
     #[error("unknown error: {0}")]
     UnknownError(String),
 }
