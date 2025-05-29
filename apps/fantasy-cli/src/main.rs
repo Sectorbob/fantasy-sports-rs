@@ -5,6 +5,7 @@ use log::*;
 
 mod config;
 mod data;
+mod league_matchups_all;
 mod league_summary_page;
 mod leagues_page;
 mod matchups_list_widget;

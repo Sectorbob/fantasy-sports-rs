@@ -1,4 +1,7 @@
-use crate::{data::League, league_summary_page, leagues_page, sleeper_utils, yahoo_utils};
+use crate::{
+    data::League, league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
+    sleeper_utils, yahoo_utils,
+};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use league_summary_page::LeagueSummaryPage;
 use leagues_page::LeaguesPage;
@@ -103,6 +106,7 @@ async fn render_loop(
     let mut terminal = Terminal::new(backend).unwrap();
     let mut page = 0;
     let mut leagues_page = LeaguesPage::new();
+    let mut league_matchups_page = LeagueMatchupsTilesPage {};
     // let mut navi_stack = vec![];
     // navi_stack.push(page);
 
@@ -127,6 +131,18 @@ async fn render_loop(
                 LeagueSummaryPage::new(leagues_page.selected())
                     .draw(&mut terminal)
                     .unwrap();
+            }
+            3 => {
+                if let Some(selected_league) = leagues_page.selected() {
+                    terminal
+                        .draw(|f| {
+                            let size = f.size();
+                            league_matchups_page.draw(f, &size, selected_league);
+                        })
+                        .unwrap();
+                } else {
+                    page = 1
+                }
             }
             _ => {}
         }
@@ -155,10 +171,12 @@ async fn render_loop(
                         leagues_page::KeyHandleResult::Unhandled => false,
                     },
                     2 => {
-                        // Here you can handle the summary page key events
-                        // For example, if you have a summary page struct, you might call its handle_key method
-                        // league_summary_page.handle_key(&key.code);
-                        false // Example: no handling for now
+                        if key.code == KeyCode::Char('m') {
+                            page = 3;
+                            true
+                        } else {
+                            false
+                        }
                     }
                     _ => false,
                 };
