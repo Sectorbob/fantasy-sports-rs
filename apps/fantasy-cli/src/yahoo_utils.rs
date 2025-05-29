@@ -3,18 +3,20 @@ use serde_json;
 use std::{
     collections::{HashMap, HashSet},
     env,
-    error::Error,
-    io::{self, BufWriter, Write},
+    error::Error as StdError,
+    io::{Error as IOError, ErrorKind},
+};
+use tokio::{
+    fs,
+    io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
 };
 
 use yahoo_fantasy_rs::{
-    Client, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions, Team, TeamStandings,
-    Token, Transaction,
+    Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
+    Team, TeamStandings, Token, Transaction,
 };
 
-const DEBUG_ENABLE: bool = false;
-
-pub async fn build_client() -> Result<Client, yahoo_fantasy_rs::Error> {
+pub async fn build_client() -> Result<Client, YahooError> {
     let yahoo_client_id = match env::var("YAHOO_CLIENT_ID") {
         Ok(id) => id,
         Err(_) => {
@@ -43,7 +45,7 @@ pub async fn build_client() -> Result<Client, yahoo_fantasy_rs::Error> {
 
     debug!("loading token file: {}", yahoo_token_file);
 
-    let token = match load_token_file(&yahoo_token_file) {
+    let token = match load_token_file(&yahoo_token_file).await {
         Ok(token) => token,
         // If fails, perform auth flow
         Err(err) => {
@@ -71,11 +73,13 @@ pub async fn build_client() -> Result<Client, yahoo_fantasy_rs::Error> {
     debug!("loaded token: {:#?}", client.token);
     info!("refreshing token");
     let new_token = client.refresh_token().await?;
-    save_token_file(&yahoo_token_file, new_token);
+    save_token_file(&yahoo_token_file, new_token)
+        .await
+        .map_err(|err: IOError| YahooError::UnknownError(format!("{:?}", err)))?;
     Ok(client)
 }
 
-pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn exec() -> Result<(), Box<dyn StdError>> {
     let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
@@ -87,14 +91,10 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let enable_league_transactions = false;
     let enable_check_players = false;
     let enable_check_team_in_seasons = true;
-    if DEBUG_ENABLE {
-        println!("Building Yahoo Fantasy Client...");
-    }
 
+    debug!("Building Yahoo Fantasy Client...");
     let client = build_client().await?;
-    if DEBUG_ENABLE {
-        println!("Yahoo Fantasy Client built");
-    }
+    debug!("Yahoo Fantasy Client built");
 
     let public_league_key = LeagueKey::new(GameKey::Id(223), 431);
     let ecr_2017 = LeagueKey::new(GameKey::Id(371), 20028);
@@ -251,47 +251,78 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_token_file(file: &String) -> Result<Token, Box<dyn Error>> {
-    let file = std::fs::File::open(file)?;
-    let reader = std::io::BufReader::new(file);
+async fn load_token_file(file: &String) -> Result<Token, IOError> {
+    // Open the file asynchronously
+    let mut f = fs::File::open(file).await?;
+    let mut contents = Vec::new();
 
-    // Read the JSON contents of the file as an instance of `Token`.
-    let token = serde_json::from_reader(reader)?;
+    // Read the file contents asynchronously
+    f.read_to_end(&mut contents).await?;
+
+    // Deserialize JSON from the buffer into Token struct
+    let token: Token = serde_json::from_slice(&contents)?;
+
     Ok(token)
 }
 
-fn save_token_file(file: &String, token: Token) {
-    // d
+async fn save_token_file(file: &String, token: Token) -> Result<(), IOError> {
+    // Serialize to Vec<u8>
+    let json_bytes = serde_json::to_vec(&token).unwrap();
 
-    let f = std::fs::OpenOptions::new()
+    // Async file and writer
+    let f = fs::OpenOptions::new()
         .write(true)
         .create(true) // creates if not exists or opens
+        .truncate(true)
         .open(file)
-        .unwrap();
-    let writer = BufWriter::new(f);
+        .await?;
+    let mut writer = BufWriter::new(f);
 
-    // Read the JSON contents of the file as an instance of `Token`.
-    serde_json::to_writer_pretty(writer, &token).unwrap();
+    // Write bytes asynchronously
+    writer.write_all(&json_bytes).await?;
+    writer.flush().await?;
+    Ok(())
 }
 
-async fn perform_oauth_flow(client: &mut Client) -> Result<Token, ()> {
-    let auth_request_url = client.get_request_auth_url().await.unwrap();
-    println!("Auth request URL: {}", auth_request_url);
+async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
+    let auth_request_url = match client.get_request_auth_url().await {
+        Ok(url) => url,
+        Err(err) => {
+            return Err(IOError::new(
+                ErrorKind::Other,
+                format!(
+                    "received unexpected error while getting request auth url: {:?}",
+                    err
+                ),
+            ));
+        }
+    };
+    debug!("Auth request URL: {}", auth_request_url);
 
-    let auth_code = receive_auth_code_from_stdin();
-    println!("Auth code: {}", auth_code);
-    let token = client.get_token(&auth_code).await.unwrap();
-    println!("Token: {:#?}", token);
+    let auth_code = receive_auth_code_from_stdin().await?;
+    debug!("Auth code: {}", auth_code);
+    let token = match client.get_token(&auth_code).await {
+        Ok(t) => t,
+        Err(err) => {
+            return Err(IOError::new(
+                ErrorKind::Other,
+                format!("received unexpected error while getting token: {:?}", err),
+            ));
+        }
+    };
+    debug!("Token: {:#?}", token);
     Ok(token)
 }
 
-fn receive_auth_code_from_stdin() -> String {
+async fn receive_auth_code_from_stdin() -> Result<String, IOError> {
     print!("Please enter the auth code: ");
-    io::stdout().flush().unwrap();
+    io::stdout().flush().await?;
     let mut auth_code = String::new();
-    io::stdin().read_line(&mut auth_code).unwrap();
+    let mut reader = BufReader::new(io::stdin());
 
-    auth_code.trim().to_string()
+    // Read a line asynchronously
+    let _ = reader.read_line(&mut auth_code).await?;
+    Ok(auth_code.trim().to_string())
 }
 
 async fn check_league_standings(client: &Client, league_key: &LeagueKey) {
@@ -433,14 +464,13 @@ async fn get_teams_for_seasons(
     client: &Client,
     seasons: Vec<String>,
     game_code: GameCode,
-) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Team>, YahooError> {
     let games = client
         .get_games(
             vec![game_code],
             seasons.iter().map(|s| s.as_str()).collect(),
         )
-        .await
-        .unwrap();
+        .await?;
 
     let mut yahoo_teams: Vec<Team> = vec![];
     for game in games {

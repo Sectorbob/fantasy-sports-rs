@@ -9,7 +9,7 @@ use tui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::leagues_page::League;
+use crate::{data::League, matchups_list_widget::MatchupsList};
 
 pub struct LeagueSummaryPage<'a> {
     league: Option<&'a League>,
@@ -27,18 +27,19 @@ impl<'a> LeagueSummaryPage<'a> {
         &'a mut self,
         terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
     ) -> io::Result<CompletedFrame<'a>> {
+        let num_of_columns = 5; // Number of columns to split the screen into
+        let num_of_rows = 2;
+
         terminal.draw(|f| {
             let size = f.size();
             if let Some(league) = &self.league {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(
-                        [
-                            // Constraint::Percentage(100),
-                            Constraint::Percentage(50),
-                            Constraint::Percentage(50),
-                        ]
-                        .as_ref(),
+                        (1..=num_of_columns)
+                            .into_iter()
+                            .map(|_| Constraint::Percentage(100 / num_of_columns))
+                            .collect::<Vec<Constraint>>(),
                     )
                     .split(size);
 
@@ -47,12 +48,10 @@ impl<'a> LeagueSummaryPage<'a> {
                     let rows = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(
-                            [
-                                Constraint::Percentage(100),
-                                // Constraint::Percentage(50),
-                                // Constraint::Percentage(50),
-                            ]
-                            .as_ref(),
+                            (1..=num_of_rows)
+                                .into_iter()
+                                .map(|_| Constraint::Percentage(100 / num_of_rows))
+                                .collect::<Vec<Constraint>>(),
                         )
                         .split(*col);
 
@@ -60,10 +59,10 @@ impl<'a> LeagueSummaryPage<'a> {
                         if i == 0 && j == 0 {
                             // Render league details in the first column
                             render_league_details(league, f, row);
-                        } else if i == 1 && j == 0 {
-                            if let Some(roster) = &league.roster() {
+                        } else if i == 0 && j == 1 {
+                            if let Some(roster_widget) = &league.roster_widget() {
                                 // Render roster in the second column
-                                roster.draw(f, row);
+                                roster_widget.draw(f, row);
                             } else {
                                 // Render empty paragraph if no roster
                                 let text = Text::from("No roster available.");
@@ -72,11 +71,24 @@ impl<'a> LeagueSummaryPage<'a> {
                                 f.render_widget(paragraph, *row);
                             }
                         } else {
-                            // Render empty paragraph in other cells
-                            let text = Text::from(format!("Column {}, Row {}", i + 1, j + 1));
-                            let paragraph =
-                                Paragraph::new(text).block(Block::default().borders(Borders::ALL));
-                            f.render_widget(paragraph, *row);
+                            let week: usize = i * 2 + j; // Calculate week number based on column and row
+                            let matchups = league.matchups();
+                            let players = league.players();
+                            match matchups.get(&week) {
+                                Some(matchups) => {
+                                    let matchup_widget =
+                                        MatchupsList::from_sleeper(None, matchups, &players);
+                                    matchup_widget.draw(f, row, None);
+                                }
+                                None => {
+                                    // Render empty paragraph in other cells
+                                    let text =
+                                        Text::from(format!("No matchups found for week {}", week));
+                                    let paragraph = Paragraph::new(text)
+                                        .block(Block::default().borders(Borders::ALL));
+                                    f.render_widget(paragraph, *row);
+                                }
+                            };
                         }
                     }
                 }
@@ -95,18 +107,19 @@ fn render_league_details(
     row: &tui::layout::Rect,
 ) {
     let title = format!(
-        "{} League Summary (↑/↓, 'q' to quit, 'w' to welcome 'l' to leagues)",
+        "{} ('q' to quit, 'w' to welcome 'l' to leagues)",
         league.name()
     );
     let text_1 = format!(
-        "Team Name: {}\nSeason:    {}\nRecord:    {}",
+        "League ID: {}\nTeam Name: {}\nSeason:    {}\nRecord:    {}",
+        league.id(),
         league.team_name(),
         league.season(),
         league.record(),
     );
     let text_2 = format!(
         "Total Points: {total_points}\n{settings:#?}\n{raw}",
-        total_points = league.total_points(),
+        total_points = format!("{:.2}", league.total_points()),
         settings = league.settings(),
         raw = league.raw(),
     );

@@ -4,8 +4,10 @@ use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 
 mod config;
+mod data;
 mod league_summary_page;
 mod leagues_page;
+mod matchups_list_widget;
 mod roster_widget;
 mod sleeper_utils;
 mod tui;

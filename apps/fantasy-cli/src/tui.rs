@@ -1,18 +1,17 @@
-use crate::{league_summary_page, leagues_page, yahoo_utils};
+use crate::{data::League, league_summary_page, leagues_page, sleeper_utils, yahoo_utils};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use league_summary_page::LeagueSummaryPage;
-use leagues_page::{League, LeaguesPage};
+use leagues_page::LeaguesPage;
 use log::*;
 
-use core::panic;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use sleeper_fantasy_rs::{self as sleeper, Sport};
+use sleeper_fantasy_rs::{self as sleeper, Player, Sport, User};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{self, Stdout},
     time::Duration,
 };
@@ -205,9 +204,15 @@ async fn get_all_leagues(
     };
     let sleeper_client = sleeper_fantasy_rs::Client::new(None);
 
+    let sleeper_players = sleeper_client.fetch_all_players(&sleeper_sport).await?;
     let mut leagues: Vec<League> = vec![];
-    let sleeper_leagues_future =
-        get_sleeper_leagues(&sleeper_client, &seasons, &sleeper_user_id, &sleeper_sport);
+    let sleeper_leagues_future = get_sleeper_leagues(
+        &sleeper_client,
+        &seasons,
+        &sleeper_user_id,
+        &sleeper_sport,
+        &sleeper_players,
+    );
     let yahoo_leagues_future = get_yahoo_leagues(&yahoo_client, &seasons, yahoo_game_code);
     let (sleeper_leagues, yahoo_leagues) =
         tokio::join!(sleeper_leagues_future, yahoo_leagues_future);
@@ -241,6 +246,7 @@ async fn get_sleeper_leagues(
     seasons: &[String],
     sleeper_user_id: &String,
     sleeper_sport: &Sport,
+    players: &HashMap<String, Player>,
 ) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
     let mut sleeper_leagues_for_season_tasks: FuturesUnordered<_> = seasons
         .iter()
@@ -261,8 +267,8 @@ async fn get_sleeper_leagues(
                 break;
             } // exit loop as all tasks are done
             Err(e) => {
-                error!("Error fetching Sleeper leagues: {:?}", e);
-                panic!("Error fetching Sleeper leagues: {:?}", e); //TDOO handle this gracefully
+                eprintln!("Error fetching Sleeper leagues: {:?}", e);
+                // panic!("Error fetching Sleeper leagues: {:?}", e); //TDOO handle this gracefully
                 // return Err(Box::new(e));
             }
         }
@@ -270,22 +276,106 @@ async fn get_sleeper_leagues(
     }
 
     let mut leagues = vec![];
+
     for sleeper_league in sleeper_leagues {
-        // let sleeper_user = sleeper_client
-        //     .get_users_for_league(&sleeper_league.league_id)
-        //     .await
-        //     .unwrap()
-        //     .iter()
-        //     .find(|u| u.user_id == sleeper_user_id)
-        //     .unwrap();
-        // sleeper_user.league_details.unwrap();
-        let rosters = sleeper_client
-            .get_rosters_for_league(&sleeper_league.league_id)
-            .await
-            .unwrap();
+        let owners_future = sleeper_client.get_users_for_league(&sleeper_league.league_id);
+        let rosters_future = sleeper_client.get_rosters_for_league(&sleeper_league.league_id);
+        let (owners_result, rosters_result) = tokio::join!(owners_future, rosters_future);
+        let owners = match owners_result {
+            Ok(owners) => owners
+                .into_iter()
+                .map(|owner| (owner.user_id.clone(), owner))
+                .collect::<HashMap<String, User>>(),
+            Err(e) => {
+                eprintln!(
+                    "Error fetching owners for league {}: {:?}",
+                    sleeper_league.league_id, e
+                );
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "Error fetching owners for league {}: {:?}",
+                        sleeper_league.league_id, e
+                    ),
+                )));
+            }
+        };
+        let rosters = match rosters_result {
+            Ok(rosters) => rosters,
+            Err(e) => {
+                eprintln!(
+                    "Error fetching rosters for league {}: {:?}",
+                    sleeper_league.league_id, e
+                );
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "Error fetching rosters for league {}: {:?}",
+                        sleeper_league.league_id, e
+                    ),
+                )));
+            }
+        };
+
+        let matchups = match sleeper_utils::get_league_matchups(
+            &sleeper_league.league_id,
+            Some(&sleeper_league),
+            &sleeper_client,
+        )
+        .await
+        {
+            Ok(matchups) => matchups,
+            Err(e) => {
+                eprintln!(
+                    "Error fetching matchups for league {}: {:?}",
+                    sleeper_league.league_id, e
+                );
+                HashMap::new()
+                // return Err(Box::new(std::io::Error::new(
+                //     std::io::ErrorKind::Other,
+                //     format!(
+                //         "Error fetching matchups for league {}: {:?}",
+                //         sleeper_league.league_id, e
+                //     ),
+                // )));
+            }
+        };
+
+        // Obtain set of all player_ids used by this league
+        let mut player_id_set: HashSet<String> = HashSet::new();
+        rosters.iter().for_each(|r| {
+            r.players.iter().for_each(|pid| {
+                player_id_set.insert(pid.clone());
+            })
+        });
+        matchups.iter().for_each(|(_, fmups)| {
+            fmups.iter().for_each(|fmup| {
+                fmup.left.players().into_iter().for_each(|owned_player_id| {
+                    player_id_set.insert(owned_player_id);
+                });
+                fmup.right
+                    .players()
+                    .into_iter()
+                    .for_each(|owned_player_id| {
+                        player_id_set.insert(owned_player_id);
+                    });
+            })
+        });
+        // TODO: add player_ids for drafted players
+        let players_in_league: HashMap<String, Player> = player_id_set
+            .into_iter()
+            .filter_map(|owned_player_id| match players.get(&owned_player_id) {
+                Some(player_ref) => Some((owned_player_id, player_ref.clone())),
+                None => None,
+            })
+            .collect::<HashMap<String, Player>>();
+
         leagues.push(League::Sleeper {
             league: sleeper_league,
+            owners,
+            players: players_in_league,
             rosters,
+            matchups,
             user_id: sleeper_user_id.clone(),
         });
     }
@@ -336,13 +426,17 @@ async fn get_yahoo_leagues(
                 .into_iter()
                 .map(|team| (team.team_id, team.roster.unwrap()))
                 .collect::<HashMap<u32, Roster>>();
-            let settings = yahoo_client.get_league_settings(&yahoo_team.team_key.league_key).await.unwrap();
+            let settings = yahoo_client
+                .get_league_settings(&yahoo_team.team_key.league_key)
+                .await
+                .unwrap();
             Ok::<League, yahoo_fantasy_rs::Error>(League::Yahoo {
-                team: yahoo_team,
                 league: yahoo_league,
-                standings,
+                matchups: HashMap::new(), // TODO: Yahoo does not provide matchups in the same way as Sleeper
                 rosters,
                 settings,
+                standings,
+                team: yahoo_team,
             })
         });
     }
