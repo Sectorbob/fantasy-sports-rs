@@ -32,6 +32,10 @@ impl<'a> LeaguesPage {
             .collect()
     }
 
+    pub fn select_by_league_id(&mut self, league_id: String) {
+        self.selected = self.leagues.iter().position(|l| l.id() == league_id).unwrap()
+    }
+
     pub fn selected(&self) -> Option<&League> {
         if self.leagues.is_empty() || self.selected >= self.leagues.len() {
             None

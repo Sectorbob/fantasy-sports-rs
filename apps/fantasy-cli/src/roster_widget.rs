@@ -1,4 +1,4 @@
-use std::{cmp::max_by, collections::HashMap, io::Stdout};
+use std::{collections::HashMap, io::Stdout};
 
 use sleeper_fantasy_rs::User;
 use tui::{

@@ -104,11 +104,10 @@ async fn render_loop(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut page = 0;
+    let mut page = NaviItem::WelcomePage;
     let mut leagues_page = LeaguesPage::new();
-    let mut league_matchups_page = LeagueMatchupsTilesPage {};
-    // let mut navi_stack = vec![];
-    // navi_stack.push(page);
+    let league_matchups_page = LeagueMatchupsTilesPage {};
+    let mut navi_stack: Vec<NaviItem> = vec![];
 
     loop {
         // Poll channel for new value (non-blocking)
@@ -120,19 +119,33 @@ async fn render_loop(
             }
         }
 
-        match page {
-            0 => {
+        match &page {
+            NaviItem::WelcomePage => {
                 draw_blank_screen_with_q_exit(&mut terminal).unwrap();
             }
-            1 => {
+            NaviItem::LeaguesPage => {
                 leagues_page.draw(&mut terminal).unwrap();
             }
-            2 => {
+            NaviItem::LeagueSummary(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
                 LeagueSummaryPage::new(leagues_page.selected())
                     .draw(&mut terminal)
                     .unwrap();
             }
-            3 => {
+            NaviItem::LeagueMatchups(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
                 if let Some(selected_league) = leagues_page.selected() {
                     terminal
                         .draw(|f| {
@@ -141,18 +154,18 @@ async fn render_loop(
                         })
                         .unwrap();
                 } else {
-                    page = 1
+                    page = NaviItem::LeaguesPage;
+                    // navi_stack.push(NaviItem::LeaguesPage);
                 }
-            }
-            _ => {}
+            } // _ => {}
         }
 
         // Exit on 'q'
         if event::poll(std::time::Duration::from_millis(99))? {
             if let Event::Key(key) = event::read()? {
-                let handled = match page {
-                    0 => false,
-                    1 => match leagues_page.handle_key(&key.code) {
+                let handled = match page.clone() {
+                    NaviItem::WelcomePage => false,
+                    NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
                         leagues_page::KeyHandleResult::NOOP => true,
                         leagues_page::KeyHandleResult::GoToLeagueSummary => {
                             // info!("Selected league: {:?}", leagues_page.selected().);
@@ -161,18 +174,22 @@ async fn render_loop(
                                 // For example, you might want to set the league in a summary page struct
                                 // league_summary_page.set_league(selected_league.clone());
                                 info!("Navigating to summary for league: {}", selected_league);
+
+                                // Here you can handle the selected league, e.g., navigate to a summary page
+                                navi_stack.push(page);
+                                page = NaviItem::LeagueSummary(selected_league.id());
                             } else {
                                 error!("No league selected.");
                             }
-                            // Here you can handle the selected league, e.g., navigate to a summary page
-                            page = 2; // Example: go to a summary page
+                            // Example: go to a summary page
                             true
                         }
                         leagues_page::KeyHandleResult::Unhandled => false,
                     },
-                    2 => {
+                    NaviItem::LeagueSummary(league_id) => {
                         if key.code == KeyCode::Char('m') {
-                            page = 3;
+                            navi_stack.push(page);
+                            page = NaviItem::LeagueMatchups(league_id.to_string());
                             true
                         } else {
                             false
@@ -184,8 +201,18 @@ async fn render_loop(
                 if !handled {
                     match key.code {
                         KeyCode::Char('q') => break,
-                        KeyCode::Char('l') => page = 1,
-                        KeyCode::Char('w') => page = 0,
+                        KeyCode::Char('l') => {
+                            navi_stack.push(page);
+                            page = NaviItem::LeaguesPage;
+                        }
+                        KeyCode::Char('w') => {
+                            navi_stack.push(page);
+                            page = NaviItem::WelcomePage;
+                        }
+                        KeyCode::Char('b') => match navi_stack.pop() {
+                            Some(previous) => page = previous,
+                            None => {}
+                        },
                         _ => {}
                     }
                 }
@@ -463,4 +490,12 @@ async fn get_yahoo_leagues(
     }
 
     Ok(leagues)
+}
+
+#[derive(Debug, Clone)]
+enum NaviItem {
+    WelcomePage,
+    LeaguesPage,
+    LeagueSummary(String),
+    LeagueMatchups(String),
 }
