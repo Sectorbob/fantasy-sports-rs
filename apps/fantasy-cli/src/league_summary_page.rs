@@ -9,14 +9,24 @@ use tui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::{data::League, matchups_list_widget::MatchupsList};
+use crate::{data::League, settings_list_widget::SettingsListWidget};
 
 pub struct LeagueSummaryPage<'a> {
     league: Option<&'a League>,
+    scoring_settings_widget: Option<SettingsListWidget>,
 }
 impl<'a> LeagueSummaryPage<'a> {
     pub fn new(league: Option<&'a League>) -> Self {
-        LeagueSummaryPage { league: league }
+        LeagueSummaryPage {
+            league: league,
+            scoring_settings_widget: match league {
+                Some(l) => Some(SettingsListWidget::from_league(
+                    Some(String::from("Scoring Settings")),
+                    l,
+                )),
+                None => None,
+            },
+        }
     }
 
     // pub fn set_league(&mut self, league: League) {
@@ -70,25 +80,18 @@ impl<'a> LeagueSummaryPage<'a> {
                                     .block(Block::default().borders(Borders::ALL));
                                 f.render_widget(paragraph, *row);
                             }
+                        } else if i == 1 && j == 0 {
+                            if let Some(scoring_settings_widget) = &self.scoring_settings_widget {
+                                scoring_settings_widget.draw(f, row);
+                            } else {
+                                let paragraph = Paragraph::new("")
+                                    .block(Block::default().borders(Borders::ALL));
+                                f.render_widget(paragraph, *row);
+                            }
                         } else {
-                            let week: usize = i * 2 + j; // Calculate week number based on column and row
-                            let matchups = league.matchups();
-                            let players = league.players();
-                            match matchups.get(&week) {
-                                Some(matchups) => {
-                                    let matchup_widget =
-                                        MatchupsList::from_sleeper(None, matchups, &players);
-                                    matchup_widget.draw(f, row, None);
-                                }
-                                None => {
-                                    // Render empty paragraph in other cells
-                                    let text =
-                                        Text::from(format!("No matchups found for week {}", week));
-                                    let paragraph = Paragraph::new(text)
-                                        .block(Block::default().borders(Borders::ALL));
-                                    f.render_widget(paragraph, *row);
-                                }
-                            };
+                            let paragraph =
+                                Paragraph::new("").block(Block::default().borders(Borders::ALL));
+                            f.render_widget(paragraph, *row);
                         }
                     }
                 }
@@ -110,20 +113,20 @@ fn render_league_details(
         "{} ('q' to quit, 'w' to welcome 'l' to leagues)",
         league.name()
     );
-    let text_1 = format!(
-        "League ID: {}\nTeam Name: {}\nSeason:    {}\nRecord:    {}",
-        league.id(),
-        league.team_name(),
-        league.season(),
-        league.record(),
-    );
-    let text_2 = format!(
-        "Total Points: {total_points}\n{settings:#?}\n{raw}",
-        total_points = format!("{:.2}", league.total_points()),
-        settings = league.settings(),
-        raw = league.raw(),
-    );
-    let text = Text::from(format!("{}\n{}", text_1, text_2));
+    let mut lines = vec![
+        format!("League ID:    {}", league.id()),
+        format!("Platform:     {}", league.platform()),
+        format!("Season:       {}", league.season()),
+        format!("Team Name:    {}", league.team_name()),
+        format!("Record:       {}", league.record()),
+        format!("Total Points: {}", format!("{:.2}", league.total_points())),
+    ];
+    league.settings().formatted_settings().iter().for_each(|(k, v)| {
+        lines.push(format!("{}: {}", k, v));
+    });
+    lines.push(format!("{}", league.raw()));
+
+    let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
 
     // let para = Paragraph::new(format!("Paragraph {},{}", i + 1, j + 1))

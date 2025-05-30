@@ -12,6 +12,7 @@ mod league_summary_page;
 mod leagues_page;
 mod matchups_list_widget;
 mod roster_widget;
+mod settings_list_widget;
 mod sleeper_utils;
 mod tui;
 mod yahoo_utils;
