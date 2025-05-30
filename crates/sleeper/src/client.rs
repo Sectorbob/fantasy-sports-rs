@@ -197,12 +197,12 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Sport, TrendType};
+    use crate::{Sport, TrendType, data::ScoringSettings};
 
     use super::Client;
     use flate2::read::GzDecoder;
     use std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         fs::{self, File},
         io::{BufReader, Read},
     };
@@ -459,6 +459,167 @@ mod tests {
             ),
             request_with_limit_and_lookback.url().to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_nba_2023_leagues_for_user() {
+        let user_id = "267506301905934815".to_string();
+        let sport = Sport::NBA;
+        let season = 2023.to_string();
+        let json_body = fs::read_to_string(format!(
+            "testdata/v1/user/{user_id}/leagues/{sport}/{season}.json"
+        ))
+        .unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/user/{user_id}/leagues/{sport}/{season}")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let nba_leagues = client
+            .get_leagues_for_user(&user_id, &sport, &season)
+            .await
+            .unwrap();
+        assert_eq!(2, nba_leagues.len());
+        assert_eq!(
+            ScoringSettings::Basketball {
+                ast: 1.0,
+                blk: 3.0,
+                bonus_ast_15p: 2.0,
+                bonus_pt_40p: 1.0,
+                bonus_pt_50p: 2.0,
+                bonus_reb_20p: 2.0,
+                dd: 1.0,
+                ff: -2.0,
+                fgmi: -0.5,
+                ftmi: -0.5,
+                pts: 1.0,
+                reb: 1.0,
+                stl: 3.0,
+                td: 2.0,
+                tf: -1.0,
+                to: -1.0,
+                tpm: 0.5,
+                other: HashMap::new(),
+            },
+            nba_leagues[0].scoring_settings
+        );
+        assert_eq!(
+            ScoringSettings::Basketball {
+                ast: 1.0,
+                blk: 3.0,
+                bonus_ast_15p: 2.0,
+                bonus_pt_40p: 0.0,
+                bonus_pt_50p: 2.0,
+                bonus_reb_20p: 2.0,
+                dd: 1.0,
+                ff: -2.0,
+                fgmi: -0.5,
+                ftmi: -0.5,
+                pts: 1.0,
+                reb: 1.0,
+                stl: 3.0,
+                td: 2.0,
+                tf: -1.0,
+                to: -1.0,
+                tpm: 0.5,
+                other: HashMap::new(),
+            },
+            nba_leagues[1].scoring_settings
+        );
+        assert!(!nba_leagues[0].scoring_settings.has_other_settings());
+        assert!(!nba_leagues[1].scoring_settings.has_other_settings());
+    }
+
+    #[tokio::test]
+    async fn test_get_nfl_2024_leagues_for_user() {
+        let user_id = "267506301905934815".to_string();
+        let sport = Sport::NFL;
+        let season = 2024.to_string();
+        let json_body = fs::read_to_string(format!(
+            "testdata/v1/user/{user_id}/leagues/{sport}/{season}.json"
+        ))
+        .unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/user/{user_id}/leagues/{sport}/{season}")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let nfl_leagues = client
+            .get_leagues_for_user(&user_id, &sport, &season)
+            .await
+            .unwrap();
+        assert_eq!(6, nfl_leagues.len());
+        assert_eq!(
+            ScoringSettings::Football {
+                sack: 1.0,
+                fgm_40_49: 4.0,
+                pass_int: -1.0,
+                pts_allow_0: 10.0,
+                pass_2pt: 2.0,
+                st_td: 6.0,
+                rec_td: 6.0,
+                fgm_30_39: 3.0,
+                xpmiss: -1.0,
+                rush_td: 6.0,
+                rec_2pt: 2.0,
+                st_fum_rec: 1.0,
+                fgmiss: -1.0,
+                ff: 1.0,
+                rec: 1.0,
+                pts_allow_14_20: 1.0,
+                fgm_0_19: 3.0,
+                int: 2.0,
+                def_st_fum_rec: 1.0,
+                fum_lost: -2.0,
+                pts_allow_1_6: 7.0,
+                fgm_20_29: 3.0,
+                pts_allow_21_27: 0.0,
+                xpm: 1.0,
+                rush_2pt: 2.0,
+                fum_rec: 2.0,
+                def_st_td: 6.0,
+                fgm_50p: 5.0,
+                def_td: 6.0,
+                safe: 2.0,
+                pass_yd: 0.04,
+                blk_kick: 2.0,
+                pass_td: 4.0,
+                rush_yd: 0.1,
+                fum: 0.0,
+                pts_allow_28_34: -1.0,
+                pts_allow_35p: -4.0,
+                fum_rec_td: 6.0,
+                rec_yd: 0.1,
+                def_st_ff: 1.0,
+                pts_allow_7_13: 4.0,
+                st_ff: 1.0,
+                def_kr_td: 0.0,
+                kr_td: 0.0,
+                def_pr_td: 0.0,
+                pr_td: 0.0,
+                other: HashMap::new(),
+                bonus_rec_yd_200: 0.0,
+                pass_td_40p: 0.0,
+                bonus_rush_yd_200: 0.0,
+                bonus_pass_yd_400: 0.0,
+                rush_td_40p: 0.0,
+                bonus_rec_te: 0.0,
+                pass_int_td: 0.0,
+                pass_cmp_40p: 0.0,
+                rec_td_40p: 0.0,
+                rush_40p: 0.0,
+                rec_40p: 0.0,
+            },
+            nfl_leagues[0].scoring_settings
+        );
+        assert!(!nfl_leagues[0].scoring_settings.has_other_settings());
+        assert!(!nfl_leagues[1].scoring_settings.has_other_settings());
+        assert!(!nfl_leagues[2].scoring_settings.has_other_settings());
+        assert!(!nfl_leagues[3].scoring_settings.has_other_settings());
+        assert!(!nfl_leagues[4].scoring_settings.has_other_settings());
+        assert!(!nfl_leagues[5].scoring_settings.has_other_settings());
     }
 }
 

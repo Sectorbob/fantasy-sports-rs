@@ -169,6 +169,304 @@ pub struct LeagueUserDetails {
     pub settings: Option<HashMap<String, Value>>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ScoringSettings {
+    Football {
+        // Passing Stats
+        pass_2pt: f32,
+        pass_int: f32,
+        pass_yd: f32,
+        pass_td: f32,
+
+        // Receiving Stats
+        rec: f32,
+        rec_2pt: f32,
+        rec_td: f32,
+        rec_yd: f32,
+
+        // Rushing Stats
+        rush_2pt: f32,
+        rush_td: f32,
+        rush_yd: f32,
+
+        // Kicking Stats
+        fgmiss: f32,
+        fgm_0_19: f32,
+        fgm_20_29: f32,
+        fgm_30_39: f32,
+        fgm_40_49: f32,
+        fgm_50p: f32,
+        xpm: f32,
+        xpmiss: f32,
+
+        // Other Offensive Stats
+        fum: f32,
+        fum_lost: f32,
+
+        // DST Stats
+        pts_allow_0: f32,
+        pts_allow_1_6: f32,
+        pts_allow_7_13: f32,
+        pts_allow_14_20: f32,
+        pts_allow_21_27: f32,
+        pts_allow_28_34: f32,
+        pts_allow_35p: f32,
+        int: f32,
+        sack: f32,
+        safe: f32,
+        def_td: f32,
+        #[serde(default)]
+        def_kr_td: f32,
+        fum_rec: f32,
+        fum_rec_td: f32,
+        ff: f32,
+        #[serde(default)]
+        pass_int_td: f32,
+        def_st_td: f32,
+        def_st_fum_rec: f32,
+        def_st_ff: f32,
+        st_fum_rec: f32,
+        st_ff: f32,
+        st_td: f32,
+        blk_kick: f32,
+        #[serde(default)]
+        kr_td: f32,
+        #[serde(default)]
+        def_pr_td: f32,
+        #[serde(default)]
+        pr_td: f32,
+
+        // Bonus Stats
+        #[serde(default)]
+        bonus_rec_yd_200: f32,
+        #[serde(default)]
+        pass_td_40p: f32,
+        #[serde(default)]
+        bonus_rush_yd_200: f32,
+        #[serde(default)]
+        bonus_pass_yd_400: f32,
+        #[serde(default)]
+        rush_td_40p: f32,
+        #[serde(default)]
+        bonus_rec_te: f32,
+        #[serde(default)]
+        pass_cmp_40p: f32,
+        #[serde(default)]
+        rec_td_40p: f32,
+        #[serde(default)]
+        rush_40p: f32,
+        #[serde(default)]
+        rec_40p: f32,
+
+        // Catch All Other Scoring Settings
+        #[serde(flatten)]
+        other: HashMap<String, Value>,
+    },
+    Basketball {
+        // Offensive Stats
+        pts: f32,
+        ast: f32,
+        reb: f32,
+        fgmi: f32, // field goals missed
+        ftmi: f32, // free throws missed
+        tpm: f32,  // three pointers made?
+
+        // Defensive Stats
+        stl: f32,
+        blk: f32,
+        tf: f32, // TODO: turnovers forced?? or total fouls??
+
+        // Combo Stats
+        dd: f32, // double-double
+        td: f32, // triple-double
+
+        // Bad Stats
+        ff: f32, // TODO: flagrant fouls??
+        to: f32, // turnovers
+
+        // Bonuses
+        bonus_ast_15p: f32,
+        bonus_pt_40p: f32,
+        bonus_pt_50p: f32,
+        bonus_reb_20p: f32,
+
+        #[serde(flatten)]
+        other: HashMap<String, Value>,
+    },
+}
+impl ScoringSettings {
+    pub fn has_other_settings(&self) -> bool {
+        match self {
+            ScoringSettings::Football {
+                sack: _,
+                fgm_40_49: _,
+                pass_int: _,
+                pts_allow_0: _,
+                pass_2pt: _,
+                st_td: _,
+                pr_td: _,
+                rec_td: _,
+                fgm_30_39: _,
+                kr_td: _,
+                xpmiss: _,
+                rush_td: _,
+                def_pr_td: _,
+                rec_2pt: _,
+                st_fum_rec: _,
+                fgmiss: _,
+                ff: _,
+                rec: _,
+                pts_allow_14_20: _,
+                fgm_0_19: _,
+                def_kr_td: _,
+                int: _,
+                def_st_fum_rec: _,
+                fum_lost: _,
+                pts_allow_1_6: _,
+                fgm_20_29: _,
+                pts_allow_21_27: _,
+                xpm: _,
+                rush_2pt: _,
+                fum_rec: _,
+                def_st_td: _,
+                fgm_50p: _,
+                def_td: _,
+                safe: _,
+                pass_yd: _,
+                blk_kick: _,
+                pass_td: _,
+                rush_yd: _,
+                fum: _,
+                pts_allow_28_34: _,
+                pts_allow_35p: _,
+                fum_rec_td: _,
+                rec_yd: _,
+                def_st_ff: _,
+                pts_allow_7_13: _,
+                st_ff: _,
+                other,
+                bonus_rec_yd_200: _,
+                pass_td_40p: _,
+                bonus_rush_yd_200: _,
+                bonus_pass_yd_400: _,
+                rush_td_40p: _,
+                bonus_rec_te: _,
+                pass_int_td: _,
+                pass_cmp_40p: _,
+                rec_td_40p: _,
+                rush_40p: _,
+                rec_40p: _,
+            } => !other.is_empty(),
+            ScoringSettings::Basketball {
+                ast: _,
+                blk: _,
+                bonus_ast_15p: _,
+                bonus_pt_40p: _,
+                bonus_pt_50p: _,
+                bonus_reb_20p: _,
+                dd: _,
+                ff: _,
+                fgmi: _,
+                ftmi: _,
+                pts: _,
+                reb: _,
+                stl: _,
+                td: _,
+                tf: _,
+                to: _,
+                tpm: _,
+                other,
+            } => !other.is_empty(),
+        }
+    }
+
+    pub fn other_settings(&self) -> &HashMap<String, Value> {
+        match self {
+            ScoringSettings::Football {
+                sack: _,
+                fgm_40_49: _,
+                pass_int: _,
+                pts_allow_0: _,
+                pass_2pt: _,
+                st_td: _,
+                pr_td: _,
+                rec_td: _,
+                fgm_30_39: _,
+                kr_td: _,
+                xpmiss: _,
+                rush_td: _,
+                def_pr_td: _,
+                rec_2pt: _,
+                st_fum_rec: _,
+                fgmiss: _,
+                ff: _,
+                rec: _,
+                pts_allow_14_20: _,
+                fgm_0_19: _,
+                def_kr_td: _,
+                int: _,
+                def_st_fum_rec: _,
+                fum_lost: _,
+                pts_allow_1_6: _,
+                fgm_20_29: _,
+                pts_allow_21_27: _,
+                xpm: _,
+                rush_2pt: _,
+                fum_rec: _,
+                def_st_td: _,
+                fgm_50p: _,
+                def_td: _,
+                safe: _,
+                pass_yd: _,
+                blk_kick: _,
+                pass_td: _,
+                rush_yd: _,
+                fum: _,
+                pts_allow_28_34: _,
+                pts_allow_35p: _,
+                fum_rec_td: _,
+                rec_yd: _,
+                def_st_ff: _,
+                pts_allow_7_13: _,
+                st_ff: _,
+                other,
+                bonus_rec_yd_200: _,
+                pass_td_40p: _,
+                bonus_rush_yd_200: _,
+                bonus_pass_yd_400: _,
+                rush_td_40p: _,
+                bonus_rec_te: _,
+                pass_int_td: _,
+                pass_cmp_40p: _,
+                rec_td_40p: _,
+                rush_40p: _,
+                rec_40p: _,
+            } => other,
+            ScoringSettings::Basketball {
+                ast: _,
+                blk: _,
+                bonus_ast_15p: _,
+                bonus_pt_40p: _,
+                bonus_pt_50p: _,
+                bonus_reb_20p: _,
+                dd: _,
+                ff: _,
+                fgmi: _,
+                ftmi: _,
+                pts: _,
+                reb: _,
+                stl: _,
+                td: _,
+                tf: _,
+                to: _,
+                tpm: _,
+                other,
+            } => other,
+        }
+    }
+}
+
 /// TODO: There is more to be gleaned from the data in GET /user/{user_id}/leagues/{sport}/{season}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct League {
@@ -178,13 +476,13 @@ pub struct League {
     pub settings: HashMap<String, Number>,
     pub season_type: SeasonType,
     pub season: String,
-    pub scoring_settings: HashMap<String, Number>,
+    pub scoring_settings: ScoringSettings,
     pub roster_positions: Vec<String>,
     pub previous_league_id: Option<String>, // "0" or null when there is no previous league
     pub name: String,
     pub league_id: String,
     pub draft_id: String,
-    pub avatar: String,
+    pub avatar: Option<String>,
     pub last_pinned_message_id: Option<String>,
     pub last_transaction_id: Option<i64>,
     #[serde(flatten)]
