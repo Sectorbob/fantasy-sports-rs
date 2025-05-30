@@ -2041,6 +2041,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "itertools",
+ "log",
  "pkce",
  "quick-xml",
  "reqwest",

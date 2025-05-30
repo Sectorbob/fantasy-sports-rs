@@ -1,10 +1,15 @@
-use crate::data::{
-    DraftResult, FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League, LeagueKey,
-    Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token, Transaction, User,
+use crate::{
+    PlayerKey,
+    data::{
+        DraftResult, FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League,
+        LeagueKey, Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token,
+        Transaction, User,
+    },
 };
 use chrono::NaiveDate;
 use core::str;
 use itertools::join;
+use log::debug;
 use quick_xml::de::from_str;
 use std::error::Error as _;
 
@@ -233,9 +238,7 @@ impl Client {
     }
 
     pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, Error> {
-        if DEBUG_ENABLED {
-            println!("GET {}", url);
-        }
+        debug!("GET {}", url);
 
         let req = match self
             .client
@@ -606,11 +609,27 @@ impl Client {
         }
     }
 
+    ///
+    /// This is tricky, I am only seeing a max returned amount of 25.
     pub async fn get_players_for_league(
         &self,
         league_key: &LeagueKey,
+        player_keys_to_filter: Option<&Vec<PlayerKey>>,
     ) -> Result<Vec<Player>, Error> {
-        let url = format!("{}/league/{}/players", self.base_url, league_key,);
+        let mut url = format!("{}/league/{}/players", self.base_url, league_key);
+        if let Some(player_keys) = player_keys_to_filter {
+            if !player_keys.is_empty() {
+                url.push_str(";player_keys=");
+                url.push_str(
+                    player_keys
+                        .iter()
+                        .map(PlayerKey::to_string)
+                        .collect::<Vec<String>>()
+                        .join(",")
+                        .as_str(),
+                );
+            }
+        }
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
