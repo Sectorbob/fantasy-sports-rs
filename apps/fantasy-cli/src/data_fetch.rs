@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use log::{error, info};
 use sleeper_fantasy_rs::{self as sleeper};
-use yahoo_fantasy_rs::{GameCode, GameKey, Roster, Team};
+use yahoo_fantasy_rs::{self as yahoo};
 
 use crate::{
     data::{Draft, League},
@@ -15,7 +15,7 @@ pub async fn get_all_leagues(
 ) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
     let sleeper_user_id = "727598467304811923".to_string();
     let sleeper_sport = sleeper::Sport::NFL;
-    let yahoo_game_code = GameCode::NFL;
+    let yahoo_game_code = yahoo::GameCode::NFL;
     let yahoo_client = match yahoo_utils::build_client().await {
         Ok(client) => client,
         Err(err) => return Err(Box::new(err)),
@@ -234,7 +234,7 @@ async fn get_sleeper_leagues(
 async fn get_yahoo_leagues(
     yahoo_client: &yahoo_fantasy_rs::Client,
     seasons: &[String],
-    yahoo_game_code: GameCode,
+    yahoo_game_code: yahoo::GameCode,
 ) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
     let games = yahoo_client
         .get_games(
@@ -244,9 +244,9 @@ async fn get_yahoo_leagues(
         .await
         .unwrap();
 
-    let mut yahoo_teams: Vec<Team> = vec![];
+    let mut yahoo_teams: Vec<yahoo::Team> = vec![];
     for game in games {
-        let game_key: GameKey = GameKey::Id(game.game_id);
+        let game_key: yahoo::GameKey = yahoo::GameKey::Id(game.game_id);
         let teams_in_season = yahoo_client.get_teams_for_user(game_key).await?;
         for team in teams_in_season {
             yahoo_teams.push(team);
@@ -258,29 +258,80 @@ async fn get_yahoo_leagues(
     let mut yahoo_teams_tasks: FuturesUnordered<_> = FuturesUnordered::new();
     for yahoo_team in yahoo_teams {
         yahoo_teams_tasks.push(async move {
-            let yahoo_league = yahoo_client
-                .get_league(&yahoo_team.team_key.league_key)
-                .await
-                .unwrap()
-                .unwrap();
-            let standings = yahoo_client
-                .get_league_standings(&yahoo_team.team_key.league_key)
-                .await
-                .unwrap();
+            let league_key = &yahoo_team.team_key.league_key;
+            let yahoo_league = yahoo_client.get_league(league_key).await.unwrap().unwrap();
+            let standings = yahoo_client.get_league_standings(league_key).await.unwrap();
             let rosters = yahoo_client
-                .get_rosters_in_league(&yahoo_team.team_key.league_key)
+                .get_rosters_in_league(league_key)
                 .await
                 .unwrap()
                 .into_iter()
                 .map(|team| (team.team_id, team.roster.unwrap()))
-                .collect::<HashMap<u32, Roster>>();
-            let settings = yahoo_client
-                .get_league_settings(&yahoo_team.team_key.league_key)
-                .await
-                .unwrap();
+                .collect::<HashMap<u32, yahoo::Roster>>();
+            let settings = match yahoo_client.get_league_settings(league_key).await {
+                Ok(s) => s,
+                Err(err) => {
+                    error!(
+                        "Failed to fetch settings for league {}: {:?}",
+                        league_key, err
+                    );
+                    return Err(err);
+                }
+            };
+            let draft_results = match yahoo_client.get_draft_results(league_key).await {
+                Ok(r) => r,
+                Err(err) => {
+                    error!(
+                        "Failed to fetch draft results for league {}: {:?}",
+                        league_key, err
+                    );
+                    vec![]
+                }
+            };
+            let mut player_key_set: HashSet<yahoo::PlayerKey> = HashSet::new();
+            draft_results.iter().for_each(|p| {
+                player_key_set.insert(p.player_key.clone());
+            });
+            //TODO: add player keys from transactions and ending rosters
+            // we may be able to borrow the player info from the rosters
+
+            let mut player_keys: Vec<yahoo::PlayerKey> = player_key_set.into_iter().collect();
+            info!(
+                "{} player keys must be looked up for {league_key}",
+                player_keys.len()
+            );
+
+            let mut players: Vec<yahoo_fantasy_rs::Player> = vec![];
+            while !player_keys.is_empty() {
+                let popped = if player_keys.len() > 25 {
+                    player_keys.split_off(player_keys.len() - 25)
+                } else {
+                    player_keys.split_off(0)
+                };
+                // info!("");
+                players.extend(
+                    match yahoo_client
+                        .get_players_for_league(league_key, Some(&popped))
+                        .await
+                    {
+                        Ok(p) => p,
+                        Err(err) => {
+                            error!("Failed to fetch players for league {league_key}: {:?}", err);
+                            vec![]
+                        }
+                    },
+                );
+            }
+
+            info!("got {} yahoo players in {league_key}", players.len());
             Ok::<League, yahoo_fantasy_rs::Error>(League::Yahoo {
+                draft_results,
                 league: yahoo_league,
                 matchups: HashMap::new(), // TODO: Yahoo does not provide matchups in the same way as Sleeper
+                players: players
+                    .into_iter()
+                    .map(|p| (p.player_key.clone(), p))
+                    .collect(),
                 rosters,
                 settings,
                 standings,

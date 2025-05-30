@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use sleeper_fantasy_rs::{Player as SleeperPlayer, custom::FantasyMatchup};
+use yahoo_fantasy_rs::PlayerKey;
 
 use crate::{matchups_list_widget::Player, roster_widget::RosterWidget};
 
@@ -17,12 +18,14 @@ pub enum League {
         user_id: String,
     },
     Yahoo {
-        team: yahoo_fantasy_rs::Team,
+        draft_results: Vec<yahoo_fantasy_rs::DraftResult>,
         league: yahoo_fantasy_rs::League,
-        standings: yahoo_fantasy_rs::Standings,
+        matchups: HashMap<usize, Vec<FantasyMatchup>>,
+        players: HashMap<PlayerKey, yahoo_fantasy_rs::Player>,
         rosters: HashMap<u32, yahoo_fantasy_rs::Roster>,
         settings: yahoo_fantasy_rs::Settings,
-        matchups: HashMap<usize, Vec<FantasyMatchup>>,
+        standings: yahoo_fantasy_rs::Standings,
+        team: yahoo_fantasy_rs::Team,
     },
 }
 impl League {
@@ -39,8 +42,10 @@ impl League {
                 user_id: _,
             } => league.league_id.clone(),
             League::Yahoo {
+                draft_results: _,
                 league,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,
@@ -61,8 +66,10 @@ impl League {
                 user_id: _,
             } => league.name.clone(),
             League::Yahoo {
+                draft_results: _,
                 league,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,
@@ -83,12 +90,14 @@ impl League {
                 user_id: _,
             } => String::from("Sleeper"),
             League::Yahoo {
-                team: _,
+                draft_results: _,
                 league: _,
-                standings: _,
+                matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
-                matchups: _,
+                standings: _,
+                team: _,
             } => String::from("Yahoo"),
         }
     }
@@ -105,8 +114,10 @@ impl League {
                 user_id: _,
             } => league.season.clone(),
             League::Yahoo {
+                draft_results: _,
                 league,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,
@@ -144,8 +155,10 @@ impl League {
                 None => "n/a".to_string(),
             },
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings,
@@ -180,8 +193,10 @@ impl League {
                 None => format!("Unknown User ({})", user_id),
             },
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,
@@ -209,8 +224,10 @@ impl League {
                 None => -1.0,
             },
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings,
@@ -237,8 +254,10 @@ impl League {
                 user_id: _,
             } => LeagueSettings::from_sleeper(&league),
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings,
                 standings: _,
@@ -259,8 +278,10 @@ impl League {
                 user_id: _,
             } => format!("Raw: {:#?}", league.settings),
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings,
                 standings: _,
@@ -284,8 +305,10 @@ impl League {
                 .find(|r| &r.owner_id == user_id)
                 .map(|roster| RosterWidget::from_sleeper(roster, owners, players)),
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups: _,
+                players: _,
                 rosters,
                 settings: _,
                 standings: _,
@@ -306,8 +329,10 @@ impl League {
                 user_id: _,
             } => matchups,
             League::Yahoo {
+                draft_results: _,
                 league: _,
                 matchups,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,
@@ -331,12 +356,14 @@ impl League {
                 .map(|(id, p)| (id.clone(), Player::from_sleeper(p)))
                 .collect::<HashMap<String, Player>>(),
             League::Yahoo {
-                team: _,
+                draft_results: _,
                 league: _,
-                standings: _,
+                matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
-                matchups: _,
+                standings: _,
+                team: _,
             } => HashMap::new(),
         }
     }
@@ -353,13 +380,49 @@ impl League {
                 user_id: _,
             } => draft.as_ref().map(|d| Draft::from(d, draft_picks)),
             League::Yahoo {
-                league: _,
+                draft_results,
+                league,
                 matchups: _,
+                players,
                 rosters: _,
-                settings: _,
+                settings,
                 standings: _,
                 team: _,
-            } => None,
+            } => match draft_results.len() {
+                0 => None,
+                _ => Some(Draft {
+                    draft_type: settings.draft_type.clone(),
+                    draft_id: "N/A".to_string(),
+                    league_id: league.league_id.clone(),
+                    picks: draft_results
+                        .iter()
+                        .map(|p| {
+                            if let Some(player) = players.get(&p.player_key) {
+                                DraftPick {
+                                    round: p.round,
+                                    pick: p.pick,
+                                    overall_pick: p.pick,
+                                    player: Player::from_yahoo(player),
+                                    roster_id: p.team_key.to_string(),
+                                }
+                            } else {
+                                DraftPick {
+                                    round: p.round,
+                                    pick: p.pick,
+                                    overall_pick: p.pick,
+                                    player: Player {
+                                        _id: p.player_key.to_string(),
+                                        name: p.player_key.to_string(),
+                                        positions: vec![],
+                                        irl_team: None,
+                                    },
+                                    roster_id: p.team_key.to_string(),
+                                }
+                            }
+                        })
+                        .collect(),
+                }),
+            },
         }
     }
 }
@@ -389,8 +452,10 @@ impl std::fmt::Display for League {
                 record = self.record(),
             ),
             League::Yahoo {
+                draft_results: _,
                 league,
                 matchups: _,
+                players: _,
                 rosters: _,
                 settings: _,
                 standings: _,

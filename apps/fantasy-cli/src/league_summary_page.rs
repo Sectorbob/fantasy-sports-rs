@@ -147,7 +147,10 @@ fn render_league_details(
         .for_each(|(k, v)| {
             lines.push(format!("{}: {}", k, v));
         });
-    lines.push(format!("{}", league.raw()));
+    if let Some(draft) = league.draft() {
+        lines.push(format!("Draft Type: {}", draft.draft_type));
+    }
+    // lines.push(format!("{}", league.raw()));
 
     let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));

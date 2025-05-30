@@ -220,7 +220,11 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     }
 
     if enable_check_players {
-        let players = client.get_players_for_league(&ecr_2017).await.unwrap();
+        let players = client
+            .get_players_for_league(&ecr_2017, None)
+            .await
+            .unwrap();
+        info!("got {} yahoo players in response", players.len());
 
         let mut player_statuses: HashSet<String> = HashSet::new();
         for player in players {

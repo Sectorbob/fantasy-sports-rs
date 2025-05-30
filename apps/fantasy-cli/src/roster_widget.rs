@@ -67,7 +67,7 @@ impl RosterWidget {
                 .players
                 .iter()
                 .map(|p| Player {
-                    _id: p.player_key.clone(),
+                    _id: p.player_key.to_string(),
                     name: p.name.full.clone(),
                     positions: vec![p.display_position.to_string()],
                     irl_team: Some(p.editorial_team_abbr.clone()),
