@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Number, Value};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Sport {
     MLB,
@@ -492,7 +492,7 @@ pub struct League {
     pub other_data: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LeagueStatus {
     PreDraft,
@@ -501,7 +501,7 @@ pub enum LeagueStatus {
     Complete,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SeasonType {
     Regular,
@@ -551,6 +551,32 @@ pub struct Matchup {
     pub starters: Vec<String>,
     pub starters_points: Vec<f32>,
     pub players_points: HashMap<String, f32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlayoffBracketEntry {
+    #[serde(rename = "r")]
+    pub round: u8,
+    #[serde(rename = "m")]
+    pub matchup_id: u8,
+    #[serde(rename = "t1")]
+    pub team_1_roster_id: Option<u8>, //TODO: I'd love to combine this with t1_from in an enum
+    #[serde(rename = "t2")]
+    pub team_2_roster_id: Option<u8>, //TODO: I'd love to combine this with t2_from in an enum
+    #[serde(rename = "w")]
+    pub winner_roster_id: u8,
+    #[serde(rename = "l")]
+    pub loser_roster_id: u8,
+    #[serde(rename = "t1_from")]
+    pub team_1_from: Option<UnresolvedPlayoffSlot>,
+    #[serde(rename = "t2_from")]
+    pub team_2_from: Option<UnresolvedPlayoffSlot>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum UnresolvedPlayoffSlot {
+    LoserOfMatch(u8),
+    WinnerOfMatch(u8),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -613,7 +639,7 @@ impl fmt::Display for TransactionStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrendType {
     ADD,
     DROP,
@@ -625,6 +651,90 @@ impl fmt::Display for TrendType {
             TrendType::DROP => write!(f, "drop"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Draft {
+    pub draft_id: String,
+    pub league_id: String,
+    pub sport: Sport,
+    pub season: String,
+    pub season_type: SeasonType,
+    #[serde(with = "chrono::serde::ts_milliseconds", default)]
+    pub created: DateTime<Utc>,
+    pub creators: Option<Vec<String>>,
+    pub draft_order: Option<HashMap<String, u8>>,
+    pub last_message_id: Option<String>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option", default)]
+    pub last_message_time: Option<DateTime<Utc>>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option", default)]
+    pub last_picked: Option<DateTime<Utc>>,
+    pub metadata: HashMap<String, String>,
+    pub settings: DraftSettings,
+    /// This denotes the time the draft started. None if draft never started.
+    #[serde(with = "chrono::serde::ts_milliseconds_option", default)]
+    pub start_time: Option<DateTime<Utc>>,
+    pub status: String,
+    #[serde(rename = "type")]
+    pub _type: DraftType,
+    /// This will only be present when obtained directly with get_draft()
+    pub slot_to_roster_id: Option<HashMap<String, u8>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DraftSettings {
+    /// Sort players by name instead of ADP.
+    #[serde(deserialize_with = "bool_from_int", default)]
+    pub alpha_sort: bool,
+    /// If true, a CPU will autopick for a user when a user runs out of time
+    #[serde(deserialize_with = "bool_from_int")]
+    pub cpu_autopick: bool,
+    pub rounds: u8,
+    pub player_type: Option<u8>,
+    pub pick_timer: u32,
+    pub teams: u8,
+    #[serde(flatten)]
+    pub other: HashMap<String, i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DraftType {
+    SNAKE,
+    LINEAR,
+    AUCTION,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DraftPick {
+    pub player_id: String,
+    /// user_id this pick will go to (not all leagues have users in every slot, this can be "")
+    pub picked_by: String,
+    /// roster_id this pick will go to
+    pub roster_id: u8,
+    pub round: u8,
+    /// which column this is on the draftboard
+    pub draft_slot: u8,
+    pub pick_no: u32,
+    pub metadata: DraftPickMetadata,
+    #[serde(default, deserialize_with = "null_to_false")]
+    pub is_keeper: bool,
+    pub draft_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DraftPickMetadata {
+    pub first_name: String,
+    pub injury_status: String,
+    pub last_name: String,
+    pub news_updated: String, // string wrapping a millis epoch
+    pub number: String,
+    pub player_id: String,
+    pub position: String,
+    pub sport: Sport,
+    pub status: String, // known value: Active
+    pub team: String,   // team abbreviation
+    pub years_exp: String,
 }
 
 pub enum Error {
@@ -665,6 +775,14 @@ impl fmt::Debug for Error {
     }
 }
 
+fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v = i64::deserialize(deserializer)?;
+    Ok(v != 0)
+}
+
 fn null_to_empty_map<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
 where
     D: Deserializer<'de>,
@@ -672,4 +790,14 @@ where
     V: Deserialize<'de>,
 {
     Option::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
+}
+
+fn null_to_false<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::deserialize(deserializer).map(|opt| match opt {
+        Some(true) => true,
+        _ => false,
+    })
 }

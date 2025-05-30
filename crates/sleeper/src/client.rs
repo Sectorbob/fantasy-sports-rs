@@ -3,8 +3,12 @@ use std::collections::HashMap;
 use reqwest::{Request, StatusCode};
 use serde::de::DeserializeOwned;
 
-use crate::data::{
-    League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer, User,
+use crate::{
+    Draft,
+    data::{
+        DraftPick, League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer,
+        User,
+    },
 };
 use thiserror;
 
@@ -167,7 +171,31 @@ impl Client {
         .await
     }
 
-    // user with baseketball league: ManagerSilent58
+    pub async fn get_drafts_for_user(
+        &self,
+        user_id: String,
+        sport: Sport,
+        season: String,
+    ) -> Result<Vec<Draft>, Error> {
+        self.get_json(format!("/user/{user_id}/drafts/{sport}/{season}"), None)
+            .await
+    }
+
+    pub async fn get_drafts_for_league(&self, league_id: String) -> Result<Vec<Draft>, Error> {
+        self.get_json(format!("/league/{}/drafts", league_id.trim()), None)
+            .await
+    }
+
+    pub async fn get_draft(&self, draft_id: String) -> Result<Draft, Error> {
+        self.get_json(format!("/draft/{draft_id}"), None).await
+    }
+
+    pub async fn get_draft_picks(&self, draft_id: String) -> Result<Vec<DraftPick>, Error> {
+        self.get_json(format!("/draft/{draft_id}/picks"), None)
+            .await
+    }
+
+    // user with basketball league: ManagerSilent58
     // https://api.sleeper.com/v1/user/267506301905934815/leagues/nba/2023
     // pub async fn get_stats(sport: Sport) {
     //     let season = "2022";
@@ -197,7 +225,7 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Sport, TrendType, data::ScoringSettings};
+    use crate::{SeasonType, Sport, TrendType, data::ScoringSettings};
 
     use super::Client;
     use flate2::read::GzDecoder;
@@ -706,6 +734,55 @@ mod tests {
             nfl_leagues[0].scoring_settings
         );
         assert!(!nfl_leagues[0].scoring_settings.has_other_settings());
+    }
+
+    #[tokio::test]
+    async fn test_get_drafts_for_nfl_league_w_orphaned_draft() {
+        let league_id = "164974877262287888".to_string();
+        let json_body =
+            fs::read_to_string(format!("testdata/v1/league/{league_id}/drafts.json")).unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/league/{league_id}/drafts")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let drafts = client.get_drafts_for_league(league_id).await.unwrap();
+        assert_eq!(2, drafts.len());
+        assert!(drafts[0].slot_to_roster_id.is_none()); // these shouldn't be here for the drafts_list
+        assert!(drafts[1].slot_to_roster_id.is_none()); // these shouldn't be here for the drafts_list
+    }
+
+    #[tokio::test]
+    async fn test_get_completed_nfl_draft() {
+        let draft_id = "685822547406541191".to_string();
+        let json_body = fs::read_to_string(format!("testdata/v1/draft/{draft_id}.json")).unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/draft/{draft_id}")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let draft = client.get_draft(draft_id).await.unwrap();
+        assert!(draft.slot_to_roster_id.is_some());
+        assert_eq!("2019", draft.season);
+        assert_eq!(SeasonType::Regular, draft.season_type);
+    }
+
+    #[tokio::test]
+    async fn test_get_pick_for_completed_nfl_draft() {
+        let draft_id = "685822547406541191".to_string();
+        let json_body =
+            fs::read_to_string(format!("testdata/v1/draft/{draft_id}/picks.json")).unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/draft/{draft_id}/picks")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let draft_picks = client.get_draft_picks(draft_id).await.unwrap();
+        assert_eq!(204, draft_picks.len());
+        assert_eq!(35, draft_picks.iter().filter(|p| p.is_keeper).count()); // 35 keepers in this draft
     }
 }
 
