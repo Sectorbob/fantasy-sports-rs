@@ -219,6 +219,7 @@ pub enum ScoringSettings {
         #[serde(default)]
         def_kr_td: f32,
         fum_rec: f32,
+        #[serde(default)]
         fum_rec_td: f32,
         ff: f32,
         #[serde(default)]
