@@ -40,7 +40,7 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => eprintln!("Error checking league matchups: {}", e),
     }
-    // check_transactions(&client, &String::from("4581480575134427121"), &sport).await;
+    check_transactions(&client, &String::from("4581480575134427121"), &sport).await;
 
     Ok(())
 }
@@ -105,7 +105,7 @@ async fn check_trending_players(players: &HashMap<String, Player>, client: &Clie
     println!("Player Count: {}", players.iter().count());
 
     let trending_players = client
-        .get_trending_players(&sport, String::from("add"), None, Some(100))
+        .get_trending_players(&sport, sleeper_fantasy_rs::TrendType::ADD, None, Some(100))
         .await
         .unwrap();
     println!("Trending Count: {}", trending_players.iter().count());
