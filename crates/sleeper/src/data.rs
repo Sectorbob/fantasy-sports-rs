@@ -704,6 +704,15 @@ pub enum DraftType {
     LINEAR,
     AUCTION,
 }
+impl fmt::Display for DraftType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DraftType::SNAKE => write!(f, "snake"),
+            DraftType::LINEAR => write!(f, "linear"),
+            DraftType::AUCTION => write!(f, "auction"),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct DraftPick {
