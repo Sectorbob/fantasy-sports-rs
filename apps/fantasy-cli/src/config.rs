@@ -1,19 +1,18 @@
+use crate::constants::APP_NAME;
 use dirs;
 use std::path::PathBuf;
 
-const DEFAULT_SUB_DIR: &str = "fantasy";
-
 pub fn config_dir() -> PathBuf {
     match dirs::config_dir() {
-        Some(home_dir) => home_dir.join(DEFAULT_SUB_DIR),
-        None => get_temp_dir().join(DEFAULT_SUB_DIR).join("config"),
+        Some(home_dir) => home_dir.join(APP_NAME),
+        None => get_temp_dir().join(APP_NAME).join("config"),
     }
 }
 
 pub fn data_dir() -> PathBuf {
     match dirs::data_local_dir() {
-        Some(data_dir) => data_dir.join(DEFAULT_SUB_DIR),
-        None => get_temp_dir().join(DEFAULT_SUB_DIR).join("data"),
+        Some(data_dir) => data_dir.join(APP_NAME),
+        None => get_temp_dir().join(APP_NAME).join("data"),
     }
 }
 

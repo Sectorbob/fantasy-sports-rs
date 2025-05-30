@@ -16,28 +16,30 @@ use yahoo_fantasy_rs::{
     Team, TeamStandings, Token, Transaction,
 };
 
+use crate::constants::{ENV_YAHOO_CLIENT_ID, ENV_YAHOO_REDIRECT_URI, ENV_YAHOO_TOKEN_FILE};
+
 pub async fn build_client() -> Result<Client, YahooError> {
-    let yahoo_client_id = match env::var("YAHOO_CLIENT_ID") {
+    let yahoo_client_id = match env::var(ENV_YAHOO_CLIENT_ID) {
         Ok(id) => id,
         Err(_) => {
             return Err(yahoo_fantasy_rs::Error::UnknownError(
-                "YAHOO_CLIENT_ID environment variable not set".to_string(),
+                ENV_YAHOO_CLIENT_ID.to_string() + " environment variable not set",
             ));
         }
     };
-    let yahoo_redirect_uri = match env::var("YAHOO_REDIRECT_URI") {
+    let yahoo_redirect_uri = match env::var(ENV_YAHOO_REDIRECT_URI) {
         Ok(uri) => uri,
         Err(_) => {
             return Err(yahoo_fantasy_rs::Error::UnknownError(
-                "YAHOO_REDIRECT_URI environment variable not set".to_string(),
+                ENV_YAHOO_REDIRECT_URI.to_string() + " environment variable not set",
             ));
         }
     };
-    let yahoo_token_file = match env::var("YAHOO_TOKEN_FILE") {
+    let yahoo_token_file = match env::var(ENV_YAHOO_TOKEN_FILE) {
         Ok(file) => file,
         Err(_) => {
             return Err(yahoo_fantasy_rs::Error::UnknownError(
-                "YAHOO_TOKEN_FILE environment variable not set".to_string(),
+                ENV_YAHOO_TOKEN_FILE.to_string() + " environment variable not set",
             ));
         }
     };

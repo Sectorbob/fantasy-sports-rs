@@ -4,7 +4,9 @@ use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 
 mod config;
+mod constants;
 mod data;
+mod data_fetch;
 mod league_matchups_all;
 mod league_summary_page;
 mod leagues_page;
