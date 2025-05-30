@@ -1,8 +1,11 @@
 use std::{collections::HashMap, error::Error};
 
 use futures::FutureExt;
+use log::error;
 use serde::Serialize;
-use sleeper_fantasy_rs::{Client, Matchup, Player, Roster, Sport, User, custom::FantasyMatchup};
+use sleeper_fantasy_rs::{
+    Client, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
+};
 use tokio::fs; // instead of std::fs
 
 pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
@@ -206,7 +209,7 @@ pub async fn get_league_matchups(
     };
     rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
 
-    let num_of_weeks: usize = 17; //league.settings.weeks;
+    let num_of_weeks: usize = 17; // TODO: league.settings.weeks;
 
     let matchups_for_week_futures = (1..=num_of_weeks)
         .into_iter()
@@ -256,6 +259,49 @@ pub async fn get_league_matchups(
         }
     }
     Ok(matchups_for_week)
+}
+
+pub async fn get_league_transactions(
+    client: &Client,
+    league_id: String,
+) -> Result<HashMap<usize, Vec<Transaction>>, sleeper_fantasy_rs::Error> {
+    let num_of_weeks: usize = 17; // TODO: league.settings.weeks;
+
+    let transactions_for_week_futures = (1..=num_of_weeks)
+        .into_iter()
+        .map(|week| {
+            let result = client
+                .get_transactions(&league_id, &week.to_string())
+                .map(move |res| {
+                    let result: Result<(usize, Vec<Transaction>), sleeper_fantasy_rs::Error> =
+                        match res {
+                            Ok(raw_txns) => Ok((week, raw_txns)),
+                            Err(e) => {
+                                error!("Error fetching transactions for week {}: {:?}", week, e);
+                                Ok((week, Vec::new())) // Return empty vector on error
+                            }
+                        };
+                    result
+                });
+            result
+        })
+        .collect::<Vec<_>>();
+
+    let mut transactions_for_week: HashMap<usize, Vec<Transaction>> = HashMap::new();
+    for thing in futures::future::join_all(transactions_for_week_futures)
+        .await
+        .into_iter()
+    {
+        match thing {
+            Ok((week, txns)) => {
+                transactions_for_week.insert(week, txns);
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+    }
+    Ok(transactions_for_week)
 }
 
 #[cfg(test)]

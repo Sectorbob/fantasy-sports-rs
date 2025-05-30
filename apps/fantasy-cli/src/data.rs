@@ -1,5 +1,7 @@
+use core::fmt;
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use sleeper_fantasy_rs::{Player as SleeperPlayer, custom::FantasyMatchup};
 use yahoo_fantasy_rs::PlayerKey;
 
@@ -941,5 +943,119 @@ impl DraftPick {
             },
             roster_id: sleeper_draft_pick.roster_id.to_string(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Transaction {
+    pub id: String,
+    pub transaction_type: String,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+    pub status: String,
+}
+impl Transaction {
+    pub fn from_sleeper(sleeper_transaction: &sleeper_fantasy_rs::Transaction) -> Self {
+        Transaction {
+            id: sleeper_transaction.transaction_id.clone(),
+            transaction_type: sleeper_transaction._type.to_string(),
+            created: sleeper_transaction.created.clone(),
+            updated: sleeper_transaction.status_updated.clone(),
+            status: sleeper_transaction.status.to_string(),
+        }
+    }
+    pub fn from_yahoo(yahoo_transaction: &yahoo_fantasy_rs::Transaction) -> Self {
+        match yahoo_transaction {
+            yahoo_fantasy_rs::Transaction::Commish {
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "commish".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+            yahoo_fantasy_rs::Transaction::Add {
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+                players,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "add".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+            yahoo_fantasy_rs::Transaction::Drop {
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+                players,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "drop".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+            yahoo_fantasy_rs::Transaction::AddDrop {
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+                players,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "add/drop".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+            yahoo_fantasy_rs::Transaction::Trade {
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+                players,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "trade".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+            yahoo_fantasy_rs::Transaction::Other {
+                type_name,
+                transaction_key,
+                transaction_id: _,
+                status,
+                timestamp,
+                players,
+                rest,
+            } => Transaction {
+                id: transaction_key.clone(),
+                transaction_type: "other".to_string(),
+                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
+                status: status.to_string(),
+            },
+        }
+    }
+}
+impl fmt::Display for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{updated}: {_type} [{status}]",
+            updated = self.updated,
+            _type = self.transaction_type,
+            status = self.status
+        )
     }
 }

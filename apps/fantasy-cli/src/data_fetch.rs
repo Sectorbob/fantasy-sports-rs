@@ -216,6 +216,8 @@ async fn get_sleeper_leagues(
             }
         }
 
+        let transactions = sleeper_client.get_transactions(league_id, week)
+
         leagues.push(League::Sleeper {
             draft,
             draft_picks,
@@ -223,6 +225,7 @@ async fn get_sleeper_leagues(
             owners,
             players: players_in_league,
             rosters,
+            transactions,
             matchups,
             user_id: sleeper_user_id.clone(),
         });
