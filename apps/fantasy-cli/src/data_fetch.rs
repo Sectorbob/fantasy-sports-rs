@@ -5,7 +5,10 @@ use log::{error, info};
 use sleeper_fantasy_rs::{self as sleeper};
 use yahoo_fantasy_rs::{GameCode, GameKey, Roster, Team};
 
-use crate::{data::League, sleeper_utils, yahoo_utils};
+use crate::{
+    data::{Draft, League},
+    sleeper_utils, yahoo_utils,
+};
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
@@ -185,7 +188,37 @@ async fn get_sleeper_leagues(
             })
             .collect::<HashMap<String, sleeper::Player>>();
 
+        let drafts = match sleeper_client
+            .get_drafts_for_league(sleeper_league.league_id.clone())
+            .await
+        {
+            Ok(d) => d,
+            Err(err) => {
+                error!(
+                    "failed to fetch drafts for sleeper league {}: {:?}",
+                    sleeper_league.league_id, err
+                );
+                vec![]
+            }
+        };
+        let draft: Option<sleeper::Draft> = Draft::check_for_valid_draft(&drafts);
+        let mut draft_picks: Vec<sleeper::DraftPick> = vec![];
+        if let Some(draft) = &draft {
+            draft_picks = match sleeper_client.get_draft_picks(draft.draft_id.clone()).await {
+                Ok(picks) => picks,
+                Err(err) => {
+                    error!(
+                        "failed to fetch draft picks for sleeper draft {}: {:?}",
+                        draft.draft_id, err
+                    );
+                    vec![]
+                }
+            }
+        }
+
         leagues.push(League::Sleeper {
+            draft,
+            draft_picks,
             league: sleeper_league,
             owners,
             players: players_in_league,

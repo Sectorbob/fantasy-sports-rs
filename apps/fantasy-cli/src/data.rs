@@ -7,6 +7,8 @@ use crate::{matchups_list_widget::Player, roster_widget::RosterWidget};
 // #[derive(Debug, Clone)]
 pub enum League {
     Sleeper {
+        draft: Option<sleeper_fantasy_rs::Draft>,
+        draft_picks: Vec<sleeper_fantasy_rs::DraftPick>,
         league: sleeper_fantasy_rs::League,
         matchups: HashMap<usize, Vec<FantasyMatchup>>,
         owners: HashMap<String, sleeper_fantasy_rs::User>,
@@ -27,6 +29,8 @@ impl League {
     pub fn id(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -47,6 +51,8 @@ impl League {
     pub fn name(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -67,26 +73,30 @@ impl League {
     pub fn platform(&self) -> String {
         match self {
             League::Sleeper {
-                league,
-                matchups,
-                owners,
-                players,
-                rosters,
-                user_id,
+                draft: _,
+                draft_picks: _,
+                league: _,
+                matchups: _,
+                owners: _,
+                players: _,
+                rosters: _,
+                user_id: _,
             } => String::from("Sleeper"),
             League::Yahoo {
-                team,
-                league,
-                standings,
-                rosters,
-                settings,
-                matchups,
+                team: _,
+                league: _,
+                standings: _,
+                rosters: _,
+                settings: _,
+                matchups: _,
             } => String::from("Yahoo"),
         }
     }
     pub fn season(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -107,6 +117,8 @@ impl League {
     pub fn record(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups: _,
                 owners: _,
@@ -155,6 +167,8 @@ impl League {
     pub fn team_name(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups: _,
                 owners,
@@ -178,6 +192,8 @@ impl League {
     pub fn total_points(&self) -> f64 {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups: _,
                 owners: _,
@@ -211,6 +227,8 @@ impl League {
     pub fn settings(&self) -> LeagueSettings {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -231,6 +249,8 @@ impl League {
     pub fn raw(&self) -> String {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -251,6 +271,8 @@ impl League {
     pub fn roster_widget(&self) -> Option<RosterWidget> {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups: _,
                 owners,
@@ -274,6 +296,8 @@ impl League {
     pub fn matchups(&self) -> &HashMap<usize, Vec<FantasyMatchup>> {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups,
                 owners: _,
@@ -294,6 +318,8 @@ impl League {
     pub fn players(&self) -> HashMap<String, Player> {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league: _,
                 matchups: _,
                 owners: _,
@@ -314,11 +340,35 @@ impl League {
             } => HashMap::new(),
         }
     }
+    pub fn draft(&self) -> Option<Draft> {
+        match self {
+            League::Sleeper {
+                draft,
+                draft_picks,
+                league: _,
+                matchups: _,
+                owners: _,
+                players: _,
+                rosters: _,
+                user_id: _,
+            } => draft.as_ref().map(|d| Draft::from(d, draft_picks)),
+            League::Yahoo {
+                league: _,
+                matchups: _,
+                rosters: _,
+                settings: _,
+                standings: _,
+                team: _,
+            } => None,
+        }
+    }
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             League::Sleeper {
+                draft: _,
+                draft_picks: _,
                 league,
                 matchups: _,
                 owners: _,
@@ -756,6 +806,75 @@ impl ScoringSettings {
             })
             .collect(),
             ScoringSettings::Unknown => vec![],
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Draft {
+    pub draft_type: String,
+    pub draft_id: String,
+    pub league_id: String,
+    pub picks: Vec<DraftPick>,
+}
+impl Draft {
+    pub fn from(
+        sleeper_draft: &sleeper_fantasy_rs::Draft,
+        sleeper_draft_picks: &Vec<sleeper_fantasy_rs::DraftPick>,
+    ) -> Self {
+        Draft {
+            draft_type: sleeper_draft._type.to_string(),
+            draft_id: sleeper_draft.draft_id.clone(),
+            league_id: sleeper_draft.league_id.clone(),
+            picks: sleeper_draft_picks.iter().map(DraftPick::from).collect(),
+        }
+    }
+    pub fn check_for_valid_draft(
+        drafts: &Vec<sleeper_fantasy_rs::Draft>,
+    ) -> Option<sleeper_fantasy_rs::Draft> {
+        match drafts.len() {
+            0 => None,
+            1 => Some(drafts[0].clone()),
+            _ => {
+                // prioritize drafts with Some(start_time)
+                let filtered = drafts
+                    .iter()
+                    .filter(|d| d.start_time.is_some())
+                    .collect::<Vec<&sleeper_fantasy_rs::Draft>>();
+                if filtered.len() == 1 {
+                    Some(filtered[0].clone())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DraftPick {
+    pub round: u32,
+    pub pick: u32,
+    pub overall_pick: u32,
+    pub player: Player,
+    pub roster_id: String,
+}
+impl DraftPick {
+    pub fn from(sleeper_draft_pick: &sleeper_fantasy_rs::DraftPick) -> Self {
+        DraftPick {
+            round: sleeper_draft_pick.round as u32,
+            pick: sleeper_draft_pick.pick_no as u32, // TODO: this is wrong
+            overall_pick: sleeper_draft_pick.pick_no as u32,
+            player: Player {
+                _id: sleeper_draft_pick.draft_id.clone(), // should I clone?
+                name: format!(
+                    "{} {}",
+                    &sleeper_draft_pick.metadata.first_name, &sleeper_draft_pick.metadata.last_name
+                ),
+                positions: vec![sleeper_draft_pick.metadata.position.clone()],
+                irl_team: Some(sleeper_draft_pick.metadata.team.clone()),
+            },
+            roster_id: sleeper_draft_pick.roster_id.to_string(),
         }
     }
 }

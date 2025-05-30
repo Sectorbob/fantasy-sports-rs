@@ -7,6 +7,7 @@ mod config;
 mod constants;
 mod data;
 mod data_fetch;
+mod draft_picks_widget;
 mod league_matchups_all;
 mod league_summary_page;
 mod leagues_page;

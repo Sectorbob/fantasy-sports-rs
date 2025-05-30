@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
@@ -247,7 +248,7 @@ impl MatchupSide {
 
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub id: String,
+    pub _id: String,
     pub name: String,
     pub positions: Vec<String>,
     pub irl_team: Option<String>,
@@ -255,7 +256,7 @@ pub struct Player {
 impl Player {
     pub fn from_sleeper(sleeper_player: &sleeper_fantasy_rs::Player) -> Self {
         Player {
-            id: sleeper_player.player_id.clone(),
+            _id: sleeper_player.player_id.clone(),
             name: sleeper_player.player_id.clone(),
             positions: match sleeper_player.position.clone() {
                 Some(position) => vec![position.clone()],
@@ -266,10 +267,21 @@ impl Player {
     }
     pub fn missing(id: &String) -> Self {
         Player {
-            id: id.clone(),
+            _id: id.clone(),
             name: format!("Missing Player ({})", id),
             positions: vec![],
             irl_team: None,
         }
+    }
+}
+impl fmt::Display for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}] {} {}",
+            self.positions.join(","),
+            self.name,
+            self.irl_team.clone().unwrap_or("".to_string())
+        )
     }
 }

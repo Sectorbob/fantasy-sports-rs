@@ -9,11 +9,14 @@ use tui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::{data::League, settings_list_widget::SettingsListWidget};
+use crate::{
+    data::League, draft_picks_widget::DraftPicksWidget, settings_list_widget::SettingsListWidget,
+};
 
 pub struct LeagueSummaryPage<'a> {
     league: Option<&'a League>,
     scoring_settings_widget: Option<SettingsListWidget>,
+    draft_picks_widget: Option<DraftPicksWidget>,
 }
 impl<'a> LeagueSummaryPage<'a> {
     pub fn new(league: Option<&'a League>) -> Self {
@@ -23,6 +26,14 @@ impl<'a> LeagueSummaryPage<'a> {
                 Some(l) => Some(SettingsListWidget::from_league(
                     Some(String::from("Scoring Settings")),
                     l,
+                )),
+                None => None,
+            },
+            draft_picks_widget: match league {
+                Some(l) => Some(DraftPicksWidget::from_league(
+                    None,
+                    l,
+                    l.roster_widget().map(|r| r.roster_id.clone()),
                 )),
                 None => None,
             },
@@ -88,6 +99,14 @@ impl<'a> LeagueSummaryPage<'a> {
                                     .block(Block::default().borders(Borders::ALL));
                                 f.render_widget(paragraph, *row);
                             }
+                        } else if i == 1 && j == 1 {
+                            if let Some(draft_picks_widget) = &self.draft_picks_widget {
+                                draft_picks_widget.draw(f, row);
+                            } else {
+                                let paragraph = Paragraph::new("")
+                                    .block(Block::default().borders(Borders::ALL));
+                                f.render_widget(paragraph, *row);
+                            }
                         } else {
                             let paragraph =
                                 Paragraph::new("").block(Block::default().borders(Borders::ALL));
@@ -121,9 +140,13 @@ fn render_league_details(
         format!("Record:       {}", league.record()),
         format!("Total Points: {}", format!("{:.2}", league.total_points())),
     ];
-    league.settings().formatted_settings().iter().for_each(|(k, v)| {
-        lines.push(format!("{}: {}", k, v));
-    });
+    league
+        .settings()
+        .formatted_settings()
+        .iter()
+        .for_each(|(k, v)| {
+            lines.push(format!("{}: {}", k, v));
+        });
     lines.push(format!("{}", league.raw()));
 
     let text = Text::from(lines.join("\n"));

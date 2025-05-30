@@ -14,6 +14,7 @@ use crate::matchups_list_widget::Player;
 
 pub struct RosterWidget {
     pub team_name: String,
+    pub roster_id: String,
     pub players: Vec<Player>,
 }
 impl RosterWidget {
@@ -23,6 +24,7 @@ impl RosterWidget {
         players: &HashMap<String, sleeper_fantasy_rs::Player>,
     ) -> Self {
         RosterWidget {
+            roster_id: roster.roster_id.to_string(),
             team_name: match owners.get(&roster.owner_id) {
                 Some(owner) => owner.team_name(),
                 None => format!("User({})", roster.owner_id),
@@ -32,7 +34,7 @@ impl RosterWidget {
                 .iter()
                 .map(|pid| match players.get(pid) {
                     Some(player) => Player {
-                        id: pid.clone(),
+                        _id: pid.clone(),
                         name: format!(
                             "{} {}",
                             player.first_name.clone().unwrap_or_default(),
@@ -47,7 +49,7 @@ impl RosterWidget {
                         irl_team: player.team.clone(),
                     },
                     None => Player {
-                        id: pid.clone(),
+                        _id: pid.clone(),
                         name: format!("Missing Player ({})", pid),
                         positions: vec![],
                         irl_team: None,
@@ -58,13 +60,14 @@ impl RosterWidget {
     }
     pub fn from_yahoo(team: &yahoo_fantasy_rs::Team, roster: &yahoo_fantasy_rs::Roster) -> Self {
         RosterWidget {
+            roster_id: team.team_key.to_string(),
             team_name: team.name.clone(),
             players: roster
                 .players
                 .players
                 .iter()
                 .map(|p| Player {
-                    id: p.player_key.clone(),
+                    _id: p.player_key.clone(),
                     name: p.name.full.clone(),
                     positions: vec![p.display_position.to_string()],
                     irl_team: Some(p.editorial_team_abbr.clone()),
