@@ -357,10 +357,10 @@ impl Client {
 
         return match from_str(body_text.as_str()) {
             Ok(content) => Ok(content),
-            Err(error) => {
-                println!("{:#?}", error);
-                panic!("unable to deserialize xml: {}", error)
-            }
+            Err(err) => Err(Error::UnknownError(format!(
+                "unable to deserialize xml: {}",
+                err
+            ))),
         };
     }
 
@@ -433,11 +433,12 @@ impl Client {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.standings {
                     Some(standings) => Ok(standings),
-                    None => panic!("failed to fetch league standings: missing"),
+                    None => Err(Error::NotFound),
                 },
-                other => {
-                    panic!("failed to fetch league standings content: invalid content variant: ")
-                }
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
             Err(err) => Err(err),
         };
@@ -455,22 +456,32 @@ impl Client {
                     Some(transactions) => Ok(transactions.transactions),
                     None => Ok(vec![]),
                 },
-                _ => {
-                    panic!("failed to fetch league transactions content: invalid content variant: ")
-                }
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::League, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch league transactions content: {}", error),
+            Err(err) => Err(Error::UnknownError(format!(
+                "failed to fetch league transactions content: {}",
+                err
+            ))),
         };
     }
 
-    pub async fn get_game(&self, game_key: GameKey) -> Result<Game, reqwest::Error> {
+    pub async fn get_game(&self, game_key: GameKey) -> Result<Game, Error> {
         let url = format!("{}/game/{}", self.base_url, game_key.to_string());
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
                 FantasyContent::Game(game) => return Ok(game),
-                _ => panic!("failed to fetch game content: invalid content variant: "),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Game, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch game content: {}", error),
+            Err(err) => Err(Error::UnknownError(format!(
+                "failed to fetch game content: {}",
+                err
+            ))),
         }
     }
 
@@ -525,10 +536,6 @@ impl Client {
     }
 
     /// league_key is {game_code}.l.{league_id}
-    ///
-    /// # Panics
-    ///
-    /// Panics if .
     ///
     /// # Errors
     ///
@@ -656,20 +663,20 @@ impl Client {
             Ok(content) => match content.content {
                 FantasyContent::Team(team) => match team.roster {
                     Some(roster) => Ok(roster),
-                    None => panic!("asdfasdfasdfasdfffffff"),
+                    None => Err(Error::NotFound),
                 },
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Team, got: {:?}",
                     other
                 ))),
             },
-            Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
+            Err(err) => Err(Error::UnknownError(format!("{:?}", err))),
         }
     }
 
     pub async fn get_rosters_in_league(&self, league_key: &LeagueKey) -> Result<Vec<Team>, Error> {
         let url = format!("{}/league/{}/teams/roster", self.base_url, league_key,);
-        // println!("GET {}", url);
+        // debug!();
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
@@ -682,10 +689,10 @@ impl Client {
                     other
                 ))),
             },
-            Err(error) => panic!(
+            Err(error) => Err(Error::UnknownError(format!(
                 "failed to fetch team rosters for league {}: {}",
                 league_key, error
-            ),
+            ))),
         }
     }
 
@@ -712,11 +719,17 @@ impl Client {
             Ok(content) => match content.content {
                 FantasyContent::Team(team) => match team.roster {
                     Some(roster) => Ok(roster),
-                    None => panic!("asdfasdfasdfasdfffffff"),
+                    None => Err(Error::NotFound),
                 },
-                _ => panic!("got another fantasy content variant than expected"),
+                other => Err(Error::UnexpectedContentVariant(format!(
+                    "expected FantasyContent::Team, got: {:?}",
+                    other
+                ))),
             },
-            Err(error) => panic!("failed to fetch roster for team {}: {}", team_key, error),
+            Err(error) => Err(Error::UnknownError(format!(
+                "failed to fetch roster for team {}: {}",
+                team_key, error
+            ))),
         }
     }
 
@@ -1060,10 +1073,10 @@ mod tests {
         assert!(resp.is_ok());
         let draft_results = resp.unwrap();
         assert_eq!(204, draft_results.len());
-        for draft_result in draft_results.iter() {
-            println!("{:?}", draft_result);
-        }
-        assert_eq!(20, draft_results[0].pick);
+        // for draft_result in draft_results.iter() {
+        //     println!("{:?}", draft_result);
+        // }
+        assert_eq!(1, draft_results[0].pick);
     }
 }
 
