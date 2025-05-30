@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error as StdError, fmt};
+use std::{collections::HashMap, fmt};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -23,7 +23,7 @@ impl std::fmt::Display for Sport {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Player {
     pub active: Option<bool>,
     pub player_id: String,
@@ -98,13 +98,13 @@ impl fmt::Display for Player {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+
 pub struct TrendingPlayer {
     pub player_id: String,
     pub count: u32,
 }
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct User {
     pub username: Option<String>, // present for get_user, but not get_users_in_league
     pub user_id: String,
@@ -159,7 +159,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LeagueUserDetails {
     pub is_bot: bool,
     pub is_owner: bool,
@@ -469,7 +469,7 @@ impl ScoringSettings {
 }
 
 /// TODO: There is more to be gleaned from the data in GET /user/{user_id}/leagues/{sport}/{season}
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct League {
     pub total_rosters: u8,
     pub status: LeagueStatus,
@@ -492,7 +492,7 @@ pub struct League {
     pub other_data: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LeagueStatus {
     PreDraft,
@@ -501,7 +501,7 @@ pub enum LeagueStatus {
     Complete,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SeasonType {
     Regular,
@@ -509,7 +509,7 @@ pub enum SeasonType {
     Pre,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LastMessageDetails {
     pub last_read_id: String,
     pub last_author_id: String,
@@ -523,7 +523,7 @@ pub struct LastMessageDetails {
     pub last_message_text_map: Option<Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Roster {
     pub roster_id: u8,
     pub owner_id: String,
@@ -541,7 +541,7 @@ pub struct Roster {
     pub other_data: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Matchup {
     pub points: f32,
     pub players: Vec<String>,
@@ -553,7 +553,7 @@ pub struct Matchup {
     pub players_points: HashMap<String, f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PlayoffBracketEntry {
     #[serde(rename = "r")]
     pub round: u8,
@@ -573,13 +573,13 @@ pub struct PlayoffBracketEntry {
     pub team_2_from: Option<UnresolvedPlayoffSlot>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UnresolvedPlayoffSlot {
     LoserOfMatch(u8),
     WinnerOfMatch(u8),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub status: TransactionStatus,
     #[serde(rename = "type")]
@@ -605,7 +605,7 @@ pub struct Transaction {
     pub waiver_budget: Vec<Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TransactionType {
     Waiver,
@@ -622,7 +622,7 @@ impl fmt::Display for TransactionType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TransactionStatus {
     Complete,
@@ -639,7 +639,7 @@ impl fmt::Display for TransactionStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum TrendType {
     ADD,
     DROP,
@@ -653,7 +653,7 @@ impl fmt::Display for TrendType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Draft {
     pub draft_id: String,
     pub league_id: String,
@@ -681,7 +681,7 @@ pub struct Draft {
     pub slot_to_roster_id: Option<HashMap<String, u8>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct DraftSettings {
     /// Sort players by name instead of ADP.
     #[serde(deserialize_with = "bool_from_int", default)]
@@ -697,7 +697,7 @@ pub struct DraftSettings {
     pub other: HashMap<String, i32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DraftType {
     SNAKE,
@@ -705,7 +705,7 @@ pub enum DraftType {
     AUCTION,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct DraftPick {
     pub player_id: String,
     /// user_id this pick will go to (not all leagues have users in every slot, this can be "")
@@ -722,7 +722,7 @@ pub struct DraftPick {
     pub draft_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct DraftPickMetadata {
     pub first_name: String,
     pub injury_status: String,
@@ -735,44 +735,6 @@ pub struct DraftPickMetadata {
     pub status: String, // known value: Active
     pub team: String,   // team abbreviation
     pub years_exp: String,
-}
-
-pub enum Error {
-    ResourceNotFound,
-    ServerError(reqwest::Error),
-    DecodeError(reqwest::Error),
-    ConnectError(reqwest::Error),
-    UnknownError(reqwest::Error),
-}
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut builder = f.debug_struct("sleeper::SleeperError");
-
-        builder.field(
-            "kind",
-            match self {
-                Error::ResourceNotFound => &"resource not found",
-                Error::ServerError(_) => &"server error",
-                Error::DecodeError(_) => &"decoding error",
-                Error::ConnectError(_) => &"connect error",
-                Error::UnknownError(_) => &"unknown error",
-            },
-        );
-
-        if let Error::ServerError(error)
-        | Error::DecodeError(error)
-        | Error::ConnectError(error)
-        | Error::UnknownError(error) = self
-        {
-            if let Some(source) = error.source() {
-                let message = source.to_string();
-                builder.field("message", &message.as_str());
-            }
-        }
-
-        builder.finish()
-    }
 }
 
 fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
