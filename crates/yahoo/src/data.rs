@@ -126,7 +126,7 @@ pub struct DraftResult {
 
 ///
 /// e.g. nfl.p.7241
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PlayerKey {
     pub game_key: GameKey, // e.g. 7241
     pub player_id: u32,
@@ -269,7 +269,7 @@ impl Filters {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum GameKey {
     Code(GameCode),
     Id(u32),
@@ -340,7 +340,7 @@ impl<'de> Deserialize<'de> for TeamKey {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum GameCode {
     NCAAF,            // NCCAF College Football Season-long
     NFL,              // NFL Season-long
@@ -798,7 +798,7 @@ pub struct Players {
 #[derive(Deserialize, Debug, PartialEq)]
 
 pub struct Player {
-    pub player_key: String,
+    pub player_key: PlayerKey,
     pub player_id: u32,
     pub name: PlayerName,
     pub url: String,                      // https://sports.yahoo.com/nfl/players/7241
