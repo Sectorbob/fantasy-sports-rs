@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use reqwest::{Request, StatusCode};
 use serde::de::DeserializeOwned;
@@ -119,61 +119,57 @@ impl Client {
         self.get_json(format!("/user/{}", user.trim()), None).await
     }
 
-    pub async fn get_leagues_for_user(
+    pub async fn get_leagues_for_user<T: Id>(
         &self,
-        user_id: &String,
+        user_id: T,
         sport: &Sport,
         season: &String,
     ) -> Result<Vec<League>, Error> {
         self.get_json(
-            format!("/user/{}/leagues/{}/{}", user_id.trim(), sport, season),
+            format!("/user/{}/leagues/{}/{}", user_id, sport, season),
             None,
         )
         .await
     }
 
-    pub async fn get_league(&self, league_id: &String) -> Result<League, Error> {
-        self.get_json(format!("/league/{}", league_id.trim()), None)
+    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, Error> {
+        self.get_json(format!("/league/{league_id}"), None).await
+    }
+
+    pub async fn get_rosters_for_league<T: Id>(&self, league_id: T) -> Result<Vec<Roster>, Error> {
+        self.get_json(format!("/league/{league_id}/rosters"), None)
             .await
     }
 
-    pub async fn get_rosters_for_league(&self, league_id: &String) -> Result<Vec<Roster>, Error> {
-        self.get_json(format!("/league/{}/rosters", league_id.trim()), None)
+    pub async fn get_users_for_league<T: Id>(&self, league_id: T) -> Result<Vec<User>, Error> {
+        self.get_json(format!("/league/{league_id}/users"), None)
             .await
     }
 
-    pub async fn get_users_for_league(&self, league_id: &String) -> Result<Vec<User>, Error> {
-        self.get_json(format!("/league/{}/users", league_id.trim()), None)
-            .await
-    }
-
-    pub async fn get_matchups(
+    pub async fn get_matchups<T: Id, I: Id>(
         &self,
-        league_id: String,
-        week: String,
+        league_id: T,
+        week: I,
     ) -> Result<Vec<Matchup>, Error> {
         self.get_json(
-            format!("/league/{}/matchups/{}", league_id.trim(), week),
+            format!("/league/{}/matchups/{}", league_id, week),
             None,
         )
         .await
     }
 
-    pub async fn get_transactions(
+    pub async fn get_transactions<T: Id, I: Id>(
         &self,
-        league_id: &String,
-        week: &String,
+        league_id: T,
+        week: I,
     ) -> Result<Vec<Transaction>, Error> {
-        self.get_json(
-            format!("/league/{}/transactions/{}", league_id.trim(), week),
-            None,
-        )
-        .await
+        self.get_json(format!("/league/{league_id}/transactions/{week}"), None)
+            .await
     }
 
-    pub async fn get_drafts_for_user(
+    pub async fn get_drafts_for_user<T: Id>(
         &self,
-        user_id: String,
+        user_id: T,
         sport: Sport,
         season: String,
     ) -> Result<Vec<Draft>, Error> {
@@ -181,16 +177,16 @@ impl Client {
             .await
     }
 
-    pub async fn get_drafts_for_league(&self, league_id: String) -> Result<Vec<Draft>, Error> {
-        self.get_json(format!("/league/{}/drafts", league_id.trim()), None)
+    pub async fn get_drafts_for_league<T: Id>(&self, league_id: T) -> Result<Vec<Draft>, Error> {
+        self.get_json(format!("/league/{league_id}/drafts"), None)
             .await
     }
 
-    pub async fn get_draft(&self, draft_id: String) -> Result<Draft, Error> {
+    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, Error> {
         self.get_json(format!("/draft/{draft_id}"), None).await
     }
 
-    pub async fn get_draft_picks(&self, draft_id: String) -> Result<Vec<DraftPick>, Error> {
+    pub async fn get_draft_picks<T: Id>(&self, draft_id: T) -> Result<Vec<DraftPick>, Error> {
         self.get_json(format!("/draft/{draft_id}/picks"), None)
             .await
     }
@@ -797,3 +793,11 @@ pub enum Error {
     #[error("unknown error: {0}")]
     UnknownError(String),
 }
+
+pub trait Id: Display {}
+
+impl Id for usize {}
+impl Id for &usize {}
+impl Id for &str {}
+impl Id for String {}
+impl Id for &String {}

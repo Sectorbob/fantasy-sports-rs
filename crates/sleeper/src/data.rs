@@ -492,6 +492,19 @@ pub struct League {
     pub other_data: HashMap<String, Value>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct LeagueSettings {
+    #[serde(deserialize_with = "bool_from_int", default)]
+    pub best_ball: bool,
+    pub leg: Option<usize>,
+    pub last_leg: Option<usize>,
+    pub last_scored_leg: Option<usize>,
+    pub playoff_teams: usize,
+    pub playoff_week_start: usize,
+    #[serde(flatten)]
+    pub other_data: HashMap<String, Number>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LeagueStatus {
