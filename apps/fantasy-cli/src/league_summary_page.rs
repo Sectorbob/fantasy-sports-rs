@@ -139,6 +139,10 @@ fn render_league_details(
         format!("Team Name:    {}", league.team_name()),
         format!("Record:       {}", league.record()),
         format!("Total Points: {}", format!("{:.2}", league.total_points())),
+        format!(
+            "Total Txns:   {}",
+            format!("{}", league.transactions().len())
+        ),
     ];
     league
         .settings()

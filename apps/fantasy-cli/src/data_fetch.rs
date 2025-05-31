@@ -135,29 +135,24 @@ async fn get_sleeper_leagues(
             }
         };
 
-        let matchups = match sleeper_utils::get_league_matchups(
-            &sleeper_league.league_id,
-            Some(&sleeper_league),
-            &sleeper_client,
-        )
-        .await
-        {
-            Ok(matchups) => matchups,
-            Err(e) => {
-                eprintln!(
-                    "Error fetching matchups for league {}: {:?}",
-                    sleeper_league.league_id, e
-                );
-                HashMap::new()
-                // return Err(Box::new(std::io::Error::new(
-                //     std::io::ErrorKind::Other,
-                //     format!(
-                //         "Error fetching matchups for league {}: {:?}",
-                //         sleeper_league.league_id, e
-                //     ),
-                // )));
-            }
-        };
+        let matchups =
+            match sleeper_utils::get_league_matchups(&sleeper_league, &sleeper_client).await {
+                Ok(matchups) => matchups,
+                Err(e) => {
+                    eprintln!(
+                        "Error fetching matchups for league {}: {:?}",
+                        sleeper_league.league_id, e
+                    );
+                    HashMap::new()
+                    // return Err(Box::new(std::io::Error::new(
+                    //     std::io::ErrorKind::Other,
+                    //     format!(
+                    //         "Error fetching matchups for league {}: {:?}",
+                    //         sleeper_league.league_id, e
+                    //     ),
+                    // )));
+                }
+            };
 
         // Obtain set of all player_ids used by this league
         let mut player_id_set: HashSet<String> = HashSet::new();
@@ -216,7 +211,17 @@ async fn get_sleeper_leagues(
             }
         }
 
-        let transactions = sleeper_client.get_transactions(league_id, week)
+        let transactions: Vec<sleeper::Transaction> =
+            match sleeper_utils::get_league_transactions(sleeper_client, &sleeper_league).await {
+                Ok(txns) => txns,
+                Err(err) => {
+                    error!(
+                        "Failed to load transactions for league {}: {:?}",
+                        sleeper_league.league_id, err
+                    );
+                    vec![]
+                }
+            };
 
         leagues.push(League::Sleeper {
             draft,

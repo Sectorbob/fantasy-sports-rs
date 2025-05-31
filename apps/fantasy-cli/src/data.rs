@@ -17,6 +17,7 @@ pub enum League {
         owners: HashMap<String, sleeper_fantasy_rs::User>,
         players: HashMap<String, SleeperPlayer>,
         rosters: Vec<sleeper_fantasy_rs::Roster>,
+        transactions: Vec<sleeper_fantasy_rs::Transaction>,
         user_id: String,
     },
     Yahoo {
@@ -41,6 +42,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => league.league_id.clone(),
             League::Yahoo {
@@ -65,6 +67,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => league.name.clone(),
             League::Yahoo {
@@ -89,6 +92,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => String::from("Sleeper"),
             League::Yahoo {
@@ -113,6 +117,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => league.season.clone(),
             League::Yahoo {
@@ -137,6 +142,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters,
+                transactions: _,
                 user_id,
             } => match rosters.iter().find(|r| &r.owner_id == user_id) {
                 Some(roster) => format!(
@@ -189,6 +195,7 @@ impl League {
                 owners,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id,
             } => match owners.get(user_id) {
                 Some(owner) => owner.team_name(),
@@ -216,6 +223,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters,
+                transactions: _,
                 user_id,
             } => match rosters.iter().find(|r| &r.owner_id == user_id) {
                 Some(roster) => roster
@@ -253,6 +261,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => LeagueSettings::from_sleeper(&league),
             League::Yahoo {
@@ -277,6 +286,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => format!("Raw: {:#?}", league.settings),
             League::Yahoo {
@@ -301,6 +311,7 @@ impl League {
                 owners,
                 players,
                 rosters,
+                transactions: _,
                 user_id,
             } => rosters
                 .iter()
@@ -328,6 +339,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => matchups,
             League::Yahoo {
@@ -352,6 +364,7 @@ impl League {
                 owners: _,
                 players,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => players
                 .iter()
@@ -379,6 +392,7 @@ impl League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => draft.as_ref().map(|d| Draft::from(d, draft_picks)),
             League::Yahoo {
@@ -427,6 +441,31 @@ impl League {
             },
         }
     }
+    pub fn transactions(&self) -> Vec<Transaction> {
+        match self {
+            League::Sleeper {
+                draft: _,
+                draft_picks: _,
+                league: _,
+                matchups: _,
+                owners: _,
+                players: _,
+                rosters: _,
+                transactions,
+                user_id: _,
+            } => transactions.iter().map(Transaction::from_sleeper).collect(),
+            League::Yahoo {
+                draft_results: _,
+                league: _,
+                matchups: _,
+                players: _,
+                rosters: _,
+                settings: _,
+                standings: _,
+                team: _,
+            } => vec![],
+        }
+    }
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -439,6 +478,7 @@ impl std::fmt::Display for League {
                 owners: _,
                 players: _,
                 rosters: _,
+                transactions: _,
                 user_id: _,
             } => write!(
                 f,
