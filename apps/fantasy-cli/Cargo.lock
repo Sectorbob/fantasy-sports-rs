@@ -55,6 +55,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.88"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1563,6 +1574,7 @@ dependencies = [
 name = "sleeper-fantasy-rs"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "directories",
  "log",
@@ -2364,6 +2376,7 @@ checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 name = "yahoo-fantasy-rs"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "itertools",
  "log",
@@ -2373,6 +2386,7 @@ dependencies = [
  "serde",
  "serde-xml-rs",
  "serde_json",
+ "sha2",
  "thiserror 2.0.12",
  "tokio",
 ]

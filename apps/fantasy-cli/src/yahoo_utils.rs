@@ -16,7 +16,7 @@ use yahoo_fantasy_rs::{
     Team, TeamStandings, Token, Transaction,
 };
 
-use crate::constants::{ENV_YAHOO_CLIENT_ID, ENV_YAHOO_REDIRECT_URI, ENV_YAHOO_TOKEN_FILE};
+use crate::{config, constants::{ENV_YAHOO_CLIENT_ID, ENV_YAHOO_REDIRECT_URI, ENV_YAHOO_TOKEN_FILE}};
 
 pub async fn build_client() -> Result<Client, YahooError> {
     let yahoo_client_id = match env::var(ENV_YAHOO_CLIENT_ID) {
@@ -43,7 +43,10 @@ pub async fn build_client() -> Result<Client, YahooError> {
             ));
         }
     };
-    let mut client = Client::new(yahoo_client_id, yahoo_redirect_uri, None);
+
+    let cache_dir = config::config_dir().join("yahoo");
+
+    let mut client = Client::new(yahoo_client_id, yahoo_redirect_uri, None, Some(cache_dir));
 
     debug!("loading token file: {}", yahoo_token_file);
 

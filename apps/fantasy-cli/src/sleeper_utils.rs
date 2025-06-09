@@ -2,12 +2,10 @@ use std::{collections::HashMap, error::Error, ops::Range};
 
 use futures::FutureExt;
 use log::{error, info};
-use serde::Serialize;
 use serde_json::Number;
 use sleeper_fantasy_rs::{
     Client, League, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
 };
-use tokio::fs; // instead of std::fs
 
 const START_WEEK: usize = 1;
 
@@ -371,24 +369,4 @@ mod tests {
                 .unwrap();
         }
     }
-}
-
-/// Saves a serializable struct as JSON to a file in a subdirectory of the user's local cache directory.
-/// `subdir` is the subdirectory name, `filename` is the file name.
-pub async fn save_to_cache_dir<T: Serialize>(
-    subdir: &str,
-    filename: &str,
-    value: &T,
-) -> std::io::Result<()> {
-    let cache_dir = dirs::cache_dir()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Cache dir not found"))?;
-    let dir_path = cache_dir.join(subdir);
-    fs::create_dir_all(&dir_path).await?;
-    let file_path = dir_path.join(filename);
-    let json = serde_json::to_string_pretty(value)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    let mut file = fs::File::create(file_path).await?;
-    use tokio::io::AsyncWriteExt;
-    file.write_all(json.as_bytes()).await?;
-    Ok(())
 }
