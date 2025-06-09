@@ -6,13 +6,16 @@ use sleeper_fantasy_rs::{self as sleeper};
 use yahoo_fantasy_rs::{self as yahoo};
 
 use crate::{
-    data::{Draft, League},
-    sleeper_utils, yahoo_utils,
+    config, data::{Draft, League}, sleeper_utils, yahoo_utils
 };
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
 ) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
+
+    let sleeper_cache_dir = config::cache_dir().join("sleeper");
+    // let yahoo_cache_dir = config::cache_dir().join("yahoo");
+
     let sleeper_user_id = "727598467304811923".to_string();
     let sleeper_sport = sleeper::Sport::NFL;
     let yahoo_game_code = yahoo::GameCode::NFL;
@@ -20,7 +23,7 @@ pub async fn get_all_leagues(
         Ok(client) => client,
         Err(err) => return Err(Box::new(err)),
     };
-    let sleeper_client = sleeper_fantasy_rs::Client::new(None);
+    let sleeper_client = sleeper_fantasy_rs::Client::new_with_cache(None, sleeper_cache_dir);
 
     let sleeper_players = sleeper_client.fetch_all_players(&sleeper_sport).await?;
     let mut leagues: Vec<League> = vec![];

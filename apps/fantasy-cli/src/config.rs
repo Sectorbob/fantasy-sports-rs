@@ -2,6 +2,13 @@ use crate::constants::APP_NAME;
 use dirs;
 use std::path::PathBuf;
 
+pub fn cache_dir() -> PathBuf {
+    match dirs::cache_dir() {
+        Some(data_dir) => data_dir.join(APP_NAME),
+        None => get_temp_dir().join(APP_NAME).join("cache"),
+    }
+}
+
 pub fn config_dir() -> PathBuf {
     match dirs::config_dir() {
         Some(home_dir) => home_dir.join(APP_NAME),
