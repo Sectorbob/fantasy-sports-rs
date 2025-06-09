@@ -6,12 +6,11 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     Draft,
-    cacheable::Cacheable,
+    cache::{Cacheable, FileSystemCacher},
     data::{
         DraftPick, League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer,
         User,
     },
-    persist::FileSystemCacher,
 };
 use thiserror;
 
