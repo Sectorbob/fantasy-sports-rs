@@ -1,14 +1,17 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
+use log::{debug, info};
 use reqwest::{Request, StatusCode};
 use serde::de::DeserializeOwned;
 
 use crate::{
     Draft,
+    cacheable::Cacheable,
     data::{
         DraftPick, League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer,
         User,
     },
+    persist::FileSystemCacher,
 };
 use thiserror;
 
@@ -19,8 +22,21 @@ const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
 pub struct Client {
     base_url: String,
     client: reqwest::Client,
+    cache: Option<Box<dyn Cacheable + Send + Sync>>,
 }
 impl Client {
+    pub fn new_with_cache<T: Into<PathBuf>>(base_url: Option<String>, cache_dir: T) -> Self {
+        Client {
+            base_url: base_url.unwrap_or(SLEEPER_API_BASE_URL.to_string()),
+            client: reqwest::ClientBuilder::new()
+                .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
+                // .default_headers(headers)
+                .build()
+                .expect("dev error while building http client"),
+            cache: Some(Box::new(FileSystemCacher::new(cache_dir))),
+        }
+    }
+
     pub fn new(base_url: Option<String>) -> Self {
         Client {
             base_url: base_url.unwrap_or(SLEEPER_API_BASE_URL.to_string()),
@@ -29,6 +45,7 @@ impl Client {
                 // .default_headers(headers)
                 .build()
                 .expect("dev error while building http client"),
+            cache: None,
         }
     }
 
@@ -63,18 +80,56 @@ impl Client {
         };
         let url = req.url().to_string();
 
-        match self.client.execute(req).await {
-            Ok(resp) => match resp.status() {
-                StatusCode::OK => match resp.json::<Option<T>>().await {
-                    Ok(opt_t) => match opt_t {
-                        Some(t) => Ok(t),
-                        None => Err(Error::NotFound(url)),
-                    },
+        // check cache if exists (TODO: some time-based logic)
+        if let Some(cacher) = &self.cache {
+            if let Some(body_text) = cacher.load_cache(url.as_str()) {
+                debug!("GET {} cache hit", url);
+                return match serde_json::from_str(&body_text) {
+                    Ok(obj) => Ok(obj),
                     Err(err) => Err(Error::ResponseDeserializationError {
                         message: format!("{:?}", err),
                         url,
                     }),
-                },
+                };
+            } else {
+                info!("GET {} cache miss", url);
+            }
+        }
+
+        match self.client.execute(req).await {
+            Ok(resp) => match resp.status() {
+                StatusCode::OK => {
+                    if let Some(cacher) = &self.cache {
+                        // load to memory buffer then save to file and return deserialized struct
+                        match resp.text().await {
+                            Ok(resp_text) => {
+                                cacher.save_cache(&url, resp_text.as_str()); // TODO: handle error case
+                                match serde_json::from_str(&resp_text) {
+                                    Ok(obj) => Ok(obj),
+                                    Err(err) => Err(Error::ResponseDeserializationError {
+                                        message: format!("{:?}", err),
+                                        url,
+                                    }),
+                                }
+                            }
+                            Err(err) => Err(Error::UnknownError(format!(
+                                "failed to read response body: {:?}",
+                                err
+                            ))),
+                        }
+                    } else {
+                        match resp.json::<Option<T>>().await {
+                            Ok(opt_t) => match opt_t {
+                                Some(t) => Ok(t),
+                                None => Err(Error::NotFound(url)),
+                            },
+                            Err(err) => Err(Error::ResponseDeserializationError {
+                                message: format!("{:?}", err),
+                                url,
+                            }),
+                        }
+                    }
+                }
                 StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
                 code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
@@ -151,11 +206,8 @@ impl Client {
         league_id: T,
         week: I,
     ) -> Result<Vec<Matchup>, Error> {
-        self.get_json(
-            format!("/league/{}/matchups/{}", league_id, week),
-            None,
-        )
-        .await
+        self.get_json(format!("/league/{}/matchups/{}", league_id, week), None)
+            .await
     }
 
     pub async fn get_transactions<T: Id, I: Id>(

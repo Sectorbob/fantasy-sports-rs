@@ -1,6 +1,8 @@
+mod cacheable;
 mod client;
 pub mod custom;
 mod data;
+mod persist;
 
 pub use client::{Client, Error, avatar_thumbnail_url, avatar_url};
 pub use data::{
