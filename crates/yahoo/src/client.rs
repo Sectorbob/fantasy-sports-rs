@@ -1,5 +1,6 @@
 use crate::{
     PlayerKey,
+    cache::{Cacheable, FileSystemCacher},
     data::{
         DraftResult, FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League,
         LeagueKey, Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token,
@@ -9,9 +10,9 @@ use crate::{
 use chrono::NaiveDate;
 use core::str;
 use itertools::join;
-use log::debug;
+use log::{debug, error, info};
 use quick_xml::de::from_str;
-use std::error::Error as _;
+use std::{error::Error as _, path::PathBuf};
 
 const USER_AGENT: &str = "reqwest";
 
@@ -28,13 +29,15 @@ pub struct Client {
     redirect_uri: String,
     code_verifier: Option<String>,
     pub token: Option<Token>,
+    cache: Option<Box<dyn Cacheable + Send + Sync>>,
 }
 impl Client {
-    pub fn with_token(
+    pub fn with_token<T: Into<PathBuf>>(
         client_id: String,
         redirect_uri: String,
         token: Token,
         base_url: Option<String>,
+        cache_dir: Option<T>,
     ) -> Self {
         let client = reqwest::Client::builder()
             .user_agent(USER_AGENT)
@@ -45,6 +48,7 @@ impl Client {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap();
+
         Client {
             base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
             client,
@@ -53,10 +57,18 @@ impl Client {
             redirect_uri,
             code_verifier: Option::None,
             token: Some(token),
+            cache: cache_dir.map(|dir| {
+                Box::new(FileSystemCacher::new(dir)) as Box<dyn Cacheable + Send + Sync>
+            }),
         }
     }
 
-    pub fn new(client_id: String, redirect_uri: String, base_url: Option<String>) -> Self {
+    pub fn new<T: Into<PathBuf>>(
+        client_id: String,
+        redirect_uri: String,
+        base_url: Option<String>,
+        cache_dir: Option<T>,
+    ) -> Self {
         let client = reqwest::Client::builder()
             .user_agent("reqwest")
             .build()
@@ -74,6 +86,9 @@ impl Client {
             redirect_uri,
             code_verifier: Option::None,
             token: Option::None,
+            cache: cache_dir.map(|dir| {
+                Box::new(FileSystemCacher::new(dir)) as Box<dyn Cacheable + Send + Sync>
+            }),
         }
     }
 
@@ -238,6 +253,21 @@ impl Client {
     }
 
     pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, Error> {
+        // check cache
+        if let Some(cacher) = &self.cache {
+            if let Some(body_text) = cacher.load_cache(url).await {
+                debug!("GET {} cache hit", url);
+                return match quick_xml::de::from_str(&body_text) {
+                    Ok(obj) => Ok(obj),
+                    Err(err) => Err(Error::UnknownError(format!(
+                        "can't parse cached file: {:?}",
+                        err
+                    ))),
+                };
+            } else {
+                info!("GET {} cache miss", url);
+            }
+        }
         debug!("GET {}", url);
 
         let req = match self
@@ -356,6 +386,13 @@ impl Client {
         };
         if DEBUG_ENABLED {
             println!("Body: {}", body_text);
+        }
+
+        // cache it
+        if let Some(cacher) = &self.cache {
+            if let Err(err) = cacher.save_cache(url, body_text.as_str()).await {
+                error!("unable to cachee yahoo GET response: {:?}", err);
+            }
         }
 
         return match from_str(body_text.as_str()) {
@@ -816,7 +853,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fixture = Client::with_token(
+        let fixture = Client::with_token::<String>(
             "".to_string(),
             "".to_string(),
             Token {
@@ -827,6 +864,7 @@ mod tests {
                 scope: None,
             },
             Some(mock_server.uri()),
+            None,
         );
         (fixture, mock_server)
     }
@@ -860,7 +898,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fixture = Client::with_token(
+        let fixture = Client::with_token::<String>(
             "".to_string(),
             "".to_string(),
             Token {
@@ -871,6 +909,7 @@ mod tests {
                 scope: None,
             },
             Some(mock_server.uri()),
+            None,
         );
         (fixture, mock_server)
     }

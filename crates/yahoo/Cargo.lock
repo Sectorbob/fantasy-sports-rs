@@ -2038,6 +2038,7 @@ checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 name = "yahoo-fantasy-rs"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "dotenv",
  "itertools",
@@ -2048,6 +2049,7 @@ dependencies = [
  "serde",
  "serde-xml-rs",
  "serde_json",
+ "sha2",
  "thiserror 2.0.12",
  "tokio",
  "wiremock",
