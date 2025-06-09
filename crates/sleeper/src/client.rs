@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
-use log::{debug, info};
+use log::{debug, error, info};
 use reqwest::{Request, StatusCode};
 use serde::de::DeserializeOwned;
 
@@ -82,7 +82,7 @@ impl Client {
 
         // check cache if exists (TODO: some time-based logic)
         if let Some(cacher) = &self.cache {
-            if let Some(body_text) = cacher.load_cache(url.as_str()) {
+            if let Some(body_text) = cacher.load_cache(url.as_str()).await {
                 debug!("GET {} cache hit", url);
                 return match serde_json::from_str(&body_text) {
                     Ok(obj) => Ok(obj),
@@ -103,7 +103,15 @@ impl Client {
                         // load to memory buffer then save to file and return deserialized struct
                         match resp.text().await {
                             Ok(resp_text) => {
-                                cacher.save_cache(&url, resp_text.as_str()); // TODO: handle error case
+                                let cache_result =
+                                    cacher.save_cache(&url, resp_text.as_str()).await; // TODO: handle error case
+                                if let Err(err) = cache_result {
+                                    // log it
+                                    error!(
+                                        "unable to cache sleeper GET response for {url}: {:?}",
+                                        err
+                                    );
+                                }
                                 match serde_json::from_str(&resp_text) {
                                     Ok(obj) => Ok(obj),
                                     Err(err) => Err(Error::ResponseDeserializationError {

@@ -624,6 +624,7 @@ pub enum TransactionType {
     Waiver,
     FreeAgent,
     Trade,
+    Commissioner,
 }
 impl fmt::Display for TransactionType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -631,6 +632,7 @@ impl fmt::Display for TransactionType {
             TransactionType::Waiver => write!(f, "Waiver"),
             TransactionType::FreeAgent => write!(f, "FreeAgent"),
             TransactionType::Trade => write!(f, "Trade"),
+            TransactionType::Commissioner => write!(f, "Commissioner"),
         }
     }
 }

@@ -1,10 +1,12 @@
 use log::info;
 use sha2::{Digest, Sha256};
-use std::fs;
-use std::io::{Read, Write};
+use std::io::Error;
 use std::path::PathBuf;
+use tokio::fs;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-// The trait for cachinh
+// The trait for caching
+#[async_trait::async_trait]
 pub trait Cacheable {
     /// Returns the cache directory location, or None if caching is off.
     fn cache_dir(&self) -> PathBuf;
@@ -19,35 +21,25 @@ pub trait Cacheable {
     }
 
     /// Try to load a cached string value for a key.
-    fn load_cache(&self, key: &str) -> Option<String> {
+    async fn load_cache(&self, key: &str) -> Option<String> {
         let path = self.cache_file_path(key);
-        let mut f = fs::File::open(path).ok()?;
+        let mut f = fs::File::open(path).await.ok()?;
         let mut s = String::new();
-        f.read_to_string(&mut s).ok()?;
+        f.read_to_string(&mut s).await.ok()?;
         Some(s)
     }
 
     /// Save a string value to the cache for a key.
-    fn save_cache(&self, key: &str, value: &str) {
+    async fn save_cache(&self, key: &str, value: &str) -> Result<(), Error> {
         let path = self.cache_file_path(key);
         info!("caching {key} to {:?}", path);
-    
+
         if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
+            fs::create_dir_all(parent).await?;
         }
-        if let Ok(mut f) = fs::File::create(path) {
-            let _ = f.write_all(value.as_bytes());
+        if let Ok(mut f) = fs::File::create(path).await {
+            f.write_all(value.as_bytes()).await?;
         }
+        Ok(())
     }
 }
-
-struct CacheableFoo {}
-
-impl Cacheable for CacheableFoo {
-    fn cache_dir(&self) -> PathBuf {
-        todo!()
-    }
-}
-// impl Sync for CacheableFoo {
-
-// }
