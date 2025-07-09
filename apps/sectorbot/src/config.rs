@@ -1,8 +1,14 @@
-use flexi_logger::{FileSpec, Logger, WriteMode};
+use flexi_logger::{FileSpec, LogSpecBuilder, Logger, LoggerHandle, WriteMode};
 
-pub fn setup_logger() {
-    Logger::try_with_str("info") // set log level
-        .unwrap()
+pub fn setup_logger() -> Result<LoggerHandle, Box<dyn std::error::Error>> {
+    let mut log_spec_builder = LogSpecBuilder::new();
+    log_spec_builder
+        .default(flexi_logger::LevelFilter::Info)
+        .module("serenity", flexi_logger::LevelFilter::Warn);
+
+    // Ok(Logger::try_with_str("info")? // set log level
+    Ok(Logger::with(log_spec_builder.build())
+        .log_to_stdout()
         .log_to_file(FileSpec::default().suppress_timestamp())
         .format(flexi_logger::detailed_format)
         // .rotate(
@@ -12,8 +18,7 @@ pub fn setup_logger() {
         // )
         .write_mode(WriteMode::BufferAndFlush)
         // .directory("log_files") // optional: log file directory
-        .start()
-        .unwrap();
+        .start()?)
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
