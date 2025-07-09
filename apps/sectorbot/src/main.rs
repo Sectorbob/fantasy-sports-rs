@@ -1,12 +1,16 @@
 mod config;
 mod tweeter;
 
+use std::error::Error;
+use std::fmt::Display;
+
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
 use crate::config::Config;
+use crate::tweeter::TweetResponse;
 
 struct Handler;
 
@@ -42,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     config::setup_logger();
     let config = config::load_config()?;
     // setup_discord_bot(&config).await?;
-    do_twitter_fetch().await?;
+    do_twitter_fetch(&config.twitter_subs, &config.twitter_cookie).await?;
     Ok(())
 }
 
@@ -69,20 +73,56 @@ async fn setup_discord_bot(config: &Config) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-async fn do_twitter_fetch() -> Result<(), Box<dyn std::error::Error>> {
-    let tweet_id: u64 = 7301820310883384255;
-    let twitter_username = "DanSchneierNFL";
+const FX_TWITTER: &str = "https://fxtwitter.com";
 
-    let twitter_timeline = tweeter::fetch_user_timeline(twitter_username).await?;
-    println!(
-        "Twitter Timeline for {}. {} entries",
-        twitter_username,
-        twitter_timeline.props.page_props.timeline.entries.len()
-    );
+async fn do_twitter_fetch(
+    subs: &Vec<String>,
+    cookie: &String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // let twitter_username = "giantinsider";
+    // let subs = vec![
+    //     "DanSchneierNFL",
+    //     "giantinsider",
+    //     "nickfalato",
+    //     "SharpFootball",
+    // ];
 
-    println!(
-        "Tweet: {:#?}",
-        tweeter::fetch_tweet(tweet_id).await.unwrap()
-    );
+    let mut tweets: Vec<TweetResponse> = vec![];
+    for twitter_username in subs {
+        let mut user_tweets = fetch_raw_tweets(twitter_username, cookie).await?;
+        println!(
+            "Twitter Timeline for {}. {} entries",
+            twitter_username,
+            user_tweets.len()
+        );
+        tweets.append(&mut user_tweets);
+    }
+    tweets.sort_by_key(|tweet| tweet.created_at.to_string());
+
+    for tweet in tweets {
+        println!("----------------------------------");
+        println!("Created At: {}", tweet.created_at);
+        println!("Text: {}", tweet.full_text);
+        println!("Link: {FX_TWITTER}{}", tweet.permalink);
+        println!("----------------------------------");
+    }
+
     Ok(())
+}
+
+async fn fetch_raw_tweets<T: Display>(
+    twitter_username: T,
+    twitter_cookie: T,
+) -> Result<Vec<TweetResponse>, Box<dyn Error>> {
+    let twitter_timeline =
+        tweeter::fetch_user_timeline(twitter_username.to_string(), twitter_cookie.to_string())
+            .await?;
+    Ok(twitter_timeline
+        .props
+        .page_props
+        .timeline
+        .entries
+        .into_iter()
+        .filter_map(|e| e.content.tweet)
+        .collect())
 }

@@ -54,6 +54,23 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
                 );
             }
         },
+        twitter_subs: match std::env::var("TWITTER_SUBS") {
+            Ok(subs) => subs.split(',').map(String::from).collect(),
+            Err(_) => {
+                return Err(
+                    "TWITTER_SUBS environment variable is not set. Please set it to a comma delimited list."
+                        .into(),
+                );
+            }
+        },
+        twitter_cookie: match std::env::var("TWITTER_COOKIE") {
+            Ok(cookie) => cookie,
+            Err(_) => {
+                return Err(
+                    "TWITTER_COOKIE environment variable is not set. Please set it.".into(),
+                );
+            }
+        },
     })
 }
 
@@ -61,4 +78,6 @@ pub struct Config {
     pub discord_token: String,
     pub guild_id: u64,
     pub channel_id: u64,
+    pub twitter_subs: Vec<String>,
+    pub twitter_cookie: String,
 }

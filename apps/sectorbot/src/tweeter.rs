@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
+use chrono::{DateTime, FixedOffset, Utc};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -32,10 +33,11 @@ fn get_token(id: u64) -> String {
     s
 }
 
-pub async fn fetch_user_timeline(
-    username: &str,
+pub async fn fetch_user_timeline<T: Display>(
+    username: T,
+    cookie: T,
 ) -> Result<TimelineResponse, Box<dyn std::error::Error>> {
-    let token = get_token(username.len() as u64);
+    let token = get_token(username.to_string().len() as u64);
     log::info!(
         "Fetching user timeline for: {} with token: {}",
         username,
@@ -53,7 +55,7 @@ pub async fn fetch_user_timeline(
         ))
         .header("User-Agent", "curl/8.7.1")
         .header("Accept", "*/*")
-        // .query(&[("screen_name", username)/* , ("token", &token)*/])
+        .header("Cookie", cookie.to_string()) // .query(&[("screen_name", username)/* , ("token", &token)*/])
         .build()?;
     println!("Request URL: {}", req.url());
     let res = client.execute(req).await?;
@@ -102,7 +104,12 @@ pub struct TweetResponse {
     pub id_str: String,
     pub text: String,
     pub user: User,
-    // Add more fields as needed
+    #[serde(deserialize_with = "parse_custom_datetime")]
+    pub created_at: DateTime<FixedOffset>,
+    pub full_text: String, // "Kurt Warner described this as the \"best throw in Super Bowl history\" and he's RIGHT\n\nIf the ball has any less velocity, it's incomplete. An inch left? Incomplete. An inch right? Interception\n\nCapped off a playoff run where he threw 11 TDs to 1 INT and nearly 300 YPG\n\n#GiantsPride",
+    pub lang: String,
+    pub permalink: String, //"/DanSchneierNFL/status/3016845289181978600",
+                           // Add more fields as needed
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,6 +176,15 @@ pub struct TimelineEntry {
 #[derive(Debug, Deserialize)]
 pub struct TimelineContent {
     pub tweet: Option<TweetResponse>,
+}
+
+fn parse_custom_datetime<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let s = String::deserialize(deserializer)?;
+    DateTime::parse_from_str(&s, "%a %b %d %H:%M:%S %z %Y").map_err(Error::custom)
 }
 
 #[cfg(test)]
