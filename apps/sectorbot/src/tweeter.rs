@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -23,11 +23,11 @@ fn f64_to_base36_string(n: f64, precision: usize) -> String {
 
 fn get_token(id: u64) -> String {
     let value = (id as f64 / 1e15) * std::f64::consts::PI;
-    println!("Value: {}", value);
+    log::debug!("Value: {}", value);
     // let base = 36u32; // 6 ** 2 = 36
     // (value.trunc() as u64).to_string_radix(36); // Convert f64 to base36-like string
     let mut s = f64_to_base36_string(value, 11); // Convert f64 to hex as a base36-like string
-    println!("Hex string: {}", s);
+    log::debug!("Hex string: {}", s);
     // Remove all '0's and '.'s
     s.retain(|c| c != '0' && c != '.');
     s
@@ -43,10 +43,6 @@ pub async fn fetch_user_timeline<T: Display>(
         username,
         token
     );
-    println!(
-        "Fetching user timeline for: {} with token: {}",
-        username, token
-    );
 
     let client = reqwest::Client::new();
     let req = client
@@ -57,7 +53,7 @@ pub async fn fetch_user_timeline<T: Display>(
         .header("Accept", "*/*")
         .header("Cookie", cookie.to_string()) // .query(&[("screen_name", username)/* , ("token", &token)*/])
         .build()?;
-    println!("Request URL: {}", req.url());
+    log::debug!("Request URL: {}", req.url());
     let res = client.execute(req).await?;
     if res.status().is_success() {
         let html = res.text().await?;
@@ -80,7 +76,6 @@ pub async fn fetch_user_timeline<T: Display>(
 pub async fn fetch_tweet(tweet_id: u64) -> Result<TweetResponse, Box<dyn std::error::Error>> {
     let token = get_token(tweet_id);
     log::info!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
-    println!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
 
     let client = reqwest::Client::new();
     let req = client
@@ -89,7 +84,7 @@ pub async fn fetch_tweet(tweet_id: u64) -> Result<TweetResponse, Box<dyn std::er
         .header("Accept", "application/json")
         .query(&[("id", &tweet_id.to_string()), ("token", &token.to_string())])
         .build()?;
-    println!("Request URL: {}", req.url());
+    log::debug!("Request URL: {}", req.url());
     let res = client.execute(req).await?;
     if res.status().is_success() {
         Ok(res.json::<TweetResponse>().await?)

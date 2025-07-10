@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct DataStore {
     feeds: sled::Db,
 }
@@ -42,7 +43,7 @@ pub struct Feed {
     pub entries: Vec<FeedEntry>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeedEntry {
     pub id: u64,
     pub title: String,
@@ -50,4 +51,10 @@ pub struct FeedEntry {
     pub source_ts: DateTime<Utc>,
     pub content: String,
     pub published_at: Option<DateTime<Utc>>,
+}
+
+pub struct FeedEvent {
+    pub entry: FeedEntry,
+    pub feed_id: u64,
+    pub destination: String,
 }

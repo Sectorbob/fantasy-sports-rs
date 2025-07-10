@@ -1,34 +1,40 @@
 mod config;
+mod custom_feed_generate;
 mod store;
 mod tweeter;
 
 use std::error::Error;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::sync::Arc;
+use std::time::Duration;
 
-use serenity::all::GuildId;
+use serenity::all::{ChannelId, GuildId};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
+use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::time::{self, sleep_until};
 
 use crate::config::Config;
-use crate::store::Feed;
+use crate::custom_feed_generate::{giants, nfl};
+use crate::store::{DataStore, FeedEvent};
 use crate::tweeter::TweetResponse;
+
+const CHANNEL_BUFFER: usize = 1000;
 
 struct AppContext {
     config: Config,
-    logger_handle: flexi_logger::LoggerHandle,
     store: store::DataStore,
+    new_tweets_sender: Sender<FeedEvent>,
 }
 impl Drop for AppContext {
-    fn drop(&mut self) {
-        // Flush the logger when the context is dropped
-        self.logger_handle.flush();
-    }
+    fn drop(&mut self) {}
 }
 
-struct Handler;
+struct Handler {
+    events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -84,45 +90,26 @@ impl EventHandler for Handler {
                 }
             }
         }
+
+        let ctx_clone = ctx.clone();
+        let feed_rx = Arc::clone(&self.events_receiver);
+
+        // Consumer: receive feed events and send to Discord
+        log::info!("Starting event receiver task...");
+        tokio::spawn(async move {
+            let mut rx = feed_rx.lock().await;
+            while let Some(feed_msg) = rx.recv().await {
+                let channel_id = ChannelId::new(feed_msg.destination.parse().unwrap());
+                if let Err(e) = channel_id.say(&ctx_clone.http, &feed_msg.entry.link).await {
+                    log::error!("Failed to send message: {:?}", e);
+                }
+            }
+        });
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let logger_handle = match config::setup_logger() {
-        Ok(handle) => handle,
-        Err(e) => {
-            eprintln!("Failed to setup logger: {}", e);
-            return Err(e);
-        }
-    };
-    let store = store::DataStore::new();
-
-    // store.save_feed(&Feed {
-    //     id: 1,
-    //     name: "Giants News".to_string(),
-    //     description: "A curated list of Giants news sources".to_string(),
-    //     sources: vec![
-    //         "DanSchneierNFL".to_string(),
-    //         "GiantInsider".to_string(),
-    //         "CarlBanksGIII".to_string(),
-    //         "nickfalato".to_string(),
-    //         "BobbySkinner_".to_string(),
-    //         // DanSchneierNFL,GiantInsider,SharpFootball,CarlBanksGIII,nickfalato,BobbySkinner_
-    //         ],
-    //     last_updated: None,
-    //     destination: "7100738766260628716".to_string(),
-    //     pool_interval: 60,
-    //     quiet_time: "00:00-06:00".to_string(),
-    //     entries: vec![],
-    // })?;
-
-    if let Some(feed) = store.get_feed(1) {
-        // println!("Feed found: {:#?}", feed);
-        println!("Feed found entries: {}", feed.entries.len());
-    }
-
-    log::info!("Data store initialized successfully!");
     let config = match config::load_config() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -130,24 +117,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e);
         }
     };
+
+    let store = store::DataStore::new();
+
+    // giants(&store).await?;
+    // nfl(&store).await?;
+
+    if let Some(feed) = store.get_feed(1) {
+        log::info!("Feed found entries: {}", feed.entries.len());
+    }
+
+    log::info!("Data store initialized successfully!");
+
+    let (tx, rx) = mpsc::channel::<FeedEvent>(CHANNEL_BUFFER);
+
     let app_context = Arc::new(AppContext {
         config,
-        logger_handle,
         store,
+        new_tweets_sender: tx,
     });
 
-    // match setup_discord_bot(&config).await {
-    //     Ok(_) => log::info!("Discord bot setup successfully!"),
-    //     Err(e) => {
-    //         log::error!("Failed to setup Discord bot: {}", e);
-    //         return Err(e);
-    //     }
-    // };
-    do_twitter_fetch(&app_context).await?;
+    // Producer task: generates messages
+    start_tweet_fetcher(1, &app_context, None).await?;
+    start_tweet_fetcher(2, &app_context, Some(Duration::from_secs(2 * 60))).await?;
+
+    // This blocks
+    match setup_discord_bot(&app_context, rx).await {
+        Ok(_) => log::info!("Discord bot setup successfully!"),
+        Err(e) => {
+            log::error!("Failed to setup Discord bot: {}", e);
+            return Err(e);
+        }
+    };
+
     Ok(())
 }
 
-async fn setup_discord_bot(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+async fn start_tweet_fetcher(
+    feed_id: u64,
+    app_context: &AppContext,
+    delay: Option<Duration>,
+) -> Result<(), Box<dyn Error>> {
+    tokio::spawn({
+        let sender_clone = app_context.new_tweets_sender.clone();
+        let store_clone = app_context.store.clone();
+        let cookie_clone = app_context.config.twitter_cookie.clone();
+        let feed = store_clone.get_feed(feed_id).ok_or("Feed not found")?;
+        if let Some(delay) = delay {
+            log::info!(
+                "Delaying tweet fetcher task. Feed: {}. Delay {:?}",
+                feed.name,
+                delay,
+            );
+            time::sleep(delay).await;
+        }
+        log::info!(
+            "Starting tweet fetcher task. Feed: {}. Interval {}s",
+            feed.name,
+            feed.pool_interval
+        );
+        let mut interval = time::interval(Duration::from_secs(feed.pool_interval));
+        async move {
+            loop {
+                interval.tick().await;
+                match do_twitter_fetch(feed_id, &sender_clone, &store_clone, &cookie_clone).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        log::error!("Failed to fetch new twitter shit: {err}");
+                    }
+                };
+            }
+        }
+    });
+    Ok(())
+}
+
+async fn setup_discord_bot(
+    app_context: &AppContext,
+    events_receiver: Receiver<FeedEvent>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
@@ -155,8 +203,10 @@ async fn setup_discord_bot(config: &Config) -> Result<(), Box<dyn std::error::Er
 
     // Create a new instance of the Client, logging in as a bot. This will automatically prepend
     // your bot token with "Bot ", which is a requirement by Discord for bot users.
-    let mut client = Client::builder(&config.discord_token, intents)
-        .event_handler(Handler)
+    let mut client = Client::builder(&app_context.config.discord_token, intents)
+        .event_handler(Handler {
+            events_receiver: Arc::new(Mutex::new(events_receiver)),
+        })
         .await?;
 
     // Finally, start a single shard, and start listening to events.
@@ -170,14 +220,18 @@ async fn setup_discord_bot(config: &Config) -> Result<(), Box<dyn std::error::Er
 
 const FX_TWITTER: &str = "https://fxtwitter.com";
 
-async fn do_twitter_fetch(app_context: &AppContext) -> Result<(), Box<dyn std::error::Error>> {
-    let mut feed = app_context.store.get_feed(1).ok_or("Feed not found")?;
+async fn do_twitter_fetch(
+    feed_id: u64,
+    tx: &Sender<FeedEvent>,
+    store: &DataStore,
+    twitter_cookie: &String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut feed = store.get_feed(feed_id).ok_or("Feed not found")?;
 
     let mut tweets: Vec<TweetResponse> = vec![];
     for twitter_username in feed.sources.iter() {
-        let mut user_tweets =
-            fetch_raw_tweets(twitter_username, &app_context.config.twitter_cookie).await?;
-        println!(
+        let mut user_tweets = fetch_raw_tweets(twitter_username, twitter_cookie).await?;
+        log::info!(
             "Twitter Timeline for {}. {} entries",
             twitter_username,
             user_tweets.len()
@@ -189,11 +243,6 @@ async fn do_twitter_fetch(app_context: &AppContext) -> Result<(), Box<dyn std::e
     let mut new_tweets: Vec<TweetResponse> = vec![];
 
     for tweet in tweets {
-        // println!("----------------------------------");
-        // println!("Created At: {}", tweet.created_at);
-        // println!("Text: {}", tweet.full_text);
-        // println!("Link: {FX_TWITTER}{}", tweet.permalink);
-        // println!("----------------------------------");
         if let None = feed
             .entries
             .iter()
@@ -204,26 +253,34 @@ async fn do_twitter_fetch(app_context: &AppContext) -> Result<(), Box<dyn std::e
     }
 
     log::info!("Found {} new tweets to add to the feed", new_tweets.len());
+    if !new_tweets.is_empty() {
+        let num_of_new_tweets = new_tweets.len();
+        for new_tweet in new_tweets.into_iter() {
+            log::info!("----------------------------------");
+            log::info!("Created At: {}", new_tweet.created_at);
+            log::info!("Text: {}", new_tweet.full_text);
+            log::info!("Link: {FX_TWITTER}{}", new_tweet.permalink);
+            log::info!("----------------------------------");
+            let entry = store::FeedEntry {
+                id: new_tweet.id_str.parse::<u64>().unwrap(),
+                title: new_tweet.full_text.clone(),
+                link: format!("{FX_TWITTER}{}", new_tweet.permalink),
+                source_ts: new_tweet.created_at.to_utc(),
+                content: new_tweet.full_text.clone(),
+                published_at: None, // You can set this to Some(Utc::now()) if you want
+            };
+            feed.entries.push(entry.clone());
+            tx.send(FeedEvent {
+                entry,
+                feed_id,
+                destination: feed.destination.to_string(),
+            })
+            .await?;
+        }
 
-    for new_tweet in new_tweets.into_iter() {
-        println!("----------------------------------");
-        println!("Created At: {}", new_tweet.created_at);
-        println!("Text: {}", new_tweet.full_text);
-        println!("Link: {FX_TWITTER}{}", new_tweet.permalink);
-        println!("----------------------------------");
-        let entry = store::FeedEntry {
-            id: new_tweet.id_str.parse::<u64>().unwrap(),
-            title: new_tweet.full_text.clone(),
-            link: format!("{FX_TWITTER}{}", new_tweet.permalink),
-            source_ts: new_tweet.created_at.to_utc(),
-            content: new_tweet.full_text.clone(),
-            published_at: None, // You can set this to Some(Utc::now()) if you want
-        };
-        feed.entries.push(entry);
+        store.save_feed(&feed)?;
+        log::info!("Feed updated with {num_of_new_tweets} new entries");
     }
-
-    app_context.store.save_feed(&feed)?;
-    log::info!("Feed updated with {} new entries", feed.entries.len());
 
     Ok(())
 }

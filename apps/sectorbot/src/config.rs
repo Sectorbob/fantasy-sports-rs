@@ -1,31 +1,13 @@
-use flexi_logger::{FileSpec, LogSpecBuilder, Logger, LoggerHandle, WriteMode};
-
-pub fn setup_logger() -> Result<LoggerHandle, Box<dyn std::error::Error>> {
-    let mut log_spec_builder = LogSpecBuilder::new();
-    log_spec_builder
-        .default(flexi_logger::LevelFilter::Info)
-        .module("serenity", flexi_logger::LevelFilter::Warn);
-
-    // Ok(Logger::try_with_str("info")? // set log level
-    Ok(Logger::with(log_spec_builder.build())
-        .log_to_stdout()
-        .log_to_file(FileSpec::default().suppress_timestamp())
-        .format(flexi_logger::detailed_format)
-        // .rotate(
-        //     flexi_logger::Criterion::Size(10 * 1024 * 1024), // rotate when file size exceeds 10 MB
-        //     flexi_logger::Naming::Timestamps, // use timestamps in log file names
-        //     flexi_logger::Cleanup::KeepLogFiles(7), // keep 7 log files
-        // )
-        .write_mode(WriteMode::BufferAndFlush)
-        // .directory("log_files") // optional: log file directory
-        .start()?)
+pub fn setup_logger() {
+    tracing_subscriber::fmt().init();
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     // Load environment variables from .env file if it exists
     if let Err(err) = dotenv::dotenv() {
-        log::warn!("Failed to load .env file: {}", err);
+        eprintln!("Failed to load .env file: {}", err);
     }
+    setup_logger();
 
     Ok(Config {
         discord_token: match std::env::var("DISCORD_TOKEN") {
