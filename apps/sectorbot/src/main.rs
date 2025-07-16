@@ -163,21 +163,21 @@ async fn start_tweet_fetcher(
         let store_clone = app_context.store.clone();
         let cookie_clone = app_context.config.twitter_cookie.clone();
         let feed = store_clone.get_feed(feed_id).ok_or("Feed not found")?;
-        if let Some(delay) = delay {
-            log::info!(
-                "Delaying tweet fetcher task. Feed: {}. Delay {:?}",
-                feed.name,
-                delay,
-            );
-            time::sleep(delay).await;
-        }
-        log::info!(
-            "Starting tweet fetcher task. Feed: {}. Interval {}s",
-            feed.name,
-            feed.pool_interval
-        );
-        let mut interval = time::interval(Duration::from_secs(feed.pool_interval));
         async move {
+            if let Some(delay) = delay {
+                log::info!(
+                    "Delaying tweet fetcher task. Feed: {}. Delay {:?}",
+                    feed.name,
+                    delay,
+                );
+                time::sleep(delay).await;
+            }
+            log::info!(
+                "Starting tweet fetcher task. Feed: {}. Interval {}s",
+                feed.name,
+                feed.pool_interval
+            );
+            let mut interval = time::interval(Duration::from_secs(feed.pool_interval));
             loop {
                 interval.tick().await;
                 match do_twitter_fetch(feed_id, &sender_clone, &store_clone, &cookie_clone).await {
