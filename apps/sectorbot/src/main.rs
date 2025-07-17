@@ -3,6 +3,7 @@ mod config;
 mod custom_feed_generate;
 mod store;
 mod tweeter;
+mod yt;
 
 use std::error::Error;
 use std::fmt::Display;
