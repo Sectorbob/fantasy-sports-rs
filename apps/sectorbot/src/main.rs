@@ -141,11 +141,12 @@ async fn do_twitter_fetch(
     let mut feed = store.get_feed(feed_id).ok_or("Feed not found")?;
 
     let mut tweets: Vec<TweetResponse> = vec![];
-    for twitter_username in feed.sources.iter() {
-        let mut user_tweets = fetch_raw_tweets(twitter_username, twitter_cookie).await?;
+    for twitter_source in feed.sources.iter() {
+        let mut user_tweets =
+            fetch_raw_tweets(twitter_source.id.to_string(), twitter_cookie.to_string()).await?;
         log::info!(
             "Twitter Timeline for {}. {} entries",
-            twitter_username,
+            twitter_source.id,
             user_tweets.len()
         );
         tweets.append(&mut user_tweets);
@@ -174,6 +175,7 @@ async fn do_twitter_fetch(
             log::info!("Link: {FX_TWITTER}{}", new_tweet.permalink);
             log::info!("----------------------------------");
             let entry = store::FeedEntry {
+                platform: Some(store::Platform::Twitter),
                 id: new_tweet.id_str.parse::<u64>().unwrap(),
                 title: new_tweet.full_text.clone(),
                 link: format!("{FX_TWITTER}{}", new_tweet.permalink),
@@ -185,7 +187,7 @@ async fn do_twitter_fetch(
             tx.send(FeedEvent {
                 entry,
                 feed_id,
-                destination: feed.destination.to_string(),
+                destination: feed.destination.clone(),
             })
             .await?;
         }

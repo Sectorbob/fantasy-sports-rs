@@ -87,7 +87,7 @@ impl EventHandler for Handler {
         tokio::spawn(async move {
             let mut rx = feed_rx.lock().await;
             while let Some(feed_msg) = rx.recv().await {
-                let channel_id = ChannelId::new(feed_msg.destination.parse().unwrap());
+                let channel_id = ChannelId::new(feed_msg.destination.id.parse().unwrap());
                 if let Err(e) = channel_id.say(&ctx_clone.http, &feed_msg.entry.link).await {
                     log::error!("Failed to send message: {:?}", e);
                 }
