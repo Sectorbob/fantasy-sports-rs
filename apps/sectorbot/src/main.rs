@@ -1,6 +1,7 @@
 mod bot;
 mod config;
 mod custom_feed_generate;
+mod server;
 mod store;
 mod tweeter;
 mod yt;
@@ -19,6 +20,7 @@ use crate::store::{DataStore, ExternalId, FeedEvent};
 use crate::tweeter::TweetResponse;
 use crate::yt::YoutubeClient;
 
+const SERVER_PORT: u16 = 8080;
 const CHANNEL_BUFFER: usize = 1000;
 
 #[tokio::main]
@@ -31,7 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     // print cwd
-    log::info!("Current working directory: {}", std::env::current_dir()?.display());
+    log::info!(
+        "Current working directory: {}",
+        std::env::current_dir()?.display()
+    );
 
     let store = store::DataStore::new();
 
@@ -62,6 +67,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         new_tweets_sender: tx,
     });
 
+    let server_handle = tokio::spawn({
+        let app_context_clone = app_context.clone();
+        async move {
+            if let Err(e) = server::setup_and_listen(SERVER_PORT, app_context_clone).await {
+                log::error!("Failed to start server: {}", e);
+            }
+        }
+    });
+
     // Producer task: generates messages
     start_feed_fetcher(1, &app_context, None).await?;
     start_feed_fetcher(2, &app_context, Some(Duration::from_secs(2 * 60))).await?;
@@ -74,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e);
         }
     };
+    server_handle.await?;
 
     Ok(())
 }
@@ -265,9 +280,12 @@ async fn do_feed_fetch(
         store.save_feed(&feed)?;
         log::info!("Feed updated with {num_of_new_tweets} new entries");
     }
-    
+
     if !new_yt_videos.is_empty() {
-        log::info!("Found {} new videos to add to the feed", new_yt_videos.len());
+        log::info!(
+            "Found {} new videos to add to the feed",
+            new_yt_videos.len()
+        );
         let num_of_new_videos = new_yt_videos.len();
         for new_video in new_yt_videos.into_iter() {
             log::info!("----------------------------------");
