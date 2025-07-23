@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::store::{DataStore, Feed, ExternalId};
+use crate::store::{DataStore, ExternalId, Feed};
 
 pub async fn giants(store: &DataStore) -> Result<(), Box<dyn Error>> {
     store.save_feed(&Feed {
@@ -27,6 +27,22 @@ pub async fn giants(store: &DataStore) -> Result<(), Box<dyn Error>> {
             ExternalId {
                 platform: Some(crate::store::Platform::Twitter),
                 id: "BobbySkinner_".to_string(),
+            },
+            ExternalId {
+                platform: Some(crate::store::Platform::Youtube),
+                id: "UC2uN7halHCl7g2GW_r7p6DA".to_string(), // Giants Collective
+            },
+            ExternalId {
+                platform: Some(crate::store::Platform::Youtube),
+                id: "UCF_O9xJbBoQ0D7x8Q8F0mAA".to_string(), // NFC East SUPERFRIENDS!
+            },
+            ExternalId {
+                platform: Some(crate::store::Platform::Youtube),
+                id: "UC-AfHSMCZfj9_SB__lDiVGQ".to_string(), // The Giant Insider
+            },
+            ExternalId {
+                platform: Some(crate::store::Platform::Youtube),
+                id: "UCJ5JxdXQ6xh48GL8kGQJT0w".to_string(), // Big Blue Banter
             },
         ],
         last_updated: None,

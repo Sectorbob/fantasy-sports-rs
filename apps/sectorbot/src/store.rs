@@ -40,8 +40,8 @@ impl DataStore {
                 });
                 // Ensure the feed entries have a value (DEFAULT To twitter)
                 feed.entries.iter_mut().for_each(|entry| {
-                    if entry.platform.is_none() {
-                        entry.platform = Some(DEFAULT_SOURCE_PLATFORM.clone());
+                    if entry.id.platform.is_none() {
+                        entry.id.platform = Some(DEFAULT_SOURCE_PLATFORM.clone());
                     }
                 });
                 feed
@@ -55,6 +55,21 @@ impl DataStore {
         Ok(())
     }
 
+    pub fn list_feeds(&self) -> Result<Vec<Feed>, Box<dyn std::error::Error>> {
+        let mut feeds = Vec::new();
+        for item in self.feeds.iter() {
+            if let Ok((_key, value)) = item {
+                match serde_json::from_slice::<Feed>(&value) {
+                    Ok(feed) => feeds.push(feed),
+                    Err(e) => {
+                        log::error!("Failed to deserialize feed: {e}. value: {}", String::from_utf8_lossy(&value));
+                        continue;
+                    }
+                }
+            }
+        }
+        Ok(feeds)
+    }
     // Add methods to interact with the store as needed
 }
 
@@ -73,8 +88,7 @@ pub struct Feed {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeedEntry {
-    pub platform: Option<Platform>,
-    pub id: u64,
+    pub id: ExternalId,
     pub title: String,
     pub link: String,
     pub source_ts: DateTime<Utc>,
@@ -142,10 +156,20 @@ impl<'de> Deserialize<'de> for ExternalId {
                 })
             }
 
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(ExternalId {
+                    platform: None,
+                    id: v.to_string(),
+                })
+            }
+
             // Implement other `visit_*` methods as needed depending on the expected input format
         }
 
-        deserializer.deserialize_string(FeedDestinationVisitor)
+        deserializer.deserialize_any(FeedDestinationVisitor)
     }
 }
 
@@ -223,5 +247,25 @@ mod tests {
         };
         let json_no_platform = serde_json::to_string(&external_id_no_platform).unwrap();
         assert_eq!(json_no_platform, r#""asdf""#);
+    }
+
+    #[test]
+    fn test_feed_entry_deserilization() {
+        let json = r#"
+        {
+        "id":7301820310883384255,
+        "title":"I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!",
+        "link":"https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255",
+        "source_ts":"2023-01-01T21:01:16Z",
+        "content":"I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!",
+        "published_at":null
+        }
+        "#;
+        let entry: crate::store::FeedEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.id.platform, None);
+        assert_eq!(entry.id.id, "7301820310883384255");
+        assert_eq!(entry.title, "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!");
+        assert_eq!(entry.link, "https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255");
+        assert_eq!(entry.content, "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!");
     }
 }

@@ -122,7 +122,7 @@ pub enum RegionCode {
     // Add more region codes as needed
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 
 pub enum Item {
@@ -140,16 +140,75 @@ pub enum Item {
         snippet: Snippet,
     },
 }
+impl Item {
+    pub fn id(&self) -> String {
+        match self {
+            Item::SearchResult { id, .. } => id.id(),
+            Item::Other { id, .. } => id.id(),
+        }
+    }
+    pub fn title(&self) -> String {
+        match self {
+            Item::SearchResult { snippet, .. } => snippet.title.clone(),
+            Item::Other { snippet, .. } => snippet.title.clone(),
+        }
+    }
+    pub fn description(&self) -> String {
+        match self {
+            Item::SearchResult { snippet, .. } => snippet.description.clone(),
+            Item::Other { snippet, .. } => snippet.description.clone(),
+        }
+    }
+    pub fn link(&self) -> String {
+        match self {
+            Item::SearchResult { id, .. } => {
+                if let Some(video_id) = &id.video_id {
+                    format!("https://www.youtube.com/watch?v={}", video_id)
+                } else if let Some(channel_id) = &id.channel_id {
+                    format!("https://www.youtube.com/channel/{}", channel_id)
+                } else {
+                    String::new()
+                }
+            }
+            Item::Other { id, .. } => {
+                if let Some(video_id) = &id.video_id {
+                    format!("https://www.youtube.com/watch?v={}", video_id)
+                } else if let Some(channel_id) = &id.channel_id {
+                    format!("https://www.youtube.com/channel/{}", channel_id)
+                } else {
+                    String::new()
+                }
+            }
+        }
+    }
+    pub fn published_at(&self) -> DateTime<Utc> {
+        match self {
+            Item::SearchResult { snippet, .. } => snippet.published_at,
+            Item::Other { snippet, .. } => snippet.published_at,
+        }
+    }
+}
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemId {
     pub kind: String,
     pub channel_id: Option<String>,
     pub video_id: Option<String>,
 }
+impl ItemId {
+    pub fn id(&self) -> String {
+        if let Some(video_id) = &self.video_id {
+            video_id.clone()
+        } else if let Some(channel_id) = &self.channel_id {
+            channel_id.clone()
+        } else {
+            "".to_string()
+        }
+    }
+}
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Snippet {
     pub published_at: DateTime<Utc>,

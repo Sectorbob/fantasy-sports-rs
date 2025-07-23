@@ -58,6 +58,12 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
                 );
             }
         },
+        yt_api_key: match std::env::var("YT_API_KEY") {
+            Ok(key) => key,
+            Err(_) => {
+                return Err("YT_API_KEY environment variable is not set. Please set it.".into());
+            }
+        },
     })
 }
 
@@ -67,4 +73,5 @@ pub struct Config {
     pub channel_id: u64,
     pub twitter_subs: Vec<String>,
     pub twitter_cookie: String,
+    pub yt_api_key: String,
 }
