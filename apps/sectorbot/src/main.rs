@@ -159,6 +159,7 @@ async fn setup_discord_bot(
     // your bot token with "Bot ", which is a requirement by Discord for bot users.
     let mut client = Client::builder(&app_context.config.discord_token, intents)
         .event_handler(Handler {
+            yt_client: Arc::clone(&app_context.yt_client),
             events_receiver: Arc::new(Mutex::new(events_receiver)),
         })
         .await?;

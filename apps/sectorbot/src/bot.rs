@@ -10,6 +10,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
 use crate::store::{self, FeedEvent};
+use crate::yt::YoutubeClient;
 
 pub struct AppContext {
     pub config: Config,
@@ -22,6 +23,7 @@ impl Drop for AppContext {
 }
 
 pub struct Handler {
+    pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
 }
 
@@ -37,6 +39,12 @@ impl EventHandler for Handler {
             // of permissions to post in the channel, so log to stdout when some error happens,
             // with a description of it.
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+                log::error!("Error sending message: {why:?}");
+            }
+        }
+        if msg.content == "!health" {
+            let message = format!("Youtube credits consumed: {}", self.yt_client.credits_consumed());
+            if let Err(why) = msg.channel_id.say(&ctx.http, message).await {
                 log::error!("Error sending message: {why:?}");
             }
         }
