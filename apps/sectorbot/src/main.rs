@@ -242,7 +242,7 @@ async fn do_feed_fetch(
         };
 
         for playlist_id in playlist_ids {
-            log::info!("Fetching videos for playlist ID: {}", playlist_id);
+            log::debug!("Fetching videos for playlist ID: {}", playlist_id);
             let playlist_videos = yt_client.list_playlist_items(playlist_id.as_str()).await?;
             if let yt::Response::PlaylistItemListResponse {
                 etag: _,
@@ -253,9 +253,9 @@ async fn do_feed_fetch(
             {
                 log::info!("Found {} videos in playlist {}", items.len(), playlist_id);
                 for video in items.iter() {
-                    log::info!("Video: {} (ID: {})", video.title(), video.id.id());
-                    log::info!("Published At: {}", video.published_at().unwrap_or_default());
-                    log::info!("URL: https://www.youtube.com/watch?v={}", video.id.id());
+                    log::debug!("Video: {} (ID: {})", video.title(), video.id.id());
+                    log::debug!("Published At: {}", video.published_at().unwrap_or_default());
+                    log::debug!("URL: https://www.youtube.com/watch?v={}", video.id.id());
                     yt_videos.push(video.clone());
                 }
             } else {
@@ -345,7 +345,7 @@ async fn do_feed_fetch(
                     platform: Some(store::Platform::Youtube),
                 },
                 title: new_video.title(),
-                link: new_video.link().unwrap_or_default(),
+                link: format!("https://www.youtube.com/watch?v={}", new_video.id.id()), //new_video.link().unwrap_or_default(),
                 source_ts: new_video.published_at().unwrap_or_default(),
                 content: new_video.description(),
                 published_at: None, // You can set this to Some(Utc::now()) if you want

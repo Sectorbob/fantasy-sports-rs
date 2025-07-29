@@ -38,7 +38,7 @@ pub async fn fetch_user_timeline<T: Display>(
     cookie: T,
 ) -> Result<TimelineResponse, Box<dyn std::error::Error>> {
     let token = get_token(username.to_string().len() as u64);
-    log::info!(
+    log::debug!(
         "Fetching user timeline for: {} with token: {}",
         username,
         token
@@ -75,7 +75,7 @@ pub async fn fetch_user_timeline<T: Display>(
 
 pub async fn fetch_tweet(tweet_id: u64) -> Result<TweetResponse, Box<dyn std::error::Error>> {
     let token = get_token(tweet_id);
-    log::info!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
+    log::debug!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
 
     let client = reqwest::Client::new();
     let req = client

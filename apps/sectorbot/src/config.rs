@@ -1,5 +1,15 @@
+const ENV_HIDE_LOG_TS: &str = "HIDE_LOG_TS";
+
 pub fn setup_logger() {
-    tracing_subscriber::fmt().init();
+    if let Some(hide_ts) = std::env::var_os(ENV_HIDE_LOG_TS) {
+        if hide_ts.to_ascii_uppercase() == "TRUE" {
+            tracing_subscriber::fmt().without_time().init();
+        } else {
+            tracing_subscriber::fmt().init();
+        }
+    } else {
+        tracing_subscriber::fmt().init();
+    }
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {

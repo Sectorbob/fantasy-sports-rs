@@ -49,7 +49,7 @@ impl EventHandler for Handler {
     // In this case, just log what the current user's username is.
     async fn ready(&self, ctx: Context, ready: Ready) {
         log::info!("{} is connected!", ready.user.name);
-        log::info!("Context: {:?}", ctx);
+        log::debug!("Context: {:?}", ctx);
 
         match ready.guilds.len() {
             0 => log::warn!("No guilds found!"),
@@ -63,9 +63,9 @@ impl EventHandler for Handler {
                     }
                     match guild_id.channels(&ctx.http).await {
                         Ok(channels) => {
-                            log::info!("Channels in guild {}: {:?}", guild_id, channels);
+                            log::debug!("Channels in guild {}: {:?}", guild_id, channels);
                             for (channel_id, channel) in channels {
-                                log::info!("Channel ID: {}, Name: {}", channel_id, channel.name);
+                                log::debug!("Channel ID: {}, Name: {}", channel_id, channel.name);
                             }
                         }
                         Err(why) => {
