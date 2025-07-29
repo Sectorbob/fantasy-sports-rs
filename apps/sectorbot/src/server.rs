@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, net::SocketAddr, sync::Arc};
+use std::{error::Error, net::SocketAddr, sync::Arc};
 
 use axum::{
     Extension, Json, Router,
