@@ -223,43 +223,75 @@ async fn do_feed_fetch(
     }
 
     if !yt_channel_ids.is_empty() {
-        let playlist_ids = match yt_client.list_channels(yt_channel_ids).await? {
-            yt::Response::ChannelListResponse {
-                etag: _,
-                next_page_token: _,
-                page_info: _,
-                items,
-            } => {
-                // log::info!("Found {} channels", items.len());
-                items
-                    .into_iter()
-                    .filter_map(|channel| channel.uploads_playlist_id())
-                    .collect::<Vec<_>>()
-            }
-            _ => {
-                vec![]
+        let channel_uploads_playlist_id = match yt_client
+            .list_channels(yt_channel_ids.clone())
+            .await
+        {
+            Ok(list_channels_response) => match list_channels_response {
+                yt::Response::ChannelListResponse { items, .. } => {
+                    log::debug!("Received metadata on {} channels", items.len());
+                    let channels_playlist_ids = items
+                        .into_iter()
+                        .filter_map(|channel| {
+                            channel
+                                .uploads_playlist_id()
+                                .map(|pid| (channel.title(), pid.clone()))
+                        })
+                        .collect::<Vec<_>>();
+                    if channels_playlist_ids.is_empty() {
+                        log::warn!(
+                            "No uploads playlists found for the provided channel IDs: {yt_channel_ids:?}"
+                        );
+                        None
+                    } else {
+                        Some(channels_playlist_ids)
+                    }
+                }
+                other => {
+                    log::warn!(
+                        "Failed to list YouTube channels with channels IDs: {yt_channel_ids:?}. Unknown response: {other:?}"
+                    );
+                    None
+                }
+            },
+            Err(err) => {
+                log::error!(
+                    "Failed to list YouTube channels with channels IDs: {yt_channel_ids:?}. Error: {err:?}"
+                );
+                None
             }
         };
 
-        for playlist_id in playlist_ids {
-            log::debug!("Fetching videos for playlist ID: {}", playlist_id);
-            let playlist_videos = yt_client.list_playlist_items(playlist_id.as_str()).await?;
-            if let yt::Response::PlaylistItemListResponse {
-                etag: _,
-                next_page_token: _,
-                page_info: _,
-                items,
-            } = playlist_videos
-            {
-                log::info!("Found {} videos in playlist {}", items.len(), playlist_id);
-                for video in items.iter() {
-                    log::debug!("Video: {} (ID: {})", video.title(), video.id.id());
-                    log::debug!("Published At: {}", video.published_at().unwrap_or_default());
-                    log::debug!("URL: https://www.youtube.com/watch?v={}", video.id.id());
-                    yt_videos.push(video.clone());
+        if let Some(channel_uploads_playlist_id) = channel_uploads_playlist_id {
+            for (channel_title, playlist_id) in channel_uploads_playlist_id {
+                log::debug!("Fetching videos for {channel_title} uploads (playlist {playlist_id})");
+                let playlist_videos = match yt_client
+                    .list_playlist_items(playlist_id.as_str())
+                    .await
+                {
+                    Ok(r) => r,
+                    Err(err) => {
+                        log::error!(
+                            "Failed to fetch videos for uploads {channel_title} (ID: {playlist_id}): {}",
+                            err
+                        );
+                        continue; // Skip this channel if there's an error
+                    }
+                };
+                if let yt::Response::PlaylistItemListResponse { items, .. } = playlist_videos {
+                    log::info!(
+                        "Youtube Uploads for {channel_title} videos in playlist {}",
+                        items.len()
+                    );
+                    for video in items.iter() {
+                        log::debug!("Video: {} (ID: {})", video.title(), video.id.id());
+                        log::debug!("Published At: {}", video.published_at().unwrap_or_default());
+                        log::debug!("URL: https://www.youtube.com/watch?v={}", video.id.id());
+                        yt_videos.push(video.clone());
+                    }
+                } else {
+                    log::error!("Unexpected response type from YouTube API");
                 }
-            } else {
-                log::error!("Unexpected response type from YouTube API");
             }
         }
     };
@@ -309,16 +341,30 @@ async fn do_feed_fetch(
                 published_at: None, // You can set this to Some(Utc::now()) if you want
             };
             feed.entries.push(entry.clone());
-            tx.send(FeedEvent {
-                entry,
-                feed_id,
-                destination: feed.destination.clone(),
-            })
-            .await?;
+            match tx
+                .send(FeedEvent {
+                    entry,
+                    feed_id,
+                    destination: feed.destination.clone(),
+                })
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!("Failed to publish new tweet to channel: {err:?}");
+                }
+            };
         }
 
-        store.save_feed(&feed)?;
-        log::info!("Feed updated with {num_of_new_tweets} new entries");
+        match store.save_feed(&feed) {
+            Ok(_) => {
+                log::info!("Feed updated with {num_of_new_tweets} new entries");
+            }
+            Err(err) => {
+                log::error!("Failed to save feed: {}", err);
+                return Err(err.into());
+            }
+        };
     }
 
     if !new_yt_videos.is_empty() {
@@ -351,16 +397,29 @@ async fn do_feed_fetch(
                 published_at: None, // You can set this to Some(Utc::now()) if you want
             };
             feed.entries.push(entry.clone());
-            tx.send(FeedEvent {
-                entry,
-                feed_id,
-                destination: feed.destination.clone(),
-            })
-            .await?;
+            match tx
+                .send(FeedEvent {
+                    entry,
+                    feed_id,
+                    destination: feed.destination.clone(),
+                })
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!("Failed to publish new video to channel: {err:?}");
+                }
+            };
         }
 
-        store.save_feed(&feed)?;
-        log::info!("Feed updated with {num_of_new_videos} new entries");
+        match store.save_feed(&feed) {
+            Ok(_) => {
+                log::info!("Feed updated with {num_of_new_videos} new entries");
+            }
+            Err(err) => {
+                log::error!("Failed to save feed: {err:?}");
+            }
+        };
     }
 
     Ok(())
