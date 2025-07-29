@@ -61,10 +61,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, rx) = mpsc::channel::<FeedEvent>(CHANNEL_BUFFER);
 
+    let yt_client = yt::YoutubeClient::new::<String, String>(
+        config.yt_api_key.clone(),
+        None, // You can pass a custom HTTP client here if needed
+    );
+
     let app_context = Arc::new(AppContext {
         config,
         store,
         new_tweets_sender: tx,
+        yt_client: Arc::new(yt_client),
     });
 
     let server_handle = tokio::spawn({
@@ -102,7 +108,7 @@ async fn start_feed_fetcher(
         let sender_clone = app_context.new_tweets_sender.clone();
         let store_clone = app_context.store.clone();
         let cookie_clone = app_context.config.twitter_cookie.clone();
-        let yt_api_key_clone = app_context.config.yt_api_key.clone();
+        let yt_client = Arc::clone(&app_context.yt_client);
         let feed = store_clone.get_feed(feed_id).ok_or("Feed not found")?;
         async move {
             if let Some(delay) = delay {
@@ -126,7 +132,7 @@ async fn start_feed_fetcher(
                     &sender_clone,
                     &store_clone,
                     &cookie_clone,
-                    &yt_api_key_clone,
+                    &yt_client,
                 )
                 .await
                 {
@@ -174,12 +180,23 @@ async fn do_feed_fetch(
     tx: &Sender<FeedEvent>,
     store: &DataStore,
     twitter_cookie: &String,
-    yt_api_key: &str,
+    yt_client: &yt::YoutubeClient,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut feed = store.get_feed(feed_id).ok_or("Feed not found")?;
 
     let mut tweets: Vec<TweetResponse> = vec![];
     let mut yt_videos: Vec<yt::Item> = vec![];
+    let yt_channel_ids: Vec<String> = feed
+        .sources
+        .iter()
+        .filter_map(|s| {
+            if s.platform == Some(store::Platform::Youtube) {
+                Some(s.id.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
     for source in feed.sources.iter() {
         match source.platform {
             Some(store::Platform::Twitter) => {
@@ -193,27 +210,7 @@ async fn do_feed_fetch(
                 tweets.append(&mut user_tweets);
             }
             Some(store::Platform::Youtube) => {
-                let yt_client = YoutubeClient::new::<String, String>(yt_api_key.to_string(), None);
-                let channel_videos = yt_client.fetch_channel_videos(&source.id).await?;
-                if let yt::Response::SearchListResponse {
-                    etag: _,
-                    next_page_token: _,
-                    region_code: _,
-                    page_info: _,
-                    mut items,
-                } = channel_videos
-                {
-                    log::info!("Found {} videos for channel {}", items.len(), source.id,);
-                    items.sort_by_key(|item| item.published_at());
-                    for video in items.iter() {
-                        log::info!("Video: {} (ID: {})", video.title(), video.id());
-                        log::info!("Published At: {}", video.published_at());
-                        log::info!("URL: https://www.youtube.com/watch?v={}", video.id());
-                        yt_videos.push(video.clone());
-                    }
-                } else {
-                    log::error!("Unexpected response type from YouTube API");
-                }
+                // do after
             }
             _ => {
                 log::warn!(
@@ -224,6 +221,49 @@ async fn do_feed_fetch(
             }
         }
     }
+
+    if !yt_channel_ids.is_empty() {
+        let playlist_ids = match yt_client.list_channels(yt_channel_ids).await? {
+            yt::Response::ChannelListResponse {
+                etag: _,
+                next_page_token: _,
+                page_info: _,
+                items,
+            } => {
+                // log::info!("Found {} channels", items.len());
+                items
+                    .into_iter()
+                    .filter_map(|channel| channel.uploads_playlist_id())
+                    .collect::<Vec<_>>()
+            }
+            _ => {
+                vec![]
+            }
+        };
+
+        for playlist_id in playlist_ids {
+            log::info!("Fetching videos for playlist ID: {}", playlist_id);
+            let playlist_videos = yt_client.list_playlist_items(playlist_id.as_str()).await?;
+            if let yt::Response::PlaylistItemListResponse {
+                etag: _,
+                next_page_token: _,
+                page_info: _,
+                items,
+            } = playlist_videos
+            {
+                log::info!("Found {} videos in playlist {}", items.len(), playlist_id);
+                for video in items.iter() {
+                    log::info!("Video: {} (ID: {})", video.title(), video.id.id());
+                    log::info!("Published At: {}", video.published_at().unwrap_or_default());
+                    log::info!("URL: https://www.youtube.com/watch?v={}", video.id.id());
+                    yt_videos.push(video.clone());
+                }
+            } else {
+                log::error!("Unexpected response type from YouTube API");
+            }
+        }
+    };
+
     tweets.sort_by_key(|tweet| tweet.created_at.to_string());
 
     let mut new_tweets: Vec<TweetResponse> = vec![];
@@ -242,7 +282,7 @@ async fn do_feed_fetch(
         if let None = feed
             .entries
             .iter()
-            .find(|e| e.id.platform == Some(store::Platform::Youtube) && e.id.id == video.id())
+            .find(|e| e.id.platform == Some(store::Platform::Youtube) && e.id.id == video.id.id())
         {
             new_yt_videos.push(video);
         }
@@ -289,18 +329,24 @@ async fn do_feed_fetch(
         let num_of_new_videos = new_yt_videos.len();
         for new_video in new_yt_videos.into_iter() {
             log::info!("----------------------------------");
-            log::info!("Published At: {}", new_video.published_at());
+            log::info!(
+                "Published At: {}",
+                new_video.published_at().unwrap_or_default()
+            );
             log::info!("Title: {}", new_video.title());
-            log::info!("Link: https://www.youtube.com/watch?v={}", new_video.id());
+            log::info!(
+                "Link: https://www.youtube.com/watch?v={}",
+                new_video.id.id()
+            );
             log::info!("----------------------------------");
             let entry = store::FeedEntry {
                 id: ExternalId {
-                    id: new_video.id(),
+                    id: new_video.id.id(),
                     platform: Some(store::Platform::Youtube),
                 },
                 title: new_video.title(),
-                link: new_video.link(),
-                source_ts: new_video.published_at(),
+                link: new_video.link().unwrap_or_default(),
+                source_ts: new_video.published_at().unwrap_or_default(),
                 content: new_video.description(),
                 published_at: None, // You can set this to Some(Utc::now()) if you want
             };

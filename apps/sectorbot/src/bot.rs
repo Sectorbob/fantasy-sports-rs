@@ -15,6 +15,7 @@ pub struct AppContext {
     pub config: Config,
     pub store: store::DataStore,
     pub new_tweets_sender: Sender<FeedEvent>,
+    pub yt_client: Arc<crate::yt::YoutubeClient>,
 }
 impl Drop for AppContext {
     fn drop(&mut self) {}

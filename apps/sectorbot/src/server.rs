@@ -1,4 +1,4 @@
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, error::Error, net::SocketAddr, sync::Arc};
 
 use axum::{
     Extension, Json, Router,
@@ -28,9 +28,21 @@ pub async fn setup_and_listen(
     Ok(())
 }
 
-async fn health_check(Extension(_state): Extension<Arc<AppContext>>) -> &'static str {
-    // state.client.
-    "Server is up and running!"
+async fn health_check(
+    Extension(state): Extension<Arc<AppContext>>,
+) -> Result<Json<Health>, AppError> {
+    Ok(Json(Health {
+        status: "ok".to_string(),
+        message: "Server is running".to_string(),
+        yt_credits_used: state.yt_client.credits_consumed(),
+    }))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct Health {
+    pub status: String,
+    pub message: String,
+    pub yt_credits_used: usize,
 }
 
 async fn fetch_feeds(
