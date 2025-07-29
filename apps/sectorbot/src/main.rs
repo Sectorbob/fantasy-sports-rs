@@ -18,7 +18,6 @@ use tokio::time;
 use crate::bot::{AppContext, Handler};
 use crate::store::{DataStore, ExternalId, FeedEvent};
 use crate::tweeter::TweetResponse;
-use crate::yt::YoutubeClient;
 
 const SERVER_PORT: u16 = 8080;
 const CHANNEL_BUFFER: usize = 1000;

@@ -1,4 +1,5 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use chrono_tz::US::Pacific;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -10,11 +11,13 @@ const DEFAULT_SOURCE_PLATFORM: Platform = Platform::Twitter;
 #[derive(Clone)]
 pub struct DataStore {
     feeds: sled::Db,
+    quotas: sled::Db,
 }
 impl DataStore {
     pub fn new() -> Self {
         let feeds = sled::open("data_store/feeds").expect("Failed to open data store");
-        DataStore { feeds }
+        let quotas = sled::open("data_store/quotas").expect("Failed to open quotas store");
+        DataStore { feeds, quotas }
     }
 
     pub fn get_feed(&self, id: u64) -> Option<Feed> {
@@ -62,7 +65,10 @@ impl DataStore {
                 match serde_json::from_slice::<Feed>(&value) {
                     Ok(feed) => feeds.push(feed),
                     Err(e) => {
-                        log::error!("Failed to deserialize feed: {e}. value: {}", String::from_utf8_lossy(&value));
+                        log::error!(
+                            "Failed to deserialize feed: {e}. value: {}",
+                            String::from_utf8_lossy(&value)
+                        );
                         continue;
                     }
                 }
@@ -71,6 +77,46 @@ impl DataStore {
         Ok(feeds)
     }
     // Add methods to interact with the store as needed
+
+    pub fn get_quota(
+        &self,
+        platform: &Platform,
+        on_date: Option<NaiveDate>,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let key = QuotaKey::new(platform.clone(), on_date.unwrap_or_else(today_pacific));
+        match self.quotas.get(String::from(key))? {
+            Some(value) => {
+                let quota: PlatformQuota = serde_json::from_slice(&value)?;
+                Ok(quota.quota)
+            }
+            None => Ok(0), // Default quota if not set
+        }
+    }
+
+    pub fn set_quota(
+        &self,
+        platform: &Platform,
+        on_date: Option<NaiveDate>,
+        quota: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let key = QuotaKey::new(platform.clone(), on_date.unwrap_or_else(today_pacific));
+        let quota_data = PlatformQuota {
+            date: key.date,
+            platform: key.platform.clone(),
+            quota,
+        };
+        let data = serde_json::to_vec(&quota_data)?;
+        self.quotas.insert(String::from(key), data)?;
+        self.quotas.flush()?;
+        Ok(())
+    }
+}
+
+fn today_pacific() -> NaiveDate {
+    // Get today's date in Pacific Time
+    let now_utc: DateTime<Utc> = Utc::now();
+    let pacific_now: DateTime<chrono_tz::Tz> = Pacific.from_utc_datetime(&now_utc.naive_utc());
+    pacific_now.date_naive()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -217,6 +263,63 @@ impl fmt::Display for Platform {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PlatformQuota {
+    pub date: NaiveDate,
+    pub platform: Platform,
+    pub quota: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuotaKey {
+    pub platform: Platform,
+    pub date: NaiveDate,
+}
+impl QuotaKey {
+    pub fn new(platform: Platform, date: NaiveDate) -> Self {
+        QuotaKey { platform, date }
+    }
+}
+impl From<QuotaKey> for String {
+    fn from(key: QuotaKey) -> Self {
+        format!("{}:{}", key.platform.to_string(), key.date)
+    }
+}
+impl From<&QuotaKey> for String {
+    fn from(key: &QuotaKey) -> Self {
+        format!("{}:{}", key.platform.to_string(), key.date)
+    }
+}
+impl From<Platform> for String {
+    fn from(platform: Platform) -> Self {
+        format!("{}:{}", platform.to_string(), today_pacific())
+    }
+}
+impl Serialize for QuotaKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{}:{}", self.platform.to_string(), self.date))
+    }
+}
+impl<'de> Deserialize<'de> for QuotaKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(serde::de::Error::custom("Invalid QuotaKey format"));
+        }
+        let platform = Platform::from_str(parts[0]).map_err(serde::de::Error::custom)?;
+        let date =
+            NaiveDate::parse_from_str(parts[1], "%Y-%m-%d").map_err(serde::de::Error::custom)?;
+        Ok(QuotaKey { platform, date })
+    }
+}
+
 mod tests {
     use crate::store::{ExternalId, Platform};
 
@@ -264,8 +367,17 @@ mod tests {
         let entry: crate::store::FeedEntry = serde_json::from_str(json).unwrap();
         assert_eq!(entry.id.platform, None);
         assert_eq!(entry.id.id, "7301820310883384255");
-        assert_eq!(entry.title, "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!");
-        assert_eq!(entry.link, "https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255");
-        assert_eq!(entry.content, "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!");
+        assert_eq!(
+            entry.title,
+            "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!"
+        );
+        assert_eq!(
+            entry.link,
+            "https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255"
+        );
+        assert_eq!(
+            entry.content,
+            "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!"
+        );
     }
 }
