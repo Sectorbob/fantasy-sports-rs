@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 
 use crate::bot::{AppContext, Handler};
-use crate::store::{DataStore, ExternalId, FeedEvent};
+use crate::store::{DataStore, ExternalId, FeedEntry, FeedEvent};
 use crate::tweeter::TweetResponse;
 
 const SERVER_PORT: u16 = 8080;
@@ -329,17 +329,7 @@ async fn do_feed_fetch(
             log::info!("Text: {}", new_tweet.full_text);
             log::info!("Link: {FX_TWITTER}{}", new_tweet.permalink);
             log::info!("----------------------------------");
-            let entry = store::FeedEntry {
-                id: ExternalId {
-                    platform: Some(store::Platform::Twitter),
-                    id: new_tweet.id_str.clone(),
-                },
-                title: new_tweet.full_text.clone(),
-                link: format!("{FX_TWITTER}{}", new_tweet.permalink),
-                source_ts: new_tweet.created_at.to_utc(),
-                content: new_tweet.full_text.clone(),
-                published_at: None, // You can set this to Some(Utc::now()) if you want
-            };
+            let entry = store::FeedEntry::from(new_tweet);
             feed.entries.push(entry.clone());
             match tx
                 .send(FeedEvent {
@@ -385,17 +375,7 @@ async fn do_feed_fetch(
                 new_video.id.id()
             );
             log::info!("----------------------------------");
-            let entry = store::FeedEntry {
-                id: ExternalId {
-                    id: new_video.id.id(),
-                    platform: Some(store::Platform::Youtube),
-                },
-                title: new_video.title(),
-                link: format!("https://www.youtube.com/watch?v={}", new_video.id.id()), //new_video.link().unwrap_or_default(),
-                source_ts: new_video.published_at().unwrap_or_default(),
-                content: new_video.description(),
-                published_at: None, // You can set this to Some(Utc::now()) if you want
-            };
+            let entry = store::FeedEntry::from(new_video);
             feed.entries.push(entry.clone());
             match tx
                 .send(FeedEvent {
@@ -440,4 +420,135 @@ async fn fetch_raw_tweets<T: Display>(
         .into_iter()
         .filter_map(|e| e.content.tweet)
         .collect())
+}
+
+impl From<TweetResponse> for FeedEntry {
+    fn from(tweet: TweetResponse) -> Self {
+        FeedEntry {
+            id: ExternalId {
+                platform: Some(store::Platform::Twitter),
+                id: tweet.id_str.clone(),
+            },
+            title: tweet.full_text.clone(),
+            link: format!("{FX_TWITTER}{}", tweet.permalink),
+            source_ts: tweet.created_at.to_utc(),
+            content: tweet.full_text.clone(),
+            published_at: None, // You can set this to Some(Utc::now()) if you want
+        }
+    }
+}
+impl From<yt::Item> for FeedEntry {
+    fn from(video: yt::Item) -> Self {
+        let video_id = video.video_id().unwrap_or_default();
+        let link = format!("https://www.youtube.com/watch?v={video_id}");
+        FeedEntry {
+            id: ExternalId {
+                platform: Some(store::Platform::Youtube),
+                id: video_id,
+            },
+            title: video.title(),
+            link,
+            source_ts: video.published_at().unwrap_or_default(),
+            content: video.description(),
+            published_at: None, // You can set this to Some(Utc::now()) if you want
+        }
+    }
+}
+
+mod tests {
+    use crate::{tweeter::User, yt::ItemId};
+
+    use super::*;
+
+    #[test]
+    fn test_feed_entry_from_tweet() {
+        let tweet = TweetResponse {
+            id_str: "1234567890".to_string(),
+            full_text: "Test tweet".to_string(),
+            created_at: chrono::Utc::now().into(),
+            permalink: "/status/1234567890".to_string(),
+            text: "other text".to_string(),
+            user: User {
+                id_str: "user123".to_string(),
+                name: "Test User".to_string(),
+                screen_name: "testuser".to_string(),
+            },
+            lang: "en-us".to_string(),
+        };
+        let entry: FeedEntry = tweet.into();
+        assert_eq!(entry.id.id, "1234567890");
+        assert_eq!(entry.title, "Test tweet");
+        assert_eq!(entry.link, "https://fxtwitter.com/status/1234567890");
+    }
+
+    #[test]
+    fn test_feed_entry_from_yt_video() {
+        let playlist_item_json = r#"
+        {
+            "kind": "youtube#playlistItem",
+            "etag": "l-yXl5XjmiLRHuP2MN6E1K8ewbM",
+            "id": "VVVKNUp4ZFhRNnhoNDhHTDhrR1FKVDB3LkxXZUs4akpwSzNz",
+            "snippet": {
+                "publishedAt": "2025-07-27T21:18:21Z",
+                "channelId": "UCJ5JxdXQ6xh48GL8kGQJT0w",
+                "title": "Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ",
+                "description": "Dan and Nick break down the last two Giants practices and discuss the moment Malik Nabers said Ah ha with Russ Wilson based on a coverage Russ diagnosed pre snap, they also discuss Jaxson Dart’s best practice and break down the video clips of his throws, plus Russ 50 yard bomb to Nabers, the Slayton one handed catch and two insanely skilled pass rushing moves by Abdul Carter. That and a whole lot more!\n\n#Giants #nyg #newyorkgiants #football #giantsfootball #nfceast #maliknabers #russellwilson #bluewirevideo #bigblue #newyorkcity #trainingcamp",
+                "thumbnails": {
+                "default": {
+                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/default.jpg",
+                    "width": 120,
+                    "height": 90
+                },
+                "medium": {
+                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/mqdefault.jpg",
+                    "width": 320,
+                    "height": 180
+                },
+                "high": {
+                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/hqdefault.jpg",
+                    "width": 480,
+                    "height": 360
+                },
+                "standard": {
+                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/sddefault.jpg",
+                    "width": 640,
+                    "height": 480
+                },
+                "maxres": {
+                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/maxresdefault.jpg",
+                    "width": 1280,
+                    "height": 720
+                }
+                },
+                "channelTitle": "Big Blue Banter",
+                "playlistId": "UUJ5JxdXQ6xh48GL8kGQJT0w",
+                "position": 0,
+                "resourceId": {
+                    "kind": "youtube#video",
+                    "videoId": "LWeK8jJpK3s"
+                },
+                "videoOwnerChannelTitle": "Big Blue Banter",
+                "videoOwnerChannelId": "UCJ5JxdXQ6xh48GL8kGQJT0w"
+            },
+            "contentDetails": {
+                "videoId": "LWeK8jJpK3s",
+                "videoPublishedAt": "2025-07-27T21:18:21Z"
+            }
+        }
+        "#;
+
+        let video: yt::Item = serde_json::from_str(playlist_item_json).unwrap();
+        // assert_eq!(video.clone().snippet.unwrap().resource_id.unwrap(), ItemId::Obj {
+        //     kind: yt::ItemKind::Video,
+        //     video_id: Some("LWeK8jJpK3s".to_string()),
+        //     channel_id: None,
+        // }); // FIXME: this fails for some reason, the deserialization isn't working
+        let entry: FeedEntry = video.into();
+        assert_eq!(entry.id.id, "LWeK8jJpK3s");
+        assert_eq!(
+            entry.title,
+            "Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ"
+        );
+        assert_eq!(entry.link, "https://www.youtube.com/watch?v=LWeK8jJpK3s");
+    }
 }

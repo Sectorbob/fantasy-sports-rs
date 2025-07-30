@@ -245,6 +245,25 @@ pub struct Item {
     // pub topic_details: Option<TopicDetails>,
 }
 impl Item {
+    pub fn video_id(&self) -> Option<String> {
+        match self.kind {
+            ItemKind::SearchResult => todo!(),
+            ItemKind::Channel => todo!(),
+            ItemKind::PlaylistItem => {
+                if let Some(content_details) = &self.content_details {
+                    if let Some(video_id) = &content_details.video_id {
+                        Some(video_id.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            ItemKind::Video => Some(self.id.id()),
+            ItemKind::Other => None,
+        }
+    }
     pub fn is_search_result(&self) -> bool {
         matches!(self.kind, ItemKind::SearchResult)
     }
@@ -298,12 +317,9 @@ impl Item {
                 Some(format!("https://www.youtube.com/channel/{}", self.id.id()))
             }
             ItemKind::PlaylistItem => {
-                if let Some(snippet) = &self.snippet {
-                    if let Some(resource_id) = &snippet.resource_id {
-                        return Some(format!(
-                            "https://www.youtube.com/watch?v={}",
-                            resource_id.id()
-                        ));
+                if let Some(content_details) = &self.content_details {
+                    if let Some(video_id) = &content_details.video_id {
+                        return Some(format!("https://www.youtube.com/watch?v={video_id}"));
                     }
                 }
                 None
@@ -337,7 +353,7 @@ impl Item {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum ItemKind {
     #[serde(rename = "youtube#searchResult")]
@@ -398,7 +414,7 @@ pub struct TopicDetails {
     pub topic_categories: Vec<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum ItemId {
     Obj {
