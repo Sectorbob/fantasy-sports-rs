@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use serenity::all::{ChannelId, Context, EventHandler, GuildId};
+use serenity::all::{
+    ChannelId, Context, CreateEmbed, CreateEmbedFooter, CreateMessage, EventHandler, GuildId,
+};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -43,7 +45,10 @@ impl EventHandler for Handler {
             }
         }
         if msg.content == "!health" {
-            let message = format!("Youtube credits consumed: {}", self.yt_client.credits_consumed());
+            let message = format!(
+                "Youtube credits consumed: {}",
+                self.yt_client.credits_consumed()
+            );
             if let Err(why) = msg.channel_id.say(&ctx.http, message).await {
                 log::error!("Error sending message: {why:?}");
             }
@@ -97,10 +102,64 @@ impl EventHandler for Handler {
             let mut rx = feed_rx.lock().await;
             while let Some(feed_msg) = rx.recv().await {
                 let channel_id = ChannelId::new(feed_msg.destination.id.parse().unwrap());
-                if let Err(e) = channel_id.say(&ctx_clone.http, &feed_msg.entry.link).await {
+
+                let content = format!("{}\n{}", feed_msg.entry.title, feed_msg.entry.link);
+
+                let mut message = CreateMessage::new().content(content);
+                // if !feed_msg.entry.link.is_empty() {
+                //     message = message.add_embed(
+                //         CreateEmbed::new()
+                //             .title(&feed_msg.entry.title)
+                //             // .description(&feed_msg.entry.title)
+                //             .url(&feed_msg.entry.link),
+                //     );
+                // }
+                // Add message timestamp if available
+                if let Some(ts) = feed_msg.entry.published_at {
+                    message = message.add_embed(
+                        CreateEmbed::new()
+                            .timestamp(ts)
+                            .footer(CreateEmbedFooter::new(format!("Published at: {}", ts))),
+                    );
+                }
+                // Add author if available
+                // if let Some(author) = &feed_msg.entry.author {
+                //     message = message.add_embed(
+                //         CreateEmbed::new()
+                //             .author(CreateEmbedAuthor::new(author.name.clone()).url(author.url.clone())),
+                //     );
+                // }
+
+                if let Err(e) = channel_id.send_message(&ctx_clone.http, message).await {
                     log::error!("Failed to send message: {:?}", e);
                 }
             }
         });
     }
 }
+
+// mod tests {
+//     use serenity::all::{GetMessages, Http};
+
+//     use super::*;
+//     use crate::yt::YoutubeClient;
+
+//     #[tokio::test]
+//     async fn test_send_discord_message() {
+//         crate::config::load_config().expect("Failed to load config");
+//         let nfl_news_channel_id = 2067967944778588584;
+//         let channel_id = ChannelId::new(nfl_news_channel_id);
+//         let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
+//         let http = Http::new(discord_token.as_str());
+
+//         let messages = channel_id
+//             .messages(http, GetMessages::new().after(1471143525422999373))
+//             .await
+//             .expect("Failed to fetch messages");
+
+//         for message in messages {
+//             println!("{:#?}", message);
+//         }
+//         panic!("Test completed, check logs for messages");
+//     }
+// }
