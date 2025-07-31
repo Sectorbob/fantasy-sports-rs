@@ -311,11 +311,10 @@ async fn do_feed_fetch(
         }
     }
     for video in yt_videos {
-        if let None = feed
-            .entries
-            .iter()
-            .find(|e| e.id.platform == Some(store::Platform::Youtube) && e.id.id == video.id.id())
-        {
+        if let None = feed.entries.iter().find(|e| {
+            e.id.platform == Some(store::Platform::Youtube)
+                && e.id.id == video.video_id().unwrap_or_default()
+        }) {
             new_yt_videos.push(video);
         }
     }
