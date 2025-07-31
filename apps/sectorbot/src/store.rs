@@ -1,8 +1,9 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::US::Pacific;
+use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
+use serde_json::ser;
 use std::str::FromStr;
 
 const DEFAULT_DESTINATION_PLATFORM: Platform = Platform::Discord;
@@ -224,12 +225,15 @@ impl Serialize for ExternalId {
     where
         S: Serializer,
     {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+impl fmt::Display for ExternalId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(platform) = &self.platform {
-            // Serialize as "platform:id"
-            serializer.serialize_str(&format!("{}:{}", platform.to_string(), self.id))
+            write!(f, "{}:{}", platform.to_string(), self.id)
         } else {
-            // If platform is None, just serialize the id
-            serializer.serialize_str(&self.id)
+            write!(f, "{}", self.id)
         }
     }
 }
