@@ -19,7 +19,6 @@ use crate::bot::{AppContext, Handler};
 use crate::store::{DataStore, ExternalId, FeedEntry, FeedEvent};
 use crate::twitter::TweetResponse;
 
-const SERVER_PORT: u16 = 8080;
 const CHANNEL_BUFFER: usize = 1000;
 
 #[tokio::main]
@@ -75,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_handle = tokio::spawn({
         let app_context_clone = app_context.clone();
         async move {
-            if let Err(e) = server::setup_and_listen(SERVER_PORT, app_context_clone).await {
+            if let Err(e) = server::setup_and_listen(app_context_clone.config.http_server_port, app_context_clone).await {
                 log::error!("Failed to start server: {}", e);
             }
         }

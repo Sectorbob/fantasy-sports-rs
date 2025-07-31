@@ -3,6 +3,8 @@ const ENV_YT_API_KEY: &str = "YT_API_KEY";
 const ENV_TWITTER_COOKIE: &str = "TWITTER_COOKIE";
 const ENV_DISCORD_TOKEN: &str = "DISCORD_TOKEN";
 
+const DEFAULT_HTTP_SERVER_PORT: u16 = 8080;
+
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     // Load environment variables from .env file if it exists
     if let Err(err) = dotenv::dotenv() {
@@ -11,6 +13,12 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     setup_logger();
 
     Ok(Config {
+        http_server_port: match std::env::var("HTTP_SERVER_PORT") {
+            Ok(port_str) => port_str
+                .parse::<u16>()
+                .unwrap_or(DEFAULT_HTTP_SERVER_PORT),
+            Err(_) => DEFAULT_HTTP_SERVER_PORT,
+        },
         discord_token: match std::env::var(ENV_DISCORD_TOKEN) {
             Ok(token) => token,
             Err(_) => {
@@ -54,6 +62,7 @@ fn setup_logger() {
 }
 
 pub struct Config {
+    pub http_server_port: u16,
     pub discord_token: String,
     pub twitter_cookie: String,
     pub yt_api_key: String,
