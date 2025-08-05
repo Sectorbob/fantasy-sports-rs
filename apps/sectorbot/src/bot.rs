@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use serenity::all::{
-    ChannelId, Context, CreateEmbed, CreateEmbedFooter, CreateMessage, EventHandler, GuildId,
+    ChannelId, Context, CreateMessage, EventHandler, GuildId,
 };
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -105,7 +105,17 @@ impl EventHandler for Handler {
 
                 let content = format!("{}\n{}", feed_msg.entry.title, feed_msg.entry.link);
 
-                let mut message = CreateMessage::new().content(content);
+                let message = CreateMessage::new().content(content);
+
+                // // add a timestamp embed for youtube videos
+                // if feed_msg.entry.id.platform == Some(store::Platform::Youtube) {
+                //     message = message.add_embed(
+                //         CreateEmbed::new()
+                //             .timestamp(feed_msg.entry.source_ts)
+                //             .footer(CreateEmbedFooter::new(format!("Published at: {}", feed_msg.entry.source_ts))),
+                //     );
+                // }
+
                 // if !feed_msg.entry.link.is_empty() {
                 //     message = message.add_embed(
                 //         CreateEmbed::new()
@@ -114,14 +124,7 @@ impl EventHandler for Handler {
                 //             .url(&feed_msg.entry.link),
                 //     );
                 // }
-                // Add message timestamp if available
-                if let Some(ts) = feed_msg.entry.published_at {
-                    message = message.add_embed(
-                        CreateEmbed::new()
-                            .timestamp(ts)
-                            .footer(CreateEmbedFooter::new(format!("Published at: {}", ts))),
-                    );
-                }
+
                 // Add author if available
                 // if let Some(author) = &feed_msg.entry.author {
                 //     message = message.add_embed(
@@ -139,6 +142,8 @@ impl EventHandler for Handler {
 }
 
 // mod tests {
+//     use std::collections::VecDeque;
+
 //     use serenity::all::{GetMessages, Http};
 
 //     use super::*;
@@ -147,18 +152,19 @@ impl EventHandler for Handler {
 //     #[tokio::test]
 //     async fn test_send_discord_message() {
 //         crate::config::load_config().expect("Failed to load config");
-//         let nfl_news_channel_id = 2067967944778588584;
-//         let channel_id = ChannelId::new(nfl_news_channel_id);
+//         // let nfl_news_channel_id: u64 = 2067967944778588584;
+//         let giants_news_channel_id: u64 = 7100738766260628716;
+//         let channel_id = ChannelId::new(giants_news_channel_id);
 //         let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
 //         let http = Http::new(discord_token.as_str());
 
 //         let messages = channel_id
-//             .messages(http, GetMessages::new().after(1471143525422999373))
+//             .messages(&http, GetMessages::new().limit(1))//.after(1471143525422999373))
 //             .await
 //             .expect("Failed to fetch messages");
-
-//         for message in messages {
-//             println!("{:#?}", message);
+//         log::info!("Fetched {} messages from channel {}", messages.len(), giants_news_channel_id);
+//         for message in &messages {
+//             log::info!("Message: {:#?}", message);
 //         }
 //         panic!("Test completed, check logs for messages");
 //     }
