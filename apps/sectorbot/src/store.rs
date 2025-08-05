@@ -3,7 +3,6 @@ use chrono_tz::US::Pacific;
 use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::ser;
 use std::str::FromStr;
 
 const DEFAULT_DESTINATION_PLATFORM: Platform = Platform::Discord;
@@ -154,7 +153,14 @@ pub struct ExternalId {
     pub platform: Option<Platform>,
     pub id: String,
 }
-
+impl ExternalId {
+    pub fn new(platform: Platform, id: String) -> Self {
+        ExternalId {
+            platform: Some(platform),
+            id,
+        }
+    }
+}
 impl<'de> Deserialize<'de> for ExternalId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -219,7 +225,6 @@ impl<'de> Deserialize<'de> for ExternalId {
         deserializer.deserialize_any(FeedDestinationVisitor)
     }
 }
-
 impl Serialize for ExternalId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
