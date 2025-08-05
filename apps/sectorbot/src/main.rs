@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 
 use crate::bot::{AppContext, Handler};
-use crate::store::{DataStore, ExternalId, FeedEntry, FeedEvent};
+use crate::store::{DataStore, ExternalId, Feed, FeedEntry, FeedEvent};
 use crate::twitter::TweetResponse;
 
 const CHANNEL_BUFFER: usize = 1000;
@@ -42,11 +42,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match store.list_feeds() {
         Ok(feeds) => {
             log::info!("Feeds in the data store:");
-            for feed in feeds {
+            for mut feed in feeds {
                 log::info!("Feed ID: {}, Name: {}", feed.id, feed.name);
                 log::info!(". Destination: {:?}", feed.destination);
                 log::info!(". Sources: {:?}", feed.sources);
                 log::info!(". Entries: {}", feed.entries.len());
+
+                feed_cleanup(&mut feed, &store);
             }
         }
         Err(e) => {
@@ -74,7 +76,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_handle = tokio::spawn({
         let app_context_clone = app_context.clone();
         async move {
-            if let Err(e) = server::setup_and_listen(app_context_clone.config.http_server_port, app_context_clone).await {
+            if let Err(e) = server::setup_and_listen(
+                app_context_clone.config.http_server_port,
+                app_context_clone,
+            )
+            .await
+            {
                 log::error!("Failed to start server: {}", e);
             }
         }
@@ -455,6 +462,31 @@ impl From<yt::Item> for FeedEntry {
     }
 }
 
+fn feed_cleanup(feed: &mut Feed, store: &DataStore) -> bool {
+    // remove duplicate entries
+    let mut unique_entries = feed.entries.clone();
+    unique_entries.sort_by_key(|e| e.id.clone()); // sort for deduplication
+    unique_entries.dedup_by_key(|e| e.id.clone()); // deduplicate by id
+    unique_entries.sort_by_key(|e| e.source_ts.clone()); // sort by source_ts for save
+    log::info!(". Unique Entries: {}", unique_entries.len());
+    if unique_entries.len() < feed.entries.len() {
+        log::warn!(
+            "Feed {} has duplicate entries. Original: {}, Unique: {}",
+            feed.name,
+            feed.entries.len(),
+            unique_entries.len()
+        );
+        // Update the feed with unique entries
+        feed.entries = unique_entries;
+        if let Err(e) = store.save_feed(&feed) {
+            log::error!("Failed to save feed {}: {}", feed.name, e);
+        } else {
+            log::info!("Feed {} saved with unique entries.", feed.name);
+        }
+    }
+    true // Return true if cleanup was performed
+}
+
 mod tests {
     use crate::{twitter::User, yt::ItemId};
 
@@ -551,4 +583,24 @@ mod tests {
         );
         assert_eq!(entry.link, "https://www.youtube.com/watch?v=LWeK8jJpK3s");
     }
+
+    // #[tokio::test]
+    // async fn test_fetch_raw_feed() {
+    //     config::load_config().expect("Failed to load config");
+
+    //     let feeds: Vec<Feed> = reqwest::get("http://35.211.148.134/feeds").await.unwrap().json().await.unwrap();
+
+    //     assert!(!feeds.is_empty(), "No feeds found");
+    //     for feed in feeds {
+    //         log::info!("Feed ID: {}, Name: {}", feed.id, feed.name);
+    //         log::info!(". Destination: {:?}", feed.destination);
+    //         log::info!(". Sources: {:?}", feed.sources);
+    //         log::info!(". Entries:         {}", feed.entries.len());
+    //         log::info!(". Twitter Entries: {}", feed.entries.iter().filter(|e| e.id.platform == Some(store::Platform::Twitter)).count());
+    //         log::info!(". YouTube Entries: {}", feed.entries.iter().filter(|e| e.id.platform == Some(store::Platform::Youtube)).count());
+    //         log::info!(". Other Entries:   {}", feed.entries.iter().filter(|e| e.id.platform != Some(store::Platform::Twitter) && e.id.platform != Some(store::Platform::Youtube)).count());
+    //     }
+
+    //     panic!("Test completed, check the logs for output");
+    // }
 }

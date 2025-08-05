@@ -149,7 +149,7 @@ pub struct FeedEvent {
     pub destination: ExternalId,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExternalId {
     pub platform: Option<Platform>,
     pub id: String,
@@ -238,7 +238,7 @@ impl fmt::Display for ExternalId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     Discord,
