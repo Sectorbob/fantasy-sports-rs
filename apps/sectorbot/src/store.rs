@@ -8,6 +8,7 @@ use std::str::FromStr;
 const DEFAULT_DESTINATION_PLATFORM: Platform = Platform::Discord;
 const DEFAULT_SOURCE_PLATFORM: Platform = Platform::Twitter;
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct DataStore {
     feeds: sled::Db,
@@ -78,6 +79,7 @@ impl DataStore {
     }
     // Add methods to interact with the store as needed
 
+    #[allow(dead_code)]
     pub fn get_quota(
         &self,
         platform: &Platform,
@@ -93,6 +95,7 @@ impl DataStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_quota(
         &self,
         platform: &Platform,
@@ -142,6 +145,7 @@ pub struct FeedEntry {
     pub published_at: Option<DateTime<Utc>>,
 }
 
+#[allow(dead_code)]
 pub struct FeedEvent {
     pub entry: FeedEntry,
     pub feed_id: u64,
@@ -329,6 +333,7 @@ impl<'de> Deserialize<'de> for QuotaKey {
     }
 }
 
+#[allow(unused_imports)]
 mod tests {
     use crate::store::{ExternalId, Platform};
 

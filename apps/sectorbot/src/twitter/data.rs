@@ -25,6 +25,7 @@ pub struct User {
     // Add more fields as needed
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineResponse {
@@ -39,6 +40,7 @@ pub struct TimelineResponse {
     pub script_loader: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineProps {
@@ -47,6 +49,7 @@ pub struct TimelineProps {
     pub nssp: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageProps {
@@ -69,6 +72,7 @@ pub struct Timeline {
     pub entries: Vec<TimelineEntry>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct TimelineEntry {
     #[serde(rename = "type")]

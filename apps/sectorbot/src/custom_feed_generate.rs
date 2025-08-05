@@ -2,6 +2,7 @@ use std::error::Error;
 
 use crate::store::{DataStore, ExternalId, Feed};
 
+#[allow(dead_code)]
 pub async fn giants(store: &DataStore) -> Result<(), Box<dyn Error>> {
     store.save_feed(&Feed {
         id: 1,
@@ -57,6 +58,7 @@ pub async fn giants(store: &DataStore) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn nfl(store: &DataStore) -> Result<(), Box<dyn Error>> {
     store.save_feed(&Feed {
         id: 2,

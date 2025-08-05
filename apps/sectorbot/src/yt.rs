@@ -29,6 +29,7 @@ impl YoutubeClient {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn search_channels(
         &self,
         query: &str,
@@ -58,6 +59,7 @@ impl YoutubeClient {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn search_channel_videos(
         &self,
         channel_id: &str,
@@ -167,6 +169,7 @@ impl YoutubeClient {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[serde(tag = "kind")]
 
@@ -216,6 +219,7 @@ pub enum Response {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PageInfo {
@@ -288,7 +292,7 @@ impl Item {
             ItemKind::SearchResult => {
                 match &self.id {
                     ItemId::Obj {
-                        kind,
+                        kind: _,
                         channel_id,
                         video_id,
                     } => {
@@ -385,6 +389,7 @@ pub struct RelatedPlaylists {
     pub watch_later: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Statistics {
@@ -394,6 +399,7 @@ pub struct Statistics {
     pub video_count: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemStatus {
@@ -407,6 +413,7 @@ pub struct ItemStatus {
     // pub public_stats_viewable: Option<bool>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TopicDetails {
@@ -705,6 +712,7 @@ mod tests {
             )
     }
 
+    #[allow(dead_code, unused_variables)]
     fn setup_mock_with_error(path: &str, code: u16, msg: &str, domain: &str, reason: &str) -> Mock {
         let msg = r#"The request cannot be completed because you have exceeded your \u003ca href=\"/youtube/v3/getting-started#quota\"\u003equota\u003c/a\u003e."#;
         let domain = "youtube.quota";

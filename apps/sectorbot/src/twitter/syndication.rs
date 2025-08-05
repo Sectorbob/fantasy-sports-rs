@@ -1,10 +1,6 @@
-use std::{collections::HashMap, fmt::Display};
-
-use chrono::{DateTime, FixedOffset};
-use regex::Regex;
-use serde::Deserialize;
-
 use crate::twitter::{TimelineResponse, TweetResponse};
+use regex::Regex;
+use std::fmt::Display;
 
 fn f64_to_base36_string(n: f64, precision: usize) -> String {
     let int_part = n.trunc() as u64;
@@ -75,6 +71,7 @@ pub async fn fetch_user_timeline<T: Display>(
     }
 }
 
+#[allow(dead_code)]
 pub async fn fetch_tweet(tweet_id: u64) -> Result<TweetResponse, Box<dyn std::error::Error>> {
     let token = get_token(tweet_id);
     log::debug!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
@@ -94,7 +91,6 @@ pub async fn fetch_tweet(tweet_id: u64) -> Result<TweetResponse, Box<dyn std::er
         Err(format!("Failed to fetch tweet: {}", res.status()).into())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
