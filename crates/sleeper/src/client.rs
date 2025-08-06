@@ -858,6 +858,32 @@ mod client_tests {
         assert_eq!(204, draft_picks.len());
         assert_eq!(35, draft_picks.iter().filter(|p| p.is_keeper).count()); // 35 keepers in this draft
     }
+
+    #[tokio::test]
+    async fn test_get_completed_playoff_bracket() {
+        let league_id = "164974877262287888".to_string();
+        // let json_body = fs::read_to_string(format!("testdata/v1/draft/{draft_id}.json")).unwrap();
+        // let (mock_server, client) = setup().await;
+        let client = Client::new(None);
+        // Mock::given(method("GET"))
+        //     .and(path(format!("/draft/{draft_id}")))
+        //     .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+        //     .mount(&mock_server)
+        //     .await;
+        let winners_bracket = client
+            .get_playoff_bracket(league_id.clone(), false)
+            .await
+            .unwrap();
+        assert_eq!(Some(7), winners_bracket.champion()); // ManagerGolden06
+        assert_eq!(Some(9), winners_bracket.runner_up()); // ManagerMighty58
+
+        let losers_bracket = client
+            .get_playoff_bracket(league_id.clone(), true)
+            .await
+            .unwrap();
+        assert_eq!(Some(10), losers_bracket.champion()); // rob bob
+        assert_eq!(Some(6), losers_bracket.runner_up()); // rich b shafer
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
