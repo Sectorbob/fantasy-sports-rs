@@ -257,122 +257,68 @@ mod tests {
     use sleeper_fantasy_rs::{Roster, User};
     use tokio::fs;
 
-    use crate::ecr::{
-        keepers::{Keepable, KeepablesReport, PlayerHistorySeason},
-        service::{KeepablesContext, LEAGUE_ID, SPORT, Service},
+    use crate::{
+        ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service},
+        fantasypros,
     };
 
     #[tokio::test]
     async fn test_me() {
         let svc = Service::new();
 
-        // let keepables_context: KeepablesContext =
-        //     svc.fetch_keepable_context(LEAGUE_ID, &SPORT).await.unwrap();
-        // fs::write(
-        //     "keepables_ctx.json",
-        //     serde_json::to_vec(&keepables_context).expect("serialization should aslways succeed"),
-        // )
-        // .await
-        // .expect("should not fail");
-        let keepables_context: KeepablesContext = serde_json::from_str(
-            fs::read_to_string("keepables_ctx.json")
-                .await
-                .unwrap()
-                .as_str(),
+        let keepables_context: KeepablesContext =
+            svc.fetch_keepable_context(LEAGUE_ID, &SPORT).await.unwrap();
+        fs::write(
+            "keepables_ctx.json",
+            serde_json::to_vec(&keepables_context).expect("serialization should aslways succeed"),
         )
-        .unwrap();
+        .await
+        .expect("should not fail");
+        // let keepables_context: KeepablesContext = serde_json::from_str(
+        //     fs::read_to_string("keepables_ctx.json")
+        //         .await
+        //         .unwrap()
+        //         .as_str(),
+        // )
+        // .unwrap();
 
         assert_eq!(6, keepables_context.draft_history.len());
         assert_eq!(476, keepables_context.players.len());
         assert_eq!(12, keepables_context.rosters.len());
         assert_eq!(12, keepables_context.users.len());
 
-        let roster_map: HashMap<u8, Roster> = keepables_context
-            .rosters
-            .iter()
-            .map(|r| (r.roster_id, r.clone()))
-            .collect();
-        let user_map: HashMap<String, User> = keepables_context
-            .users
-            .iter()
-            .map(|u| (u.user_id.clone(), u.clone()))
-            .collect();
+        let fantasy_pros_cli = fantasypros::Client::new();
+
+        let ecr_rankings = fantasy_pros_cli
+            .fetch_ecr_half_ppr()
+            .await
+            .expect("asdfasdfasdfasdf");
+        let num_teams = keepables_context.current_league.settings.num_teams;
+
         let keepables = svc.get_keepables(keepables_context).await.unwrap();
-
-        let heideclinetrade_keepables: Vec<&Keepable> = keepables
-            .keepables
-            .iter()
-            .filter(|k| k.ownerName == "ManagerStormy10")
-            .collect();
-        let cmc = heideclinetrade_keepables
-            .iter()
-            .find(|k| k.playerName == "Christian McCaffrey")
-            .expect("can't find CMC");
-        assert_eq!(Some("ADP".to_string()), cmc.cost("2025"));
-        assert_eq!(Some("ADP".to_string()), cmc.cost("2024"));
-        assert_eq!(Some("ADP".to_string()), cmc.cost("2023"));
-        assert_eq!(Some("ADP".to_string()), cmc.cost("2022"));
-        assert_eq!(Some("2".to_string()), cmc.cost("2021"));
-
-        print_out(&keepables, &roster_map, &user_map);
-    }
-
-    fn print_out(
-        keepables: &KeepablesReport,
-        roster_map: &HashMap<u8, Roster>,
-        user_map: &HashMap<String, User>,
-    ) {
-        for keepable in keepables.keepables.iter() {
-            println!(
-                "{}({}) - {} ({})",
-                keepable.ownerName,
-                roster_map
-                    .iter()
-                    .find(|(_, r)| r.owner_id == keepable.ownerId)
-                    .map(|r| r.0.clone())
-                    .unwrap_or_default(),
-                keepable.playerName,
-                keepable.cost("2025".to_string()).unwrap_or_default()
-            );
-
-            let mut history: Vec<PlayerHistorySeason> = keepable
-                .history
-                .clone()
-                .into_iter()
-                .map(|e| e.1.clone())
-                .collect();
-            history.sort_by_key(|e| e.season.clone());
-            history.reverse();
-            for e in history {
-                let season = e.season.clone();
-                let d_or_k = if e.drafted {
-                    "drafted"
-                } else if e.kept {
-                    "keeper "
-                } else {
-                    "       "
-                };
-                let cost = keepable.cost(season.as_str());
-                let rd = e.rd.unwrap_or_default();
-                let rd_str = format!("[{rd:>2}]");
-                let roster: Option<&Roster> = roster_map.get(&e.roster_id);
-                let owner: Option<&User> = match roster {
-                    Some(roster) => user_map.get(roster.owner_id.as_str()),
-                    None => None,
-                };
-                let by = match owner {
-                    Some(owner) => owner.display_name.clone(),
-                    None => format!("roster{}", e.roster_id),
-                };
-                let cost_note = if cost.is_none() {
-                    "".to_string()
-                } else if cost != Some(rd.to_string()) {
-                    format!("[Cost to keep: {cost}]", cost = cost.unwrap())
-                } else {
-                    "".to_string()
-                };
-                println!("     {season}: {d_or_k}{rd_str} {by} {cost_note}");
+        for keepable in keepables.keepables {
+            let mut cost = keepable.cost("2025".to_string());
+            //if cost == Some("ADP".to_string()) {
+            // lookup current ranking
+            if let Some(fp_player) = ecr_rankings
+                .players
+                .iter()
+                .find(|p| p.player_name == keepable.playerName)
+            {
+                let round = fp_player.rank_ecr / num_teams + 1;
+                let pick_in_round = fp_player.rank_ecr % num_teams;
+                cost = Some(format!(
+                    "({cost:?}) ADP ~ {round}.{pick_in_round}",
+                    cost = cost.unwrap()
+                ))
             }
+            //}
+            let cost = if let Some(cost) = cost {
+                format!(" ({cost})")
+            } else {
+                String::new()
+            };
+            println!("{} - {} {cost}", keepable.ownerName, keepable.playerName);
         }
         assert!(false)
     }
