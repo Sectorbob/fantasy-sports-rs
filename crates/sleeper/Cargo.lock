@@ -1290,6 +1290,7 @@ dependencies = [
  "directories",
  "flate2",
  "log",
+ "rand",
  "reqwest",
  "serde",
  "serde_json",

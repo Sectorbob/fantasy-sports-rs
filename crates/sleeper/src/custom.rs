@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use rand::{rng, seq::SliceRandom};
+
 use crate::{
     PlayoffBracketEntry,
     data::{LeagueSettings, Matchup, Player, Roster, User},
@@ -240,20 +242,36 @@ impl Standings {
     pub fn expected_playoff_teams(&self) -> usize {
         self.league_settings.playoff_teams
     }
+
+    /// This will group the rosters into 2 groups: playoff and non-playoff
+    /// teams. It will then randomize within the two groups and insert the
+    /// non-playoff randomize rosters then the randomized playoff teams to
+    /// generate the draft order for the following season.
+    pub fn randomize_bucketed_draft_order(&self) -> Vec<u8> {
+        let rosters: Vec<u8> = (1..=self.league_settings.num_teams as u8).collect();
+        let mut playoff_teams: Vec<u8> = self.list_playoff_roster_ids().drain().collect();
+        let mut non_playoff_teams = rosters
+            .into_iter()
+            .filter(|r| !playoff_teams.contains(r))
+            .collect::<Vec<u8>>();
+
+        // shuffle
+        playoff_teams.shuffle(&mut rng());
+        non_playoff_teams.shuffle(&mut rng());
+
+        non_playoff_teams.extend(playoff_teams);
+        non_playoff_teams
+    }
 }
 
 #[cfg(test)]
 mod custom_tests {
     use std::{
-        ffi::OsStr,
-        fs::{self, File},
-        io::BufReader,
-        path::Path,
+        collections::HashMap, ffi::OsStr, fs::{self, File}, io::BufReader, path::Path
     };
 
     use crate::{
-        League, LeagueStatus,
-        data::{LeagueSettings, LeagueType, PlayoffType, WaiverType},
+        custom::Standings, data::{LeagueSettings, LeagueType, PlayoffType, WaiverType}, Client, League, LeagueStatus, Roster, User
     };
 
     fn load_all_testdata_leagues() -> Vec<League> {
@@ -413,5 +431,46 @@ mod custom_tests {
             .expect("failed to deserialize the league settings json");
         assert_eq!(14, league_settings.playoff_week_start);
         assert_eq!(6, league_settings.playoff_teams);
+    }
+
+    #[tokio::test]
+    async fn test_randomize_bucketed_draft_order() {
+        let client = Client::new(None);
+        let league_id = "2489066589662560510";
+        let league = client.get_league(league_id).await.unwrap();
+        let roster_map = client
+            .get_rosters_for_league(league_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.roster_id, r))
+            .collect::<HashMap<u8, Roster>>();
+        let user_map = client
+            .get_users_for_league(league_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|u| (u.user_id.clone(), u))
+            .collect::<HashMap<String, User>>();
+        let previous_league = client
+            .get_league(league.previous_league_id.unwrap())
+            .await
+            .unwrap();
+        let previous_league_bracket = client
+            .get_playoff_bracket(previous_league.league_id.clone(), false)
+            .await
+            .unwrap();
+        let standings = Standings::new(
+            previous_league.settings,
+            previous_league_bracket.matchups,
+            None,
+        );
+        let draft_order_roster_ids = standings.randomize_bucketed_draft_order();
+        for (i,roster_id) in draft_order_roster_ids.iter().enumerate() {
+            let slot = i+1;
+            let roster = roster_map.get(roster_id).unwrap();
+            let user = user_map.get(roster.owner_id.as_str()).unwrap();
+            println!("{slot}: {}", user.display_name)
+        }
     }
 }
