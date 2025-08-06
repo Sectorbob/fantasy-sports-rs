@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::data::{Matchup, Player, Roster, User};
+use crate::{
+    PlayoffBracketEntry,
+    data::{LeagueSettings, Matchup, Player, Roster, User},
+};
 
 /// I want to place my own custom consumer code here
 ///
@@ -197,5 +200,218 @@ impl FantasyMatchupSide {
             .max_by_key(|s| s.len())
             .unwrap_or_default()
             .len()
+    }
+}
+
+pub struct Standings {
+    league_settings: LeagueSettings,
+    winners_bracket: Vec<PlayoffBracketEntry>,
+    losers_bracket: Option<Vec<PlayoffBracketEntry>>,
+}
+impl Standings {
+    pub fn new(
+        league_settings: LeagueSettings,
+        winners_bracket: Vec<PlayoffBracketEntry>,
+        losers_bracket: Option<Vec<PlayoffBracketEntry>>,
+    ) -> Self {
+        Standings {
+            league_settings,
+            winners_bracket,
+            losers_bracket,
+        }
+    }
+
+    pub fn list_playoff_roster_ids(&self) -> HashSet<u8> {
+        self.winners_bracket
+            .iter()
+            .flat_map(|e| {
+                let mut rids = vec![];
+                if let Some(rid) = e.team_1_roster_id {
+                    rids.push(rid);
+                }
+                if let Some(rid) = e.team_2_roster_id {
+                    rids.push(rid);
+                }
+                rids
+            })
+            .collect()
+    }
+
+    pub fn expected_playoff_teams(&self) -> usize {
+        self.league_settings.playoff_teams
+    }
+}
+
+#[cfg(test)]
+mod custom_tests {
+    use std::{
+        ffi::OsStr,
+        fs::{self, File},
+        io::BufReader,
+        path::Path,
+    };
+
+    use crate::{
+        League, LeagueStatus,
+        data::{LeagueSettings, LeagueType, PlayoffType, WaiverType},
+    };
+
+    fn load_all_testdata_leagues() -> Vec<League> {
+        let test_data_leagues_path = "testdata/v1/league";
+        let paths: Vec<String> = fs::read_dir(test_data_leagues_path)
+            .expect("unable to list test data files")
+            .filter_map(|f| match f {
+                Ok(dir_entry) => {
+                    let tmp = dir_entry.file_name();
+                    let p = Path::new(tmp.as_os_str());
+                    match p.extension().and_then(OsStr::to_str) {
+                        Some(ext) => {
+                            if ext == "json" {
+                                Some(format!(
+                                    "{}/{}",
+                                    test_data_leagues_path,
+                                    p.to_str().unwrap()
+                                ))
+                            } else {
+                                None
+                            }
+                        }
+                        None => None,
+                    }
+                }
+                Err(_) => None,
+            })
+            .collect();
+        paths
+            .iter()
+            .map(|league_test_data_filename| {
+                let f = File::open(league_test_data_filename.clone()).expect(
+                    format!("failed to open test data file ({league_test_data_filename})").as_str(),
+                );
+
+                serde_json::from_reader(BufReader::new(f)).expect(
+                    format!(
+                        "failed to deserialize league json file: {}",
+                        league_test_data_filename
+                    )
+                    .as_str(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn load_all_leagues_test_datas_sanity_check() {
+        let leagues = load_all_testdata_leagues();
+        assert_eq!(5, leagues.len());
+        for league in leagues {
+            let league_name = league.name.as_str();
+            let season = league.season.as_str();
+            let league_id = league.league_id.as_str();
+            let league_debug_name = format!("{league_name} [{season}] ({league_id})");
+
+            // assertions
+            debug_assert_eq!(
+                "Rapid League 17", league_name,
+                "unusual league name in {league_debug_name}"
+            );
+            debug_assert_eq!(
+                12, league.settings.num_teams,
+                "unusual num_teams in {league_debug_name}"
+            );
+            debug_assert_eq!(
+                LeagueType::Keeper,
+                league.settings.r#type,
+                "unusual league type in {league_debug_name}"
+            );
+            debug_assert_eq!(
+                WaiverType::FAAB,
+                league.settings.waiver_type,
+                "unusual waiver_type in {league_debug_name}"
+            );
+            debug_assert_eq!(
+                PlayoffType::Default,
+                league.settings.playoff_type,
+                "unusual playoff_type in {league_debug_name}"
+            );
+            debug_assert_eq!(
+                6, league.settings.playoff_teams,
+                "unusual playoff_teams in {league_debug_name}"
+            );
+            debug_assert!(
+                !league.settings.best_ball,
+                "unusual best_ball in {league_debug_name}"
+            );
+            if league.status == LeagueStatus::PreDraft {
+                debug_assert!(
+                    league.settings.last_scored_leg.is_none(),
+                    "unusual last_scored_leg in predraft {league_debug_name}"
+                );
+            } else {
+                debug_assert!(
+                    league.settings.last_scored_leg.is_some(),
+                    "unusual last_scored_leg in {league_debug_name}"
+                );
+            }
+            debug_assert!(
+                league.settings.playoff_week_start > 0,
+                "unusual playoff_week_start in {league_debug_name}"
+            );
+            // assert_eq!(1, league.settings.start_week);
+            let reg_season_weeks = league.settings.playoff_week_start - league.settings.start_week;
+            debug_assert!(
+                reg_season_weeks > 0,
+                "unusual calculated regular season weeks [{reg_season_weeks}] in {league_debug_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_league_settings_deserialization() {
+        let league_settings_json = r#"{
+            "last_report": 13,
+            "waiver_budget": 100,
+            "disable_adds": 0,
+            "divisions": 3,
+            "capacity_override": 0,
+            "taxi_deadline": 0,
+            "draft_rounds": 10,
+            "reserve_allow_na": 0,
+            "start_week": 3,
+            "playoff_teams": 6,
+            "num_teams": 12,
+            "daily_waivers_hour": 0,
+            "playoff_type": 0,
+            "taxi_slots": 0,
+            "last_scored_leg": 16,
+            "daily_waivers_days": 1093,
+            "playoff_week_start": 14,
+            "waiver_clear_days": 2,
+            "reserve_allow_doubtful": 0,
+            "reserve_allow_dnr": 1,
+            "taxi_allow_vets": 0,
+            "waiver_day_of_week": 2,
+            "reserve_allow_out": 1,
+            "reserve_allow_sus": 1,
+            "trade_deadline": 10,
+            "taxi_years": 0,
+            "daily_waivers": 0,
+            "pick_trading": 1,
+            "type": 1,
+            "max_keepers": 3,
+            "waiver_type": 2,
+            "league_average_match": 0,
+            "trade_review_days": 2,
+            "bench_lock": 0,
+            "offseason_adds": 0,
+            "leg": 16,
+            "reserve_slots": 1,
+            "was_auto_archived": 1
+        }"#;
+
+        let league_settings: LeagueSettings = serde_json::from_str(league_settings_json)
+            .expect("failed to deserialize the league settings json");
+        assert_eq!(14, league_settings.playoff_week_start);
+        assert_eq!(6, league_settings.playoff_teams);
     }
 }

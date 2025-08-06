@@ -8,8 +8,8 @@ use crate::{
     Draft,
     cache::{Cacheable, FileSystemCacher},
     data::{
-        DraftPick, League, Matchup, Player, Roster, Sport, Transaction, TrendType, TrendingPlayer,
-        User,
+        Bracket, DraftPick, League, Matchup, Player, PlayoffBracketEntry, Roster, Sport,
+        Transaction, TrendType, TrendingPlayer, User,
     },
 };
 use thiserror;
@@ -248,6 +248,25 @@ impl Client {
     pub async fn get_draft_picks<T: Id>(&self, draft_id: T) -> Result<Vec<DraftPick>, Error> {
         self.get_json(format!("/draft/{draft_id}/picks"), None)
             .await
+    }
+
+    pub async fn get_playoff_bracket<T: Id>(
+        &self,
+        league_id: T,
+        losers: bool,
+    ) -> Result<Bracket, Error> {
+        let bracket_name = if losers {
+            "losers_bracket"
+        } else {
+            "winners_bracket"
+        };
+        let bracket_matchups: Vec<PlayoffBracketEntry> = self
+            .get_json(format!("/league/{league_id}/{bracket_name}"), None)
+            .await?;
+        Ok(Bracket {
+            matchups: bracket_matchups,
+            is_losers: losers,
+        })
     }
 
     // user with basketball league: ManagerSilent58
