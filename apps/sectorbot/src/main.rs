@@ -1,6 +1,7 @@
 mod bot;
 mod config;
 mod custom_feed_generate;
+mod ecr;
 mod server;
 mod store;
 mod twitter;
