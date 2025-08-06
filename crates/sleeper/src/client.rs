@@ -279,7 +279,7 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod client_tests {
     use crate::{SeasonType, Sport, TrendType, data::ScoringSettings};
 
     use super::Client;

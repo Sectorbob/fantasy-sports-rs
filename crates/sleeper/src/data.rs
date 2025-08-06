@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt};
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Number, Value};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -494,7 +494,11 @@ pub struct League {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct LeagueSettings {
-    #[serde(deserialize_with = "bool_from_int", default)]
+    #[serde(
+        deserialize_with = "bool_from_int",
+        serialize_with = "int_from_bool",
+        default
+    )]
     pub best_ball: bool,
     pub leg: Option<usize>,
     pub last_leg: Option<usize>,
@@ -699,10 +703,14 @@ pub struct Draft {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct DraftSettings {
     /// Sort players by name instead of ADP.
-    #[serde(deserialize_with = "bool_from_int", default)]
+    #[serde(
+        deserialize_with = "bool_from_int",
+        serialize_with = "int_from_bool",
+        default
+    )]
     pub alpha_sort: bool,
     /// If true, a CPU will autopick for a user when a user runs out of time
-    #[serde(deserialize_with = "bool_from_int")]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "int_from_bool")]
     pub cpu_autopick: bool,
     pub rounds: u8,
     pub player_type: Option<u8>,
@@ -769,6 +777,17 @@ where
     Ok(v != 0)
 }
 
+fn int_from_bool<S>(b: &bool, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if *b {
+        s.serialize_i8(1)
+    } else {
+        s.serialize_i8(0)
+    }
+}
+
 fn null_to_empty_map<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
 where
     D: Deserializer<'de>,
@@ -786,4 +805,31 @@ where
         Some(true) => true,
         _ => false,
     })
+}
+
+#[cfg(test)]
+mod data_tests {
+    use crate::Draft;
+    use std::{fs, io};
+
+    #[test]
+    fn ensure_two_way_de_serialization_of_draft() {
+        let file = fs::File::open("testdata/v1/league/164974877262287888/drafts.json")
+            .expect("unable to load test data file");
+        let reader = io::BufReader::new(file);
+
+        // Deserialize it
+        let drafts: Vec<Draft> =
+            serde_json::from_reader(reader).expect("failed to deserialize test data file");
+        println!("{:#?}", drafts);
+        assert_eq!(2, drafts.len());
+
+        // Serialize it
+        let serialized_drafts =
+            serde_json::to_string(&drafts).expect("failed to re-serialize the drafts json");
+
+        let re_deserialized_drafts: Vec<Draft> = serde_json::from_str(serialized_drafts.as_str())
+            .expect("failed to re-deserialize draft json object");
+        assert_eq!(drafts, re_deserialized_drafts)
+    }
 }
