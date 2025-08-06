@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    u64,
+};
 
 use serde::{Deserialize, Serialize};
 use sleeper_fantasy_rs::{Client, Draft, DraftPick, League, Player, Roster, Sport, User};
@@ -96,14 +99,14 @@ impl Service {
                         ownerName: user.display_name.clone(),
                         wasKeeperLastYear: keeper_status.is_keeper,
                         playerId: player.player_id.clone(),
-                        playerName: player.search_full_name.clone().unwrap_or_default(),
+                        playerName: player.to_string(),
                         position: player.position.clone().unwrap_or_default(),
                         round: keeper_status.draft_round.unwrap_or_default(),
                         history: player_history,
                     });
                     println!(
-                        "\t\t${name} [${position}] [${team}] Keeper[${is_keeper}] Rd[${draft_round}]",
-                        name = player.search_full_name.clone().unwrap_or_default(),
+                        "\t\t{name} [${position}] [{team}] Keeper[{is_keeper}] Rd[{draft_round}]",
+                        name = player.to_string(),
                         position = player.position.clone().unwrap_or_default(),
                         team = player.team.clone().unwrap_or_default(),
                         is_keeper = keeper_status.is_keeper,
@@ -114,10 +117,14 @@ impl Service {
             }
         }
 
-        for (season, draft_details) in ctx.draft_history {
-            println!("Draft {} Season: {season}", draft_details.draft.draft_id);
-            println!("Entries {}", draft_details.picks.len())
-        }
+        // try fancy sort of keepables
+        keepables.sort_by_key(|k| {
+            k.ownerId
+                .parse::<u64>()
+                .unwrap_or(u64::MIN)
+                .checked_add(k.round as u64)
+                .unwrap_or(u64::MAX)
+        });
 
         Ok(KeepablesReport { keepables })
     }
@@ -245,9 +252,15 @@ pub enum ECRError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use sleeper_fantasy_rs::{Roster, User};
     use tokio::fs;
 
-    use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
+    use crate::ecr::{
+        keepers::{Keepable, KeepablesReport, PlayerHistorySeason},
+        service::{KeepablesContext, LEAGUE_ID, SPORT, Service},
+    };
 
     #[tokio::test]
     async fn test_me() {
@@ -274,14 +287,92 @@ mod tests {
         assert_eq!(12, keepables_context.rosters.len());
         assert_eq!(12, keepables_context.users.len());
 
+        let roster_map: HashMap<u8, Roster> = keepables_context
+            .rosters
+            .iter()
+            .map(|r| (r.roster_id, r.clone()))
+            .collect();
+        let user_map: HashMap<String, User> = keepables_context
+            .users
+            .iter()
+            .map(|u| (u.user_id.clone(), u.clone()))
+            .collect();
         let keepables = svc.get_keepables(keepables_context).await.unwrap();
-        for keepable in keepables.keepables {
+
+        let heideclinetrade_keepables: Vec<&Keepable> = keepables
+            .keepables
+            .iter()
+            .filter(|k| k.ownerName == "ManagerStormy10")
+            .collect();
+        let cmc = heideclinetrade_keepables
+            .iter()
+            .find(|k| k.playerName == "Christian McCaffrey")
+            .expect("can't find CMC");
+        assert_eq!(Some("ADP".to_string()), cmc.cost("2025"));
+        assert_eq!(Some("ADP".to_string()), cmc.cost("2024"));
+        assert_eq!(Some("ADP".to_string()), cmc.cost("2023"));
+        assert_eq!(Some("ADP".to_string()), cmc.cost("2022"));
+        assert_eq!(Some("2".to_string()), cmc.cost("2021"));
+
+        print_out(&keepables, &roster_map, &user_map);
+    }
+
+    fn print_out(
+        keepables: &KeepablesReport,
+        roster_map: &HashMap<u8, Roster>,
+        user_map: &HashMap<String, User>,
+    ) {
+        for keepable in keepables.keepables.iter() {
             println!(
-                "{} - {} ({})",
+                "{}({}) - {} ({})",
                 keepable.ownerName,
+                roster_map
+                    .iter()
+                    .find(|(_, r)| r.owner_id == keepable.ownerId)
+                    .map(|r| r.0.clone())
+                    .unwrap_or_default(),
                 keepable.playerName,
-                keepable.cost("2025".to_string())
+                keepable.cost("2025".to_string()).unwrap_or_default()
             );
+
+            let mut history: Vec<PlayerHistorySeason> = keepable
+                .history
+                .clone()
+                .into_iter()
+                .map(|e| e.1.clone())
+                .collect();
+            history.sort_by_key(|e| e.season.clone());
+            history.reverse();
+            for e in history {
+                let season = e.season.clone();
+                let d_or_k = if e.drafted {
+                    "drafted"
+                } else if e.kept {
+                    "keeper "
+                } else {
+                    "       "
+                };
+                let cost = keepable.cost(season.as_str());
+                let rd = e.rd.unwrap_or_default();
+                let rd_str = format!("[{rd:>2}]");
+                let roster: Option<&Roster> = roster_map.get(&e.roster_id);
+                let owner: Option<&User> = match roster {
+                    Some(roster) => user_map.get(roster.owner_id.as_str()),
+                    None => None,
+                };
+                let by = match owner {
+                    Some(owner) => owner.display_name.clone(),
+                    None => format!("roster{}", e.roster_id),
+                };
+                let cost_note = if cost.is_none() {
+                    "".to_string()
+                } else if cost != Some(rd.to_string()) {
+                    format!("[Cost to keep: {cost}]", cost = cost.unwrap())
+                } else {
+                    "".to_string()
+                };
+                println!("     {season}: {d_or_k}{rd_str} {by} {cost_note}");
+            }
         }
         assert!(false)
     }

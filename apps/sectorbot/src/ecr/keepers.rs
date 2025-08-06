@@ -8,7 +8,7 @@ pub fn get_keeper_status(player: &Player, picks: &Vec<DraftPick>) -> KeeperStatu
     if let Some(pick) = picks.iter().find(|p| p.player_id == player.player_id) {
         KeeperStatus {
             is_keeper: pick.is_keeper,
-            was_drafted: pick.is_keeper,
+            was_drafted: !pick.is_keeper,
             draft_round: Some(pick.round),
         }
     } else {
@@ -62,12 +62,13 @@ pub struct Keepable {
     pub history: HashMap<String, PlayerHistorySeason>,
 }
 impl Keepable {
-    pub fn cost(&self, season: String) -> String {
+    pub fn cost<T: Into<String>>(&self, season: T) -> Option<String> {
         let mut kept_since: Option<String> = None;
-        let season_int: i32 = season.parse().unwrap();
+        let season_int: i32 = season.into().parse().unwrap();
 
         let mut seasons: Vec<String> = self.history.keys().map(Into::into).collect();
         seasons.sort();
+        seasons.reverse();
 
         for s in seasons {
             if let Some(history_entry) = self.history.get(s.as_str()) {
@@ -83,26 +84,27 @@ impl Keepable {
         // this is the first time this pick is being kept
         if kept_since.is_none() {
             let season_drafted: i32 = season_int - 1;
-            let season_entry = self
+            return self
                 .history
                 .get(season_drafted.to_string().as_str())
-                .unwrap();
-            return format!("{}", season_entry.rd.unwrap());
+                .map(|season_entry| format!("{}", season_entry.rd.unwrap()));
         }
 
         let ket_since_int: i32 = kept_since.unwrap().parse().unwrap();
 
         // contract renegotiation
         if season_int - ket_since_int >= 3 {
-            return "ADP".to_string();
+            return Some("ADP".to_string());
         }
 
-        self.history
-            .get(ket_since_int.to_string().as_str())
-            .unwrap()
-            .rd
-            .unwrap()
-            .to_string()
+        Some(
+            self.history
+                .get(ket_since_int.to_string().as_str())
+                .unwrap()
+                .rd
+                .unwrap()
+                .to_string(),
+        )
     }
 }
 
@@ -112,7 +114,7 @@ pub struct KeeperStatus {
     pub draft_round: Option<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlayerHistorySeason {
     pub season: String,
     pub drafted: bool,
