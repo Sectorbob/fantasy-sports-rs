@@ -1,4 +1,4 @@
-use std::{collections::HashMap, num::ParseIntError};
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use sleeper_fantasy_rs::{Client, Draft, DraftPick, League, Player, Roster, Sport, User};
@@ -36,7 +36,7 @@ impl Service {
             .await
             .map_err(|e| ECRError::SleeperError(e.to_string()))?;
         let draft_history = self.fetch_all_draft_history(league.clone()).await?;
-        let players = players_future
+        let mut players = players_future
             .await
             .map_err(|e| ECRError::SleeperError(e.to_string()))?;
         let rosters = rosters_future
@@ -46,10 +46,14 @@ impl Service {
             .await
             .map_err(|e| ECRError::SleeperError(e.to_string()))?;
 
-        let current_season: i32 = league
-            .season
-            .parse()
-            .map_err(|e: ParseIntError| ECRError::Unknown(e.to_string()))?;
+        // look through drafts and rosters (later transactions?????)
+        // and get a set of player_ids to include in players_map
+        reduce_players_map(&mut players, Some(&draft_history), Some(&rosters));
+
+        // let current_season: i32 = league
+        //     .season
+        //     .parse()
+        //     .map_err(|e: ParseIntError| ECRError::Unknown(e.to_string()))?;
 
         Ok(KeepablesContext {
             current_league: league,
@@ -186,6 +190,38 @@ impl Service {
     }
 }
 
+/// This function will look through provided sleeper league data structures and
+/// find all player_ids referenced, place them into a HashSet and then reduce
+/// the provided player_map to reduce memory footprint and such.
+///
+/// In my limited testing I was able to reduce the overall storage footprint of
+/// a 5 year league history context from 14MB to 1MB on disk. This was
+/// effectively a player_map size of 11388 reduced down to 476 entries.
+fn reduce_players_map(
+    players: &mut HashMap<String, Player>,
+    draft_results: Option<&Vec<DraftResult>>,
+    rosters: Option<&Vec<Roster>>,
+    // transactions: Option<&Vec<Transaction>>,
+) {
+    let mut player_ids: HashSet<String> = HashSet::new();
+    if let Some(draft_results) = draft_results {
+        player_ids.extend(
+            draft_results
+                .iter()
+                .flat_map(|d| d.picks.iter().map(|p| p.player_id.clone())),
+        );
+    }
+    if let Some(rosters) = rosters {
+        player_ids.extend(rosters.iter().flat_map(|r| r.players.clone()));
+    }
+    // if let Some(transactions) = transactions {
+    //     player_ids.extend(transactions.iter().flat_map(|t| t.adds.keys().));
+    // }
+
+    // reduce the player map
+    players.retain(|key, _| player_ids.contains(key));
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DraftResult {
     pub draft: Draft,
@@ -211,20 +247,32 @@ pub enum ECRError {
 mod tests {
     use tokio::fs;
 
-    use crate::ecr::service::{KeepablesContext, Service, LEAGUE_ID, SPORT};
+    use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
 
     #[tokio::test]
     async fn test_me() {
         let svc = Service::new();
 
-        // let keepables_context = svc.fetch_keepable_context(LEAGUE_ID, &SPORT).await.unwrap();
-        let keepables_context: KeepablesContext = serde_json::from_str(fs::read_to_string("keepables_ctx.json").await.unwrap().as_str()).unwrap();
+        // let keepables_context: KeepablesContext =
+        //     svc.fetch_keepable_context(LEAGUE_ID, &SPORT).await.unwrap();
+        // fs::write(
+        //     "keepables_ctx.json",
+        //     serde_json::to_vec(&keepables_context).expect("serialization should aslways succeed"),
+        // )
+        // .await
+        // .expect("should not fail");
+        let keepables_context: KeepablesContext = serde_json::from_str(
+            fs::read_to_string("keepables_ctx.json")
+                .await
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap();
 
-        assert_eq!(5, keepables_context.draft_history.len());
-        assert_eq!(5000, keepables_context.players.len());
+        assert_eq!(6, keepables_context.draft_history.len());
+        assert_eq!(476, keepables_context.players.len());
         assert_eq!(12, keepables_context.rosters.len());
         assert_eq!(12, keepables_context.users.len());
-    
 
         let keepables = svc.get_keepables(keepables_context).await.unwrap();
         for keepable in keepables.keepables {
