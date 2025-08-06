@@ -488,10 +488,11 @@ fn feed_cleanup(feed: &mut Feed, store: &DataStore) -> bool {
     true // Return true if cleanup was performed
 }
 
+#[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use crate::{twitter::User, yt::ItemId};
     use super::*;
+    use crate::{twitter::User, yt::ItemId};
 
     #[test]
     fn test_feed_entry_from_tweet() {

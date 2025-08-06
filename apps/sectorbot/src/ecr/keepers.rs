@@ -121,4 +121,5 @@ pub struct PlayerHistorySeason {
     pub roster_id: u8,
 }
 
+#[cfg(test)]
 mod tests {}

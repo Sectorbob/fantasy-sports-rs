@@ -187,6 +187,7 @@ impl From<FeedEntry> for rss::Item {
     }
 }
 
+#[cfg(test)]
 #[allow(dead_code, unused_imports)]
 mod tests {
     use crate::store::{ExternalId, Feed, FeedEntry, Platform};

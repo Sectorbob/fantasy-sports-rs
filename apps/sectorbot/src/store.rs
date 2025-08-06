@@ -333,6 +333,7 @@ impl<'de> Deserialize<'de> for QuotaKey {
     }
 }
 
+#[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
     use crate::store::{ExternalId, Platform};

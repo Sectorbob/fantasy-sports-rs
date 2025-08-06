@@ -207,7 +207,7 @@ pub enum ECRError {
     Unknown(String),
 }
 
-#[allow(dead_code, unused_imports)]
+#[cfg(test)]
 mod tests {
     use tokio::fs;
 
