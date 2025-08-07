@@ -31,6 +31,15 @@ pub struct Handler {
     pub ecr_service: ecr::service::Service,
 }
 impl Handler {
+    async fn process_health_command(&self, ctx: &Context, msg: &Message) -> Result<(), ECRError> {
+        let message = format!(
+            "Youtube credits consumed: {}",
+            self.yt_client.credits_consumed()
+        );
+        send_as_code(&ctx, &msg, message).await;
+        Ok(())
+    }
+
     async fn process_keepables_command(
         &self,
         ctx: &Context,
@@ -75,12 +84,8 @@ impl EventHandler for Handler {
             return;
         }
         if msg.content == "!health" {
-            let message = format!(
-                "Youtube credits consumed: {}",
-                self.yt_client.credits_consumed()
-            );
-            if let Err(why) = msg.channel_id.say(&ctx.http, message).await {
-                log::error!("Error sending message: {why:?}");
+            if let Err(err) = self.process_health_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
             }
             return;
         }
