@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serenity::all::{ChannelId, Context, CreateMessage, EventHandler, GuildId};
+use serenity::all::{CacheHttp, ChannelId, Context, CreateMessage, EventHandler, GuildId};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -11,7 +11,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
 use crate::ecr;
-use crate::ecr::service::{LEAGUE_ID, SPORT};
+use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
 use crate::store::{self, FeedEvent};
 use crate::yt::YoutubeClient;
 
@@ -30,6 +30,33 @@ pub struct Handler {
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
     pub ecr_service: ecr::service::Service,
 }
+impl Handler {
+    async fn process_keepables_command(
+        &self,
+        ctx: &Context,
+        msg: &Message,
+    ) -> Result<(), ECRError> {
+        let keepables_ctx = self
+            .ecr_service
+            .fetch_keepable_context(LEAGUE_ID, &SPORT)
+            .await?;
+        let keepables_report = self.ecr_service.get_keepables(&keepables_ctx)?;
+        send_as_code(&ctx, &msg, keepables_report.text_report()).await;
+        Ok(())
+    }
+
+    async fn process_draft_order_command(
+        &self,
+        ctx: &Context,
+        msg: &Message,
+    ) -> Result<(), ECRError> {
+        let standings = Standings::from_sleeper(LEAGUE_ID).await?;
+        let order = standings.randomize_bucketed_draft_order();
+        let text_report = Standings::visualize_draft_order(order).await?;
+        send_as_code(&ctx, &msg, text_report).await;
+        Ok(())
+    }
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -45,6 +72,7 @@ impl EventHandler for Handler {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
                 log::error!("Error sending message: {why:?}");
             }
+            return;
         }
         if msg.content == "!health" {
             let message = format!(
@@ -54,53 +82,19 @@ impl EventHandler for Handler {
             if let Err(why) = msg.channel_id.say(&ctx.http, message).await {
                 log::error!("Error sending message: {why:?}");
             }
+            return;
         }
         if msg.content == "!keepables" {
-            if let Ok(keepables_ctx) = self
-                .ecr_service
-                .fetch_keepable_context(LEAGUE_ID, &SPORT)
-                .await
-            {
-                if let Ok(keepables_report) = self.ecr_service.get_keepables(&keepables_ctx) {
-                    let mut text_report = keepables_report.text_report();
-                    text_report.truncate(2000);
-                    if let Err(why) = msg.channel_id.say(&ctx.http, text_report).await {
-                        log::error!("Error sending message: {why:?}");
-                    }
-                }
+            if let Err(err) = self.process_keepables_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
             }
+            return;
         }
         if msg.content == "!draftorder" {
-            match Standings::from_sleeper(LEAGUE_ID).await {
-                Ok(standings) => {
-                    let order = standings.randomize_bucketed_draft_order();
-                    match Standings::visualize_draft_order(order).await {
-                        Ok(text) => {
-                            if let Err(why) = msg.channel_id.say(&ctx.http, text).await {
-                                log::error!("Error sending message: {why:?}");
-                            }
-                        }
-                        Err(err) => {
-                            if let Err(why) = msg
-                                .channel_id
-                                .say(&ctx.http, "failed to visualize draft order")
-                                .await
-                            {
-                                log::error!("Error sending message: {why:?}");
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    if let Err(why) = msg
-                        .channel_id
-                        .say(&ctx.http, "failed to make draft order")
-                        .await
-                    {
-                        log::error!("Error sending message: {why:?}");
-                    }
-                }
+            if let Err(err) = self.process_draft_order_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
             }
+            return;
         }
     }
 
@@ -187,6 +181,38 @@ impl EventHandler for Handler {
                 }
             }
         });
+    }
+}
+
+const MAX_MESSAGE_LEN: usize = 2000;
+const CODE_MAX_CONTENT_LEN: usize = MAX_MESSAGE_LEN - 8;
+const CODE_PFX: &str = "```\n";
+const CODE_SFX: &str = "\n```";
+
+async fn send_as_code<T: Into<String>>(ctx: &Context, msg: &Message, text: T) {
+    let mut text: String = text.into();
+
+    text.truncate(CODE_MAX_CONTENT_LEN);
+
+    // let active_message = String::from(CODE_PFX);
+
+    // for line in text.lines() {
+
+    // }
+
+    if let Err(why) = msg
+        .channel_id
+        .say(&ctx.http, format!("{CODE_PFX}{text}{CODE_SFX}"))
+        .await
+    {
+        log::error!("Error sending message: {why:?}");
+    }
+}
+
+async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
+    log::error!("failed: {err}");
+    if let Err(why) = msg.channel_id.say(http, err.to_string()).await {
+        log::error!("Error sending message: {why:?}");
     }
 }
 
