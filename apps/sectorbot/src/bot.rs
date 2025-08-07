@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use serenity::all::{
-    ChannelId, Context, CreateMessage, EventHandler, GuildId,
-};
+use serenity::all::{ChannelId, Context, CreateMessage, EventHandler, GuildId};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -11,6 +9,8 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
+use crate::ecr;
+use crate::ecr::service::{LEAGUE_ID, SPORT};
 use crate::store::{self, FeedEvent};
 use crate::yt::YoutubeClient;
 
@@ -27,6 +27,7 @@ impl Drop for AppContext {
 pub struct Handler {
     pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
+    pub ecr_service: ecr::service::Service,
 }
 
 #[async_trait]
@@ -51,6 +52,21 @@ impl EventHandler for Handler {
             );
             if let Err(why) = msg.channel_id.say(&ctx.http, message).await {
                 log::error!("Error sending message: {why:?}");
+            }
+        }
+        if msg.content == "!keepables" {
+            if let Ok(keepables_ctx) = self
+                .ecr_service
+                .fetch_keepable_context(LEAGUE_ID, &SPORT)
+                .await
+            {
+                if let Ok(keepables_report) = self.ecr_service.get_keepables(&keepables_ctx) {
+                    let mut text_report = keepables_report.text_report();
+                    text_report.truncate(2000);
+                    if let Err(why) = msg.channel_id.say(&ctx.http, text_report).await {
+                        log::error!("Error sending message: {why:?}");
+                    }
+                }
             }
         }
     }

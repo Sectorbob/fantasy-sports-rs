@@ -2282,6 +2282,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "dotenv",
+ "flate2",
  "html-escape",
  "log",
  "num",

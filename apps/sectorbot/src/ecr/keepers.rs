@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
-use sleeper_fantasy_rs::{DraftPick, Player};
-
 use crate::ecr::service::DraftResult;
+use sleeper_fantasy_rs::DraftPick;
+use std::collections::{HashMap, HashSet};
 
-pub fn get_keeper_status(player: &Player, picks: &Vec<DraftPick>) -> KeeperStatus {
-    if let Some(pick) = picks.iter().find(|p| p.player_id == player.player_id) {
+pub fn get_keeper_status<T: Into<String>>(player_id: T, picks: &Vec<DraftPick>) -> KeeperStatus {
+    let player_id: String = player_id.into();
+    if let Some(pick) = picks.iter().find(|p| p.player_id == player_id) {
         KeeperStatus {
             is_keeper: pick.is_keeper,
             was_drafted: !pick.is_keeper,
@@ -20,17 +19,14 @@ pub fn get_keeper_status(player: &Player, picks: &Vec<DraftPick>) -> KeeperStatu
     }
 }
 
-pub fn get_player_history(
-    player: &Player,
+pub fn get_player_history<T: Into<String>>(
+    player_id: T,
     draft_history: &HashMap<String, DraftResult>,
 ) -> HashMap<String, PlayerHistorySeason> {
+    let player_id: String = player_id.into();
     let mut history = HashMap::<String, PlayerHistorySeason>::new();
     for (season, draft_result) in draft_history {
-        if let Some(pick) = draft_result
-            .picks
-            .iter()
-            .find(|p| p.player_id == player.player_id)
-        {
+        if let Some(pick) = draft_result.picks.iter().find(|p| p.player_id == player_id) {
             history.insert(
                 season.clone(),
                 PlayerHistorySeason {
@@ -48,18 +44,74 @@ pub fn get_player_history(
 }
 
 pub struct KeepablesReport {
+    pub season: String,
     pub keepables: Vec<Keepable>,
 }
+impl KeepablesReport {
+    pub fn text_report(&self) -> String {
+        let mut text = String::new();
 
+        let mut owners = self
+            .keepables
+            .iter()
+            .map(|k| k.owner_name.to_string())
+            .collect::<HashSet<String>>()
+            .into_iter()
+            .collect::<Vec<String>>();
+        owners.sort_by_key(|owner| owner.to_ascii_lowercase());
+        for owner in owners.iter() {
+            text.push_str(&owner);
+            text.push('\n');
+
+            let max_player_name_length = self
+                .keepables
+                .iter()
+                .map(|k| k.player_name.len())
+                .max()
+                .unwrap_or_default();
+
+            for keepable in &self
+                .keepables
+                .iter()
+                .filter(|k| &k.owner_name == owner)
+                .collect::<Vec<&Keepable>>()
+            {
+                let cost = keepable.cost(self.season.as_str());
+                // lookup current ranking
+                let cost = if let Some(player_rank) = &keepable.player_rank {
+                    Some(format!(
+                        "COST={cost:?} ADP~{player_rank}",
+                        cost = cost.unwrap()
+                    ))
+                } else {
+                    Some(format!("COST={cost:?} ADP~UNKNOWN", cost = cost.unwrap()))
+                };
+                text.push_str(
+                    format!(
+                        " {player:<max_player_name_length$} {cost}\n",
+                        player = keepable.player_name,
+                        cost = cost.map(|v| format!(" ({v})")).unwrap_or_default()
+                    )
+                    .as_str(),
+                );
+            }
+        }
+
+        text
+    }
+}
+
+#[allow(dead_code)]
 pub struct Keepable {
-    pub ownerId: String,
-    pub ownerName: String,
-    pub wasKeeperLastYear: bool,
-    pub playerId: String,
-    pub playerName: String,
+    pub owner_id: String,
+    pub owner_name: String,
+    pub was_keeper_last_year: bool,
+    pub player_id: String,
+    pub player_name: String,
     pub position: String,
     pub round: u8,
     pub history: HashMap<String, PlayerHistorySeason>,
+    pub player_rank: Option<String>,
 }
 impl Keepable {
     pub fn cost<T: Into<String>>(&self, season: T) -> Option<String> {
@@ -114,6 +166,7 @@ pub struct KeeperStatus {
     pub draft_round: Option<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PlayerHistorySeason {
     pub season: String,

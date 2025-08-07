@@ -1,9 +1,8 @@
-use std::{error::Error, fs};
 mod data;
 
 use scraper::{Html, Selector};
 
-use crate::fantasypros::data::ECRResponse;
+pub use data::ECRResponse;
 
 const DEFAULT_BASE_URL: &str = "https://www.fantasypros.com";
 const USER_AGENT: &str =
@@ -28,11 +27,14 @@ impl Client {
         }
     }
     pub async fn fetch_ecr_half_ppr(&self) -> Result<ECRResponse, FantasyProsError> {
-        let resp = reqwest::get(format!(
-            "{base_url}/nfl/rankings/half-point-ppr-cheatsheets.php",
-            base_url = self.base_url
-        ))
-        .await?;
+        let resp = self
+            .cli
+            .get(format!(
+                "{base_url}/nfl/rankings/half-point-ppr-cheatsheets.php",
+                base_url = self.base_url
+            ))
+            .send()
+            .await?;
         let html = resp.text().await?;
         parse_html(html)
     }

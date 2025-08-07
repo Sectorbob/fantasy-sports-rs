@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 const YOUTUBE_API_V3_BASE_URL: &str = "https://www.googleapis.com/youtube/v3";
 
-const MAX_PAGE_RESULTS: u32 = 50; // Maximum results per page for YouTube API
+// const MAX_PAGE_RESULTS: u32 = 50; // Maximum results per page for YouTube API
 const MAX_PAGE_RESULTS_STR: &str = "50"; // String representation for query parameters
 
 const SEARCH_CREDITS: usize = 100; // Credits consumed for search operations

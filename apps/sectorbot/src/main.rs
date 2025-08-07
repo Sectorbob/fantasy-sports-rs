@@ -169,6 +169,7 @@ async fn setup_discord_bot(
         .event_handler(Handler {
             yt_client: Arc::clone(&app_context.yt_client),
             events_receiver: Arc::new(Mutex::new(events_receiver)),
+            ecr_service: ecr::service::Service::new(),
         })
         .await?;
 
