@@ -192,25 +192,47 @@ impl EventHandler for Handler {
 const MAX_MESSAGE_LEN: usize = 2000;
 const CODE_MAX_CONTENT_LEN: usize = MAX_MESSAGE_LEN - 8;
 const CODE_PFX: &str = "```\n";
-const CODE_SFX: &str = "\n```";
+const CODE_SFX: &str = "```";
 
 async fn send_as_code<T: Into<String>>(ctx: &Context, msg: &Message, text: T) {
-    let mut text: String = text.into();
+    let text: String = text.into();
 
-    text.truncate(CODE_MAX_CONTENT_LEN);
+    let mut line_iterator = text.lines();
 
-    // let active_message = String::from(CODE_PFX);
-
-    // for line in text.lines() {
-
-    // }
-
-    if let Err(why) = msg
-        .channel_id
-        .say(&ctx.http, format!("{CODE_PFX}{text}{CODE_SFX}"))
-        .await
-    {
-        log::error!("Error sending message: {why:?}");
+    let mut messages_to_send: Vec<String> = vec![];
+    let mut line = line_iterator.next();
+    while let Some(line_text) = line {
+        let mut active_message = String::from("");
+        let mut space_left = CODE_MAX_CONTENT_LEN;
+        let mut line_text = line_text;
+        let mut lines = 0;
+        while line.is_some() && space_left > line_text.len() {
+            active_message.push_str(line_text);
+            active_message.push('\n');
+            lines = lines + 1;
+            space_left = space_left - line_text.len() - 1;
+            line = line_iterator.next();
+            if let Some(tmp) = line.clone() {
+                line_text = tmp;
+            }
+        }
+        // send
+        if log::log_enabled!(log::Level::Debug) {
+            log::debug!("lines in message: {lines}");
+            log::debug!("characters in message: {}", active_message.len());
+            log::debug!("message: {active_message}");
+        }
+        messages_to_send.push(active_message);
+    }
+    for text in messages_to_send {
+        if let Err(why) = msg
+            .channel_id
+            .say(&ctx.http, format!("{CODE_PFX}{text}{CODE_SFX}"))
+            .await
+        {
+            log::error!("Error sending message: {why:?}");
+            break;
+        }
     }
 }
 
