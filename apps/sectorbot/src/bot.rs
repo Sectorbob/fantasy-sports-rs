@@ -5,6 +5,7 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 
+use sleeper_fantasy_rs::custom::Standings;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -64,6 +65,38 @@ impl EventHandler for Handler {
                     let mut text_report = keepables_report.text_report();
                     text_report.truncate(2000);
                     if let Err(why) = msg.channel_id.say(&ctx.http, text_report).await {
+                        log::error!("Error sending message: {why:?}");
+                    }
+                }
+            }
+        }
+        if msg.content == "!draftorder" {
+            match Standings::from_sleeper(LEAGUE_ID).await {
+                Ok(standings) => {
+                    let order = standings.randomize_bucketed_draft_order();
+                    match Standings::visualize_draft_order(order).await {
+                        Ok(text) => {
+                            if let Err(why) = msg.channel_id.say(&ctx.http, text).await {
+                                log::error!("Error sending message: {why:?}");
+                            }
+                        }
+                        Err(err) => {
+                            if let Err(why) = msg
+                                .channel_id
+                                .say(&ctx.http, "failed to visualize draft order")
+                                .await
+                            {
+                                log::error!("Error sending message: {why:?}");
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    if let Err(why) = msg
+                        .channel_id
+                        .say(&ctx.http, "failed to make draft order")
+                        .await
+                    {
                         log::error!("Error sending message: {why:?}");
                     }
                 }
