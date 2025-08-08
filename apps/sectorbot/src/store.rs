@@ -1,9 +1,9 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::US::Pacific;
-use sleeper_fantasy_rs::User as SleeperUser;
 use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sleeper_fantasy_rs::User as SleeperUser;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -69,24 +69,14 @@ impl DataStore {
         Ok(())
     }
 
+    pub fn delete_feed(&self, id: i64) -> Result<(), Box<dyn std::error::Error>> {
+        let _old_entry = self.feeds.remove(id.to_string())?;
+        self.feeds.flush()?;
+        Ok(())
+    }
+
     pub fn list_feeds(&self) -> Result<Vec<Feed>, Box<dyn std::error::Error>> {
-        let mut feeds = Vec::new();
-        for item in self.feeds.iter() {
-            if let Ok((key, value)) = item {
-                match serde_json::from_slice::<Feed>(&value) {
-                    Ok(feed) => feeds.push(feed),
-                    Err(e) => {
-                        log::error!(
-                            "Failed to deserialize feed({k}): {e}. value: {v}",
-                            k = String::from_utf8_lossy(&key),
-                            v = String::from_utf8_lossy(&value),
-                        );
-                        continue;
-                    }
-                }
-            }
-        }
-        Ok(feeds)
+        DataStore::list_collection(&self.feeds, "feed")
     }
     // Add methods to interact with the store as needed
 
@@ -147,6 +137,33 @@ impl DataStore {
         self.leagues.insert(league.guild_id.to_string(), data)?;
         self.leagues.flush()?;
         Ok(())
+    }
+
+    pub fn list_leagues(&self) -> Result<Vec<League>, Box<dyn std::error::Error>> {
+        DataStore::list_collection(&self.leagues, "league")
+    }
+
+    fn list_collection<T: for<'de> Deserialize<'de>>(
+        db: &sled::Db,
+        item_type: &'static str,
+    ) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+        let mut items = Vec::new();
+        for item in db.iter() {
+            if let Ok((key, value)) = item {
+                match serde_json::from_slice::<T>(&value) {
+                    Ok(feed) => items.push(feed),
+                    Err(e) => {
+                        log::error!(
+                            "Failed to deserialize ${item_type}({k}): {e}. value: {v}",
+                            k = String::from_utf8_lossy(&key),
+                            v = String::from_utf8_lossy(&value),
+                        );
+                        continue;
+                    }
+                }
+            }
+        }
+        Ok(items)
     }
 
     #[allow(dead_code)]
@@ -342,12 +359,18 @@ impl TryFrom<String> for ExternalId {
 }
 impl From<SleeperUser> for ExternalId {
     fn from(value: SleeperUser) -> Self {
-        ExternalId { platform: Some(Platform::Sleeper), id: value.user_id.clone() }
+        ExternalId {
+            platform: Some(Platform::Sleeper),
+            id: value.user_id.clone(),
+        }
     }
 }
 impl From<&SleeperUser> for ExternalId {
     fn from(value: &SleeperUser) -> Self {
-        ExternalId { platform: Some(Platform::Sleeper), id: value.user_id.clone() }
+        ExternalId {
+            platform: Some(Platform::Sleeper),
+            id: value.user_id.clone(),
+        }
     }
 }
 
@@ -483,7 +506,8 @@ impl League {
                     .map(|m| m.get(&current_league_platform))
                     .flatten()
                     .map(|id| ExternalId::new(current_league_platform, id.to_string()))
-            }).flatten()
+            })
+            .flatten()
     }
 }
 

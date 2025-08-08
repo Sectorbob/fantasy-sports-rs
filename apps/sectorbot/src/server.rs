@@ -11,7 +11,7 @@ use rss::Channel;
 
 use crate::{
     bot::AppContext,
-    store::{Feed, FeedEntry},
+    store::{Feed, FeedEntry, League},
 };
 
 pub async fn setup_and_listen(
@@ -23,10 +23,11 @@ pub async fn setup_and_listen(
         .route("/health", get(health_check))
         .route("/feeds", get(fetch_feeds))
         .route("/feeds/{feed_id}", get(fetch_rss_feed))
+        .route("/leagues", get(fetch_leagues))
         .layer(Extension(app_context));
     // Define the server address
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("Server running at http://{}", addr);
+    log::info!("HTTP Server listening on http://{}", addr);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
@@ -59,7 +60,7 @@ async fn fetch_feeds(
     match state.store.list_feeds() {
         Ok(feeds) => Ok(Json(feeds)),
         Err(err) => Err(AppError::CustomError(format!(
-            "failed to fetch_slates: {err}",
+            "failed to fetch_feeds: {err}",
         ))),
     }
 }
@@ -96,6 +97,17 @@ async fn fetch_rss_feed(
             .unwrap(),
     };
     response
+}
+
+async fn fetch_leagues(
+    Extension(state): Extension<Arc<AppContext>>,
+) -> Result<Json<Vec<League>>, AppError> {
+    match state.store.list_leagues() {
+        Ok(feeds) => Ok(Json(feeds)),
+        Err(err) => Err(AppError::CustomError(format!(
+            "failed to fetch_leagues: {err}",
+        ))),
+    }
 }
 
 #[allow(dead_code)]

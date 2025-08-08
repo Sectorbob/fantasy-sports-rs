@@ -96,6 +96,16 @@ impl Handler {
             s
         };
         let guild_id = &msg.guild_id;
+        let league_meta_data = guild_id
+            .map(|guild_id| {
+                self.store
+                    .get_league(guild_id.to_string())
+                    .inspect_err(|err| {
+                        log::warn!("can't find league for guild: {err}");
+                    })
+                    .ok()
+            })
+            .flatten();
         let mut guild_members = vec![];
         if let Some(guild_id) = guild_id {
             log::info!("fetching guild info for {}", guild_id);
@@ -115,20 +125,6 @@ impl Handler {
         let guild_members_string = if guild_members.is_empty() {
             na.clone()
         } else {
-            let league_meta_data = guild_id
-                .map(|guild_id| {
-                    self.store
-                        .get_league(guild_id.to_string())
-                        .inspect_err(|err| {
-                            log::warn!("can't find league for guild: {err}");
-                        })
-                        .ok()
-                })
-                .flatten();
-            // let member_map = guild_id.map(|guild_id| {
-            //     self.store.get_league(guild_id.to_string()).map(|l| l.member_map).ok()
-            // }).flatten().unwrap_or_default();
-
             let mut s = guild_members.len().to_string();
             for member in &guild_members {
                 let member_name = member.display_name();
@@ -143,6 +139,22 @@ impl Handler {
             s
         };
 
+        let league_history = league_meta_data.map_or(vec![], |league| {
+            let mut seasons: Vec<&i32> = league.league_id_map.keys().collect();
+            seasons.sort();
+            seasons
+                .into_iter()
+                .map(|season| {
+                    format!(
+                        "{season}: {}",
+                        league
+                            .league_id_map
+                            .get(season)
+                            .map_or(format!("{season}: N/A"), ExternalId::to_string)
+                    )
+                })
+                .collect()
+        });
         text.push_str(format!("Server ID:    {server_id}\n").as_str());
         text.push_str(format!("Server Name:  {server_name}\n").as_str());
         text.push_str(format!("Channel ID:   {channel_id}\n").as_str());
@@ -152,6 +164,10 @@ impl Handler {
         text.push_str(format!("League Size:  {league_size}\n").as_str());
         text.push_str(format!("League Owners:  {league_owners_string}\n").as_str());
         text.push_str(format!("Server Members: {guild_members_string}\n").as_str());
+        text.push_str(format!("History: {} seasons", league_history.len()).as_str());
+        for season in league_history {
+            text.push_str(format!("\n - {season}").as_str());
+        }
 
         send_as_code(&ctx, &msg, text).await;
         Ok(())
