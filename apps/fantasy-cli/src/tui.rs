@@ -1,12 +1,13 @@
 use crate::{
-    constants::SEASONS_TO_SCAN, data::League, data_fetch,
-    league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
+    constants::SEASONS_TO_SCAN, data_fetch, league_matchups_all::LeagueMatchupsTilesPage,
+    league_summary_page, leagues_page,
 };
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use fantasy_core_rs::League;
 use league_summary_page::LeagueSummaryPage;
 use leagues_page::LeaguesPage;
 use log::*;

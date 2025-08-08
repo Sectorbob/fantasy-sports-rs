@@ -1,5 +1,6 @@
 use std::io::{self, Stdout};
 
+use fantasy_core_rs::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -10,7 +11,8 @@ use tui::{
 };
 
 use crate::{
-    data::League, draft_picks_widget::DraftPicksWidget, settings_list_widget::SettingsListWidget,
+    draft_picks_widget::DraftPicksWidget, roster_widget::RosterWidget,
+    settings_list_widget::SettingsListWidget,
 };
 
 pub struct LeagueSummaryPage<'a> {
@@ -33,7 +35,7 @@ impl<'a> LeagueSummaryPage<'a> {
                 Some(l) => Some(DraftPicksWidget::from_league(
                     None,
                     l,
-                    l.roster_widget().map(|r| r.roster_id.clone()),
+                    RosterWidget::from_league(l).map(|r| r.roster_id.clone()),
                 )),
                 None => None,
             },
@@ -81,7 +83,7 @@ impl<'a> LeagueSummaryPage<'a> {
                             // Render league details in the first column
                             render_league_details(league, f, row);
                         } else if i == 0 && j == 1 {
-                            if let Some(roster_widget) = &league.roster_widget() {
+                            if let Some(roster_widget) = RosterWidget::from_league(&league) {
                                 // Render roster in the second column
                                 roster_widget.draw(f, row);
                             } else {

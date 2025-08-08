@@ -1,18 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+use fantasy_core_rs::{Draft, League};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use log::{error, info};
 use sleeper_fantasy_rs::{self as sleeper};
 use yahoo_fantasy_rs::{self as yahoo};
 
-use crate::{
-    config, data::{Draft, League}, sleeper_utils, yahoo_utils
-};
+use crate::{config, sleeper_utils, yahoo_utils};
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
 ) -> Result<Vec<League>, Box<dyn std::error::Error + Send + Sync>> {
-
     let sleeper_cache_dir = config::cache_dir().join("sleeper");
     // let yahoo_cache_dir = config::cache_dir().join("yahoo");
 

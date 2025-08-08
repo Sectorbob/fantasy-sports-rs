@@ -1,13 +1,12 @@
 use std::io::Stdout;
 
+use fantasy_core_rs::{DraftPick, League};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-
-use crate::data::{DraftPick, League};
 
 pub struct DraftPicksWidget {
     title_override: Option<String>,

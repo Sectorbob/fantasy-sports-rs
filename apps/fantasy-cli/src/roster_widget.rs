@@ -1,6 +1,6 @@
-use std::{collections::HashMap, io::Stdout};
-
+use fantasy_core_rs::{League, Player};
 use sleeper_fantasy_rs::User;
+use std::{collections::HashMap, io::Stdout};
 use tui::{
     backend::CrosstermBackend,
     layout::{self, Rect},
@@ -10,14 +10,43 @@ use tui::{
 };
 use yahoo_fantasy_rs;
 
-use crate::matchups_list_widget::Player;
-
 pub struct RosterWidget {
     pub team_name: String,
     pub roster_id: String,
     pub players: Vec<Player>,
 }
 impl RosterWidget {
+    pub fn from_league(league: &League) -> Option<Self> {
+        match league {
+            League::Sleeper {
+                draft: _,
+                draft_picks: _,
+                league: _,
+                matchups: _,
+                owners,
+                players,
+                rosters,
+                transactions: _,
+                user_id,
+            } => rosters
+                .iter()
+                .find(|r| &r.owner_id == user_id)
+                .map(|roster| RosterWidget::from_sleeper(roster, &owners, &players)),
+            League::Yahoo {
+                draft_results: _,
+                league: _,
+                matchups: _,
+                players: _,
+                rosters,
+                settings: _,
+                standings: _,
+                team,
+            } => rosters
+                .get(&team.team_id)
+                .map(|r| RosterWidget::from_yahoo(&team, r)),
+        }
+    }
+
     pub fn from_sleeper(
         roster: &sleeper_fantasy_rs::Roster,
         owners: &HashMap<String, User>,

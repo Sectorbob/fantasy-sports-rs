@@ -1,9 +1,9 @@
-use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
 };
 
+use fantasy_core_rs::Player;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
@@ -246,50 +246,3 @@ impl MatchupSide {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Player {
-    pub _id: String,
-    pub name: String,
-    pub positions: Vec<String>,
-    pub irl_team: Option<String>,
-}
-impl Player {
-    pub fn from_sleeper(sleeper_player: &sleeper_fantasy_rs::Player) -> Self {
-        Player {
-            _id: sleeper_player.player_id.clone(),
-            name: sleeper_player.to_string(),
-            positions: match sleeper_player.position.clone() {
-                Some(position) => vec![position.clone()],
-                None => vec![],
-            },
-            irl_team: sleeper_player.team.clone(),
-        }
-    }
-    pub fn from_yahoo(yahoo_player: &yahoo_fantasy_rs::Player) -> Self {
-        Player {
-            _id: yahoo_player.player_key.to_string(),
-            name: yahoo_player.name.full.to_string(),
-            positions: vec![yahoo_player.display_position.to_string()],
-            irl_team: Some(yahoo_player.editorial_team_abbr.to_string()),
-        }
-    }
-    pub fn missing(id: &String) -> Self {
-        Player {
-            _id: id.clone(),
-            name: format!("Missing Player ({})", id),
-            positions: vec![],
-            irl_team: None,
-        }
-    }
-}
-impl fmt::Display for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}] {} {}",
-            self.positions.join(","),
-            self.name,
-            self.irl_team.clone().unwrap_or("".to_string())
-        )
-    }
-}

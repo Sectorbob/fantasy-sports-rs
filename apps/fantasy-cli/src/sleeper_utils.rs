@@ -1,11 +1,9 @@
-use std::{collections::HashMap, error::Error, ops::Range};
-
 use futures::FutureExt;
 use log::{error, info};
-use serde_json::Number;
 use sleeper_fantasy_rs::{
     Client, League, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
 };
+use std::{collections::HashMap, error::Error, ops::Range};
 
 const START_WEEK: usize = 1;
 
@@ -175,21 +173,9 @@ async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport:
 fn determine_weeks_to_scan(league: &League) -> Range<usize> {
     let first_leg = START_WEEK;
     // leg, last_leg, last_scored_leg
-    let last_leg: Option<usize> = league
-        .settings
-        .get("last_leg")
-        .and_then(Number::as_u64)
-        .map(|n| n as usize);
-    let leg: Option<usize> = league
-        .settings
-        .get("leg")
-        .and_then(Number::as_u64)
-        .map(|n| n as usize);
-    let last_scored_leg: Option<usize> = league
-        .settings
-        .get("last_scored_leg")
-        .and_then(Number::as_u64)
-        .map(|n| n as usize);
+    let last_leg: Option<usize> = league.settings.last_leg.map(|n| n as usize);
+    let leg: Option<usize> = league.settings.leg.map(|n| n as usize);
+    let last_scored_leg: Option<usize> = league.settings.last_scored_leg.map(|n| n as usize);
     info!(
         "{} Sleeper League ({}): last_leg: {:?}",
         league.season, league.league_id, last_leg

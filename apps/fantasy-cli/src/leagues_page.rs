@@ -1,6 +1,7 @@
 use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
+use fantasy_core_rs::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -8,8 +9,6 @@ use tui::{
     terminal::CompletedFrame,
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
-
-use crate::data::League;
 
 pub struct LeaguesPage {
     leagues: Vec<League>,
@@ -33,7 +32,11 @@ impl<'a> LeaguesPage {
     }
 
     pub fn select_by_league_id(&mut self, league_id: String) {
-        self.selected = self.leagues.iter().position(|l| l.id() == league_id).unwrap()
+        self.selected = self
+            .leagues
+            .iter()
+            .position(|l| l.id() == league_id)
+            .unwrap()
     }
 
     pub fn selected(&self) -> Option<&League> {

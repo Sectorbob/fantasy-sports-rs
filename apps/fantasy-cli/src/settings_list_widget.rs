@@ -1,13 +1,12 @@
 use std::io::Stdout;
 
+use fantasy_core_rs::League;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-
-use crate::data::League;
 
 pub struct SettingsListWidget {
     title_override: Option<String>,

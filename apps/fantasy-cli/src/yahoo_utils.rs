@@ -293,6 +293,7 @@ async fn save_token_file(file: &String, token: Token) -> Result<(), IOError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     let auth_request_url = match client.get_request_auth_url().await {
         Ok(url) => url,
@@ -323,6 +324,7 @@ async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     Ok(token)
 }
 
+#[allow(dead_code)]
 async fn receive_auth_code_from_stdin() -> Result<String, IOError> {
     print!("Please enter the auth code: ");
     io::stdout().flush().await?;

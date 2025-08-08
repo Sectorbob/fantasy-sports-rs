@@ -1,5 +1,6 @@
 use std::io::Stdout;
 
+use fantasy_core_rs::League;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,7 +9,7 @@ use tui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::{data::League, matchups_list_widget::MatchupsList};
+use crate::matchups_list_widget::MatchupsList;
 
 pub struct LeagueMatchupsTilesPage {}
 impl LeagueMatchupsTilesPage {
