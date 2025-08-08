@@ -1,11 +1,9 @@
-use std::collections::{HashMap, HashSet};
-
-use rand::{rng, seq::SliceRandom};
-
 use crate::{
-    PlayoffBracketEntry,
+    Client, Error, PlayoffBracketEntry,
     data::{LeagueSettings, Matchup, Player, Roster, User},
 };
+use rand::{rng, seq::SliceRandom as _};
+use std::collections::{HashMap, HashSet};
 
 /// I want to place my own custom consumer code here
 ///
@@ -222,6 +220,35 @@ impl Standings {
             losers_bracket,
         }
     }
+    pub async fn from_sleeper<T: Into<String>>(league_id: T) -> Result<Self, Error> {
+        let client = Client::new(None);
+        let league_id: String = league_id.into();
+        let league_future = client.get_league(league_id.as_str());
+        // let rosters_future = client.get_rosters_for_league(league_id.as_str());
+        // let users_future = client
+        // .get_users_for_league(league_id.as_str());
+        // let roster_map = rosters_future.await?
+        //     .into_iter()
+        //     .map(|r| (r.roster_id, r))
+        //     .collect::<HashMap<u8, Roster>>();
+        // let user_map = users_future.await?
+        //     .into_iter()
+        //     .map(|u| (u.user_id.clone(), u))
+        //     .collect::<HashMap<String, User>>();
+        let league = league_future.await?;
+        let previous_league_id = league.previous_league_id.ok_or(Error::NotFound(format!(
+            "previous league does not exist for {league_id}"
+        )))?;
+        let previous_league = client.get_league(previous_league_id.as_str()).await?;
+        let previous_league_bracket = client
+            .get_playoff_bracket(previous_league.league_id.clone(), false)
+            .await?;
+        Ok(Standings::new(
+            previous_league.settings,
+            previous_league_bracket.matchups,
+            None,
+        ))
+    }
 
     pub fn list_playoff_roster_ids(&self) -> HashSet<u8> {
         self.winners_bracket
@@ -262,16 +289,48 @@ impl Standings {
         non_playoff_teams.extend(playoff_teams);
         non_playoff_teams
     }
+
+    pub async fn visualize_draft_order(draft_order_roster_ids: Vec<u8>) -> Result<String, Error> {
+        let client = Client::new(None);
+        let league_id = "2489066589662560510";
+        let roster_map = client
+            .get_rosters_for_league(league_id)
+            .await?
+            .into_iter()
+            .map(|r| (r.roster_id, r))
+            .collect::<HashMap<u8, Roster>>();
+        let user_map = client
+            .get_users_for_league(league_id)
+            .await?
+            .into_iter()
+            .map(|u| (u.user_id.clone(), u))
+            .collect::<HashMap<String, User>>();
+        let mut text = String::new();
+        for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
+            let slot = i + 1;
+            let roster = roster_map.get(roster_id).unwrap();
+            let user = user_map.get(roster.owner_id.as_str()).unwrap();
+            text.push_str(format!("{slot}: {}", user.display_name).as_str());
+            text.push('\n');
+        }
+        Ok(text)
+    }
 }
 
 #[cfg(test)]
 mod custom_tests {
     use std::{
-        collections::HashMap, ffi::OsStr, fs::{self, File}, io::BufReader, path::Path
+        collections::HashMap,
+        ffi::OsStr,
+        fs::{self, File},
+        io::BufReader,
+        path::Path,
     };
 
     use crate::{
-        custom::Standings, data::{LeagueSettings, LeagueType, PlayoffType, WaiverType}, Client, League, LeagueStatus, Roster, User
+        Client, League, LeagueStatus, Roster, User,
+        custom::Standings,
+        data::{LeagueSettings, LeagueType, PlayoffType, WaiverType},
     };
 
     fn load_all_testdata_leagues() -> Vec<League> {
@@ -437,7 +496,6 @@ mod custom_tests {
     async fn test_randomize_bucketed_draft_order() {
         let client = Client::new(None);
         let league_id = "2489066589662560510";
-        let league = client.get_league(league_id).await.unwrap();
         let roster_map = client
             .get_rosters_for_league(league_id)
             .await
@@ -452,22 +510,12 @@ mod custom_tests {
             .into_iter()
             .map(|u| (u.user_id.clone(), u))
             .collect::<HashMap<String, User>>();
-        let previous_league = client
-            .get_league(league.previous_league_id.unwrap())
+        let standings = Standings::from_sleeper(league_id)
             .await
-            .unwrap();
-        let previous_league_bracket = client
-            .get_playoff_bracket(previous_league.league_id.clone(), false)
-            .await
-            .unwrap();
-        let standings = Standings::new(
-            previous_league.settings,
-            previous_league_bracket.matchups,
-            None,
-        );
+            .expect("failed to fetch sleeper standings data");
         let draft_order_roster_ids = standings.randomize_bucketed_draft_order();
-        for (i,roster_id) in draft_order_roster_ids.iter().enumerate() {
-            let slot = i+1;
+        for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
+            let slot = i + 1;
             let roster = roster_map.get(roster_id).unwrap();
             let user = user_map.get(roster.owner_id.as_str()).unwrap();
             println!("{slot}: {}", user.display_name)
