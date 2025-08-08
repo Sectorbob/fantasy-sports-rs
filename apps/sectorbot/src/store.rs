@@ -72,13 +72,14 @@ impl DataStore {
     pub fn list_feeds(&self) -> Result<Vec<Feed>, Box<dyn std::error::Error>> {
         let mut feeds = Vec::new();
         for item in self.feeds.iter() {
-            if let Ok((_key, value)) = item {
+            if let Ok((key, value)) = item {
                 match serde_json::from_slice::<Feed>(&value) {
                     Ok(feed) => feeds.push(feed),
                     Err(e) => {
                         log::error!(
-                            "Failed to deserialize feed: {e}. value: {}",
-                            String::from_utf8_lossy(&value)
+                            "Failed to deserialize feed({k}): {e}. value: {v}",
+                            k = String::from_utf8_lossy(&key),
+                            v = String::from_utf8_lossy(&value),
                         );
                         continue;
                     }
@@ -143,8 +144,8 @@ impl DataStore {
 
     pub fn save_league(&self, league: &League) -> Result<(), Box<dyn std::error::Error>> {
         let data = serde_json::to_vec(league)?;
-        self.feeds.insert(league.guild_id.to_string(), data)?;
-        self.feeds.flush()?;
+        self.leagues.insert(league.guild_id.to_string(), data)?;
+        self.leagues.flush()?;
         Ok(())
     }
 
