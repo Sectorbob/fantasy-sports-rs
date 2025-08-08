@@ -7,8 +7,6 @@ use sleeper_fantasy_rs::User as SleeperUser;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::ecr::service::ECRError;
-
 const DEFAULT_DESTINATION_PLATFORM: Platform = Platform::Discord;
 const DEFAULT_SOURCE_PLATFORM: Platform = Platform::Twitter;
 
@@ -62,21 +60,21 @@ impl DataStore {
             })
     }
 
-    pub fn save_feed(&self, feed: &Feed) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_feed(&self, feed: &Feed) -> Result<(), DataStoreError> {
         let data = serde_json::to_vec(feed)?;
         self.feeds.insert(feed.id.to_string(), data)?;
         self.feeds.flush()?;
         Ok(())
     }
 
-    pub fn delete_feed(&self, id: i64) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn delete_feed(&self, id: i64) -> Result<(), DataStoreError> {
         let _old_entry = self.feeds.remove(id.to_string())?;
         self.feeds.flush()?;
         Ok(())
     }
 
-    pub fn list_feeds(&self) -> Result<Vec<Feed>, Box<dyn std::error::Error>> {
-        DataStore::list_collection(&self.feeds, "feed")
+    pub fn list_feeds(&self) -> Result<Vec<Feed>, DataStoreError> {
+        DataStore::list_collection(&self.feeds)
     }
     // Add methods to interact with the store as needed
 
@@ -115,52 +113,33 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn get_league<T: Into<String>>(
-        &self,
-        guild_id: T,
-    ) -> Result<League, Box<dyn std::error::Error>> {
+    pub fn get_league<T: Into<String>>(&self, guild_id: T) -> Result<League, DataStoreError> {
         let guild_id: String = guild_id.into();
-
         let bytes = self
             .leagues
-            .get(guild_id.as_str())
-            .map_err(|err| Box::new(err))?
-            .ok_or(Box::new(ECRError::NotFound(format!(
-                "unable to find league metadata for discord guild: {guild_id}"
-            ))))?;
-        let value = serde_json::from_slice::<League>(&bytes).map_err(|err| Box::new(err))?;
-        Ok(value)
+            .get(guild_id.as_str())?
+            .ok_or(DataStoreError::ElementNotFound(guild_id))?;
+        Ok(serde_json::from_slice::<League>(&bytes)?)
     }
 
-    pub fn save_league(&self, league: &League) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_league(&self, league: &League) -> Result<(), DataStoreError> {
         let data = serde_json::to_vec(league)?;
         self.leagues.insert(league.guild_id.to_string(), data)?;
         self.leagues.flush()?;
         Ok(())
     }
 
-    pub fn list_leagues(&self) -> Result<Vec<League>, Box<dyn std::error::Error>> {
-        DataStore::list_collection(&self.leagues, "league")
+    pub fn list_leagues(&self) -> Result<Vec<League>, DataStoreError> {
+        DataStore::list_collection(&self.leagues)
     }
 
     fn list_collection<T: for<'de> Deserialize<'de>>(
         db: &sled::Db,
-        item_type: &'static str,
-    ) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<T>, DataStoreError> {
         let mut items = Vec::new();
         for item in db.iter() {
-            if let Ok((key, value)) = item {
-                match serde_json::from_slice::<T>(&value) {
-                    Ok(feed) => items.push(feed),
-                    Err(e) => {
-                        log::error!(
-                            "Failed to deserialize ${item_type}({k}): {e}. value: {v}",
-                            k = String::from_utf8_lossy(&key),
-                            v = String::from_utf8_lossy(&value),
-                        );
-                        continue;
-                    }
-                }
+            if let Ok((_key, value)) = item {
+                items.push(serde_json::from_slice::<T>(&value)?);
             }
         }
         Ok(items)
@@ -172,12 +151,10 @@ impl DataStore {
         guild_id: G,
         member_id: M,
         external_user_id: ExternalId,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let platform = &external_user_id
-            .platform
-            .ok_or(ECRError::Unknown(String::from(
-                "cannot set league user id mapping without external id platform",
-            )))?;
+    ) -> Result<(), DataStoreError> {
+        let platform = &external_user_id.platform.ok_or(DataStoreError::DevError(
+            "cannot set league user id mapping without external id platform".into(),
+        ))?;
 
         let guild_id = guild_id.into();
         let member_id = member_id.into();
@@ -207,6 +184,21 @@ impl DataStore {
         }
         Ok(())
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum DataStoreError {
+    #[error("element not found {0}")]
+    ElementNotFound(String),
+
+    #[error("failed to fetch from sleeper {0}")]
+    SledError(#[from] sled::Error),
+
+    #[error("failed to deserialize item: {0}")]
+    SerdeError(#[from] serde_json::Error),
+
+    #[error("failed to deserialize item: {0}")]
+    DevError(String),
 }
 
 fn today_pacific() -> NaiveDate {

@@ -1,33 +1,35 @@
 use std::{
     collections::{HashMap, HashSet},
+    sync::Arc,
     u64,
 };
 
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
 use serde::{Deserialize, Serialize};
-use sleeper_fantasy_rs::{Draft, DraftPick, League, Player, Roster, Sport, User};
+use sleeper_fantasy_rs::{
+    Draft, DraftPick, League as SleeperLeague, Player, Roster, Sport, User as SleeperUser,
+};
 
 use crate::{
     ecr::keepers::{Keepable, KeepablesReport, get_keeper_status, get_player_history},
     fantasypros,
+    store::{DataStore, DataStoreError, ExternalId, League},
 };
 
 pub const LEAGUE_ID: &str = "2489066589662560510";
 pub const SPORT: Sport = Sport::NFL;
 
 pub struct Service {
-    league_id: String,
-    sport: Sport,
     sleeper_cli: sleeper_fantasy_rs::Client,
     fantasypros_cli: fantasypros::Client,
+    store: Arc<DataStore>,
 }
 impl Service {
-    pub fn new() -> Self {
+    pub fn new(store_arc: &Arc<DataStore>) -> Self {
         Service {
-            league_id: LEAGUE_ID.to_string(),
-            sport: SPORT,
             sleeper_cli: sleeper_fantasy_rs::Client::new(None),
             fantasypros_cli: fantasypros::Client::new(),
+            store: Arc::clone(store_arc),
         }
     }
 
@@ -43,7 +45,7 @@ impl Service {
         let rosters_future = self.sleeper_cli.get_rosters_for_league(league_id.clone());
         let users_future = self.sleeper_cli.get_users_for_league(league_id.clone());
         let league = league_future.await?;
-        let draft_history = self.fetch_all_draft_history(league.clone()).await?;
+        let draft_history = self.fetch_all_draft_history_sleeper(league.clone()).await?;
         let mut players = players_future.await?;
         let rosters = rosters_future.await?;
         let users = users_future.await?;
@@ -93,17 +95,18 @@ impl Service {
                 .users
                 .iter()
                 .find(|u| u.user_id == roster.owner_id)
-                .map(User::clone)
+                .map(SleeperUser::clone)
                 .unwrap_or_else(|| {
                     log::warn!("for some reason, we could not find the user info {user_id} for roster({roster_id})",user_id =roster.owner_id, roster_id = roster.roster_id);
-                    User {
-                    username: None,
-                    user_id: roster.owner_id.clone(),
-                    display_name: format!("Unknown User({})", roster.owner_id),
-                    avatar: None,
-                    league_details: None,
-                    other_data: HashMap::new(),
-                }});
+                    SleeperUser {
+                        username: None,
+                        user_id: roster.owner_id.clone(),
+                        display_name: format!("Unknown User({})", roster.owner_id),
+                        avatar: None,
+                        league_details: None,
+                        other_data: HashMap::new(),
+                    }
+                });
             log::debug!("User: {}", user.display_name);
             for player_id in &roster.players {
                 let (player_name, player_pos, player_team) =
@@ -175,7 +178,10 @@ impl Service {
         })
     }
 
-    async fn fetch_all_draft_history(&self, league: League) -> Result<Vec<DraftResult>, ECRError> {
+    async fn fetch_all_draft_history_sleeper(
+        &self,
+        league: SleeperLeague,
+    ) -> Result<Vec<DraftResult>, ECRError> {
         let mut drafts: Vec<DraftResult> = vec![];
         let mut draft_futures = vec![];
         let mut current_league = league;
@@ -228,6 +234,69 @@ impl Service {
             } //Err(ECRError::UndeterminableDraft(league_id)),
         }
     }
+
+    pub fn fetch_league_metadata<T: Into<String>>(
+        &self,
+        league_id: T,
+    ) -> Result<League, DataStoreError> {
+        self.store.get_league(league_id.into()).inspect_err(|err| {
+            log::warn!("can't find league for guild: {err}");
+        })
+    }
+
+    pub async fn fetch_external_league_info<T: Into<ExternalId>>(
+        &self,
+        league_id: T,
+    ) -> Result<SleeperLeague, ECRError> {
+        let league_id: ExternalId = league_id.into();
+        match &league_id.platform {
+            Some(platform) => match platform {
+                // crate::store::Platform::Discord => todo!(),
+                crate::store::Platform::Sleeper => {
+                    Ok(self.sleeper_cli.get_league(league_id.id.as_str()).await?)
+                }
+                // TODO: crate::store::Platform::Yahoo => todo!(),
+                other => Err(ECRError::Unknown(format!(
+                    "league_id platform not implemented: {other}"
+                ))),
+            },
+            None => Err(ECRError::Unknown("league_id platform not set".into())),
+        }
+    }
+
+    pub async fn fetch_external_league_owners<T: Into<ExternalId>>(
+        &self,
+        league_id: T,
+    ) -> Result<Vec<SleeperUser>, ECRError> {
+        let league_id: ExternalId = league_id.into();
+        match &league_id.platform {
+            Some(platform) => match platform {
+                // crate::store::Platform::Discord => todo!(),
+                crate::store::Platform::Sleeper => Ok(self
+                    .sleeper_cli
+                    .get_users_for_league(league_id.id.as_str())
+                    .await?),
+                // TODO: crate::store::Platform::Yahoo => todo!(),
+                other => Err(ECRError::Unknown(format!(
+                    "league_id platform not implemented: {other}"
+                ))),
+            },
+            None => Err(ECRError::Unknown("league_id platform not set".into())),
+        }
+    }
+
+    pub fn save_user_mapping<T: Into<String>, U: Into<String>>(
+        &self,
+        guild_id: T,
+        user_discord_id: U,
+        external_id: ExternalId,
+    ) -> Result<(), DataStoreError> {
+        self.store.set_league_user_mapping(
+            guild_id.into(),
+            user_discord_id.into().as_str(),
+            external_id,
+        )
+    }
 }
 
 /// This function will look through provided sleeper league data structures and
@@ -272,11 +341,11 @@ pub struct DraftResult {
 pub struct KeepablesContext {
     #[serde(with = "ts_milliseconds")]
     pub fetched_at: DateTime<Utc>,
-    pub current_league: League,
+    pub current_league: SleeperLeague,
     pub draft_history: HashMap<String, DraftResult>,
     pub players: HashMap<String, Player>,
     pub rosters: Vec<Roster>,
-    pub users: Vec<User>,
+    pub users: Vec<SleeperUser>,
     pub rankings: fantasypros::ECRResponse,
 }
 
@@ -304,14 +373,17 @@ mod tests {
     use std::error::Error;
     use std::fs::File;
     use std::io::{self, BufReader};
+    use std::sync::Arc;
     use tokio::fs::{self};
 
     use crate::ecr::keepers::Keepable;
     use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
+    use crate::store::DataStore;
 
     #[tokio::test]
     async fn test_get_keepables_report() {
-        let svc = Service::new();
+        let store = Arc::new(DataStore::new());
+        let svc = Service::new(&store);
 
         let keepables_context: KeepablesContext = load_keepables_context_testdata()
             .await

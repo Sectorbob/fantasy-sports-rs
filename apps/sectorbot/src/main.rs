@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             log::error!("Failed to list feeds: {}", e);
-            return Err(e);
+            return Err(e.into());
         }
     }
 
@@ -67,14 +67,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.yt_api_key.clone(),
         None, // You can pass a custom HTTP client here if needed
     );
-    let sleeper_cli = sleeper_fantasy_rs::Client::new(None);
 
     let app_context = Arc::new(AppContext {
         config,
         store: Arc::new(store),
         new_tweets_sender: tx,
         yt_client: Arc::new(yt_client),
-        sleeper_cli: Arc::new(sleeper_cli),
     });
 
     let server_handle = tokio::spawn({
@@ -174,9 +172,7 @@ async fn setup_discord_bot(
         .event_handler(Handler {
             yt_client: Arc::clone(&app_context.yt_client),
             events_receiver: Arc::new(Mutex::new(events_receiver)),
-            ecr_service: ecr::service::Service::new(),
-            sleeper_cli: sleeper_fantasy_rs::Client::new(None),
-            store: Arc::clone(&app_context.store),
+            ecr_service: ecr::service::Service::new(&app_context.store),
         })
         .await?;
 

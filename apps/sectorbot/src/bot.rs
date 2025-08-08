@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::config::Config;
 use crate::ecr;
 use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
-use crate::store::{self, DataStore, ExternalId, FeedEvent};
+use crate::store::{self, ExternalId, FeedEvent, League};
 use crate::yt::YoutubeClient;
 
 const TEST_SERVER_ID: u64 = 0;
@@ -21,7 +21,6 @@ pub struct AppContext {
     pub store: Arc<store::DataStore>,
     pub new_tweets_sender: Sender<FeedEvent>,
     pub yt_client: Arc<crate::yt::YoutubeClient>,
-    pub sleeper_cli: Arc<sleeper_fantasy_rs::Client>,
 }
 impl Drop for AppContext {
     fn drop(&mut self) {}
@@ -31,8 +30,7 @@ pub struct Handler {
     pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
     pub ecr_service: ecr::service::Service,
-    pub sleeper_cli: sleeper_fantasy_rs::Client,
-    pub store: Arc<DataStore>,
+    // pub sleeper_cli: sleeper_fantasy_rs::Client,
 }
 impl Handler {
     async fn process_health_command(&self, ctx: &Context, msg: &Message) -> Result<(), ECRError> {
@@ -56,24 +54,47 @@ impl Handler {
             .name(&ctx.http)
             .await
             .map_or(na.clone(), |name| name);
-        let server_id = msg.guild_id.map(|id| id.to_string()).unwrap_or(na.clone());
+
+        let guild_id = &msg.guild_id;
+        let league_meta_data = guild_id
+            .map(|guild_id| {
+                self.ecr_service
+                    .fetch_league_metadata(guild_id.to_string())
+                    .inspect_err(|err| {
+                        log::warn!("can't find league for guild: {err}");
+                    })
+                    .ok()
+            })
+            .flatten();
+
+        let server_id = guild_id.map(|id| id.to_string()).unwrap_or(na.clone());
         let server_name = msg
             .guild(&ctx.cache)
             .map(|guild| guild.name.clone())
             .unwrap_or(na.clone());
-        let league_id = Handler::league_id_for_server(server_id.as_str());
-        let league = if let Some(league_id) = league_id {
-            self.sleeper_cli.get_league(league_id).await.ok()
-        } else {
-            None
-        };
-        let league_owners = if let Some(league) = &league {
-            self.sleeper_cli
-                .get_users_for_league(league.league_id.as_str())
+
+        let league_id = league_meta_data
+            .as_ref()
+            .map(League::current_league_id)
+            .flatten();
+        let league = match &league_id {
+            Some(league_id) => self
+                .ecr_service
+                .fetch_external_league_info(league_id.clone())
                 .await
-                .map_or_else(|err| vec![], |owners| owners)
-        } else {
-            vec![]
+                .inspect_err(|err| log::warn!("external league not found: {err}"))
+                .ok(),
+            None => None,
+        };
+        let league_owners = match league_id {
+            Some(league_id) => self
+                .ecr_service
+                .fetch_external_league_owners(league_id.clone())
+                .await
+                .inspect_err(|err| log::warn!("external league users not found: {err}"))
+                .ok()
+                .unwrap_or_default(),
+            None => vec![],
         };
         let league_id = league
             .as_ref()
@@ -95,17 +116,7 @@ impl Handler {
             }
             s
         };
-        let guild_id = &msg.guild_id;
-        let league_meta_data = guild_id
-            .map(|guild_id| {
-                self.store
-                    .get_league(guild_id.to_string())
-                    .inspect_err(|err| {
-                        log::warn!("can't find league for guild: {err}");
-                    })
-                    .ok()
-            })
-            .flatten();
+
         let mut guild_members = vec![];
         if let Some(guild_id) = guild_id {
             log::info!("fetching guild info for {}", guild_id);
@@ -205,51 +216,25 @@ impl Handler {
         member: &Member,
     ) -> Result<ExternalId, ECRError> {
         // perform a sleeper username lookup
-        match &league_id.platform {
-            Some(platform) => match platform {
-                store::Platform::Sleeper => self
-                    .sleeper_cli
-                    .get_users_for_league(league_id.id.as_str())
-                    .await
-                    .inspect_err(|err| {
-                        log::warn!("unable to fetch league users: {err}");
-                        return;
-                    })
-                    .map(|users| {
-                        users
-                            .into_iter()
-                            .find(|user| user.display_name == member.user.display_name())
-                    })?
-                    .map(ExternalId::from)
-                    .ok_or_else(|| {
-                        ECRError::NotFound(format!("did not match a user in sleeper league"))
-                    }),
-                store::Platform::Yahoo => {
-                    log::warn!("yahoo not yet implemented");
-                    Err(ECRError::Unknown(format!(
-                        "league_id yahoo platform not yet implemented: {league_id}"
-                    )))
-                }
-                _ => Err(ECRError::Unknown(format!(
-                    "league_id is not a proper platform: {league_id}"
-                ))),
-            },
-            None => Err(ECRError::Unknown(format!(
-                "league_id does not refer to a platform: {league_id}"
-            ))),
-        }
+
+        self.ecr_service
+            .fetch_external_league_owners(league_id.clone())
+            .await
+            .inspect_err(|err| {
+                log::warn!("unable to fetch league users: {err}");
+                return;
+            })
+            .map(|users| {
+                users
+                    .into_iter()
+                    .find(|user| user.display_name == member.user.display_name())
+            })?
+            .map(ExternalId::from)
+            .ok_or_else(|| ECRError::NotFound(format!("did not match a user in sleeper league")))
     }
 
     fn is_permitted(ctx: &Context, msg: &Message) -> bool {
         msg.author.id.get() == SECTORBOB_DISCORD_USER_ID
-    }
-
-    fn league_id_for_server<T: Into<String>>(server_id: T) -> Option<String> {
-        let server_id = server_id.into();
-        match server_id.as_str() {
-            "4259898555563580599" => Some("2489066589662560510".to_string()),
-            _ => None,
-        }
     }
 }
 
@@ -402,7 +387,7 @@ impl EventHandler for Handler {
         let member_user_id = new_member.user.id.to_string();
 
         // lookup league
-        let league = match self.store.get_league(guild_id.to_string()) {
+        let league = match self.ecr_service.fetch_league_metadata(guild_id.to_string()) {
             Ok(league) => league,
             Err(err) => {
                 log::warn!("unable to find league for guild: {err}");
@@ -421,11 +406,13 @@ impl EventHandler for Handler {
                     .await
                 {
                     // found a match, now update the DataStore
-                    self.store.set_league_user_mapping(
+                    if let Err(err) = self.ecr_service.save_user_mapping(
                         guild_id.to_string(),
-                        member_user_id.as_str(),
+                        member_user_id,
                         external_user_id,
-                    );
+                    ) {
+                        log::error!("failed to set user mapping in datastore: {err}");
+                    }
                 }
             }
         }
