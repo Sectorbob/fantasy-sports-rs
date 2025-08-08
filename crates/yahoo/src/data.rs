@@ -62,7 +62,7 @@ pub(crate) struct Leagues {
     pub leagues: Vec<League>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct League {
     pub league_key: LeagueKey,
     pub league_id: String,
@@ -100,7 +100,7 @@ pub struct League {
     pub weekly_deadline: Option<Value>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DraftStatus {
     PreDraft,
@@ -110,13 +110,13 @@ pub enum DraftStatus {
     // Other(String),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DraftResults {
     #[serde(rename = "draft_result")]
     pub draft_results: Vec<DraftResult>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DraftResult {
     pub pick: u32,
     pub round: u32,
@@ -145,13 +145,13 @@ impl<'de> Deserialize<'de> for PlayerKey {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Scoreboard {
     pub week: u32,
     pub matchups: Matchups,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Settings {
     pub draft_type: String,   // known values: live
     pub scoring_type: String, // known values: head
@@ -168,19 +168,19 @@ pub struct Settings {
     pub divisions: Option<Divisions>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub(crate) struct Divisions {
     #[serde(rename = "division")]
     pub divisions: Vec<Division>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Division {
     division_id: u32,
     name: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Standings {
     #[serde(rename = "teams")]
     _teams: Teams,
@@ -191,13 +191,13 @@ impl Standings {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Matchups {
     #[serde(rename = "matchup")]
     pub matchups: Vec<Matchup>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Matchup {
     pub week: Option<u32>,
     pub status: String, // known values: postevent
@@ -462,13 +462,13 @@ pub struct User {
 
 //endregion
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Teams {
     #[serde(rename = "team", default)]
     pub teams: Vec<Team>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Team {
     pub team_key: TeamKey,
     pub team_id: u32,
@@ -504,25 +504,25 @@ impl Team {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 struct TeamLogos {
     #[serde(rename = "team_logo", default)]
     pub team_logos: Vec<TeamLogo>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TeamLogo {
     pub size: String,
     pub url: String,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 struct Managers {
     #[serde(rename = "manager", default)]
     pub managers: Vec<Manager>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Manager {
     pub manager_id: u32,
     pub nickname: String,
@@ -534,7 +534,7 @@ pub struct Manager {
     pub felo_tier: Option<FeloTier>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum FeloTier {
     Diamond,
@@ -544,7 +544,7 @@ pub enum FeloTier {
     Bronze,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TeamPoints {
     pub coverage_type: String, // known values: season, week
     pub season: Option<String>,
@@ -553,7 +553,7 @@ pub struct TeamPoints {
     pub total: Option<f32>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TeamStandings {
     #[serde(deserialize_with = "empty_string_as_none")]
     pub rank: Option<u32>,
@@ -564,7 +564,7 @@ pub struct TeamStandings {
     pub points_against: f32,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Roster {
     pub coverage_type: String, // date or week
     pub date: Option<String>,
@@ -574,7 +574,7 @@ pub struct Roster {
     pub players: Players,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct OutcomeTotals {
     pub wins: u32,
     pub losses: u32,
@@ -583,20 +583,20 @@ pub struct OutcomeTotals {
     pub percentage: Option<f32>,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Streak {
     #[serde(rename = "type")]
     _type: String,
     value: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Transactions {
     #[serde(rename = "transaction")]
     pub transactions: Vec<Transaction>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Transaction {
     Commish {
         transaction_key: String,
@@ -789,13 +789,13 @@ impl<'de> Deserialize<'de> for Transaction {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Players {
     #[serde(rename = "player", default)]
     pub players: Vec<Player>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 
 pub struct Player {
     pub player_key: PlayerKey,
@@ -824,13 +824,13 @@ pub struct Player {
     pub transaction_data: Option<TransactionData>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Weeks {
     #[serde(rename = "week")]
     pub weeks: Vec<String>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct KeeperSummary {
     // #[serde(default)]
     pub status: String, // Option<bool>,
@@ -839,7 +839,7 @@ pub struct KeeperSummary {
     pub kept: String, // Option<bool>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Headshot {
     pub url: String,
     pub size: String,
@@ -847,7 +847,7 @@ pub struct Headshot {
 
 // pub struct PlayerKey {}
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct PlayerName {
     pub full: String,
     pub first: String,
@@ -856,7 +856,7 @@ pub struct PlayerName {
     pub ascii_last: String,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TransactionData {
     #[serde(rename = "type")]
     pub _type: String,
@@ -866,7 +866,7 @@ pub struct TransactionData {
     pub destination_type: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PlayerPositions {
     One(PlayerPosition),
     Many(Vec<PlayerPosition>),
@@ -989,7 +989,7 @@ impl std::fmt::Display for PlayerPosition {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum PositionType {
     K,
     DT,
