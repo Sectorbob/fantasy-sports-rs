@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::US::Pacific;
+use sleeper_fantasy_rs::User as SleeperUser;
 use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -148,32 +149,41 @@ impl DataStore {
     }
 
     #[allow(dead_code)]
-    pub fn set_league_user_mapping<G: Into<String>, M: Into<String>, L: Into<String>>(
+    pub fn set_league_user_mapping<G: Into<String>, M: Into<String>>(
         &self,
         guild_id: G,
         member_id: M,
-        external_user_id: Option<L>,
+        external_user_id: ExternalId,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let platform = &external_user_id
+            .platform
+            .ok_or(ECRError::Unknown(String::from(
+                "cannot set league user id mapping without external id platform",
+            )))?;
+
         let guild_id = guild_id.into();
         let member_id = member_id.into();
 
         let mut league = self.get_league(guild_id)?;
-        let mut changed = false;
-        if let Some(external_user_id) = external_user_id {
-            let external_user_id = external_user_id.into();
-            // insert
-            let insertion_result = league
-                .member_map
-                .insert(member_id, external_user_id.clone());
-            if insertion_result.is_none() {
-                changed = true;
-            } else if let Some(previous_entry) = insertion_result {
-                changed = previous_entry != external_user_id;
+        let changed = if let Some(entry) = league.member_map.get_mut(&member_id) {
+            if let Some(_) = entry.get(platform) {
+                // overwrite it
+                let existing_value = entry.insert(platform.clone(), external_user_id.id.clone());
+                existing_value.map_or(true, |v| v != external_user_id.id)
+            } else {
+                // insert it
+                entry.insert(platform.clone(), external_user_id.id);
+                true
             }
         } else {
-            // remove
-            changed = league.member_map.remove(member_id.as_str()).is_some();
-        }
+            // create new entry for member
+            league.member_map.insert(
+                member_id,
+                HashMap::from([(platform.clone(), external_user_id.id)]),
+            );
+            true
+        };
+
         if changed {
             self.save_league(&league)?;
         }
@@ -230,6 +240,33 @@ impl ExternalId {
             id,
         }
     }
+    fn parse<T: Into<String>>(v: T) -> Result<Self, ParseExternalIdError> {
+        let v = v.into();
+        if v.contains(':') {
+            let parts: Vec<&str> = v.split(':').collect();
+            if parts.len() == 2 {
+                // Reconstruct the string or store the parts as needed
+                return Ok(ExternalId {
+                    platform: Some(
+                        Platform::from_str(parts[0]).map_err(ParseExternalIdError::from)?,
+                    ),
+                    id: parts[1].to_string(),
+                });
+            } else if parts.len() > 2 {
+                return Err(ParseExternalIdError::from(
+                    "expecting a string with two segments delinted by a :",
+                ));
+            }
+        }
+        Ok(ExternalId {
+            platform: None,
+            id: v.to_string(),
+        })
+    }
+
+    fn get_platform(self) -> Option<Platform> {
+        self.platform.clone()
+    }
 }
 impl<'de> Deserialize<'de> for ExternalId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -249,33 +286,11 @@ impl<'de> Deserialize<'de> for ExternalId {
             where
                 E: Error,
             {
-                // Here, you would implement the logic to handle the optional colon
-                // during deserialization.
-                //
-                // Example:
-                if v.contains(':') {
-                    let parts: Vec<&str> = v.split(':').collect();
-                    if parts.len() == 2 {
-                        // Reconstruct the string or store the parts as needed
-                        return Ok(ExternalId {
-                            platform: match Platform::from_str(parts[0]) {
-                                Ok(platform) => Some(platform),
-                                Err(err) => {
-                                    return Err(E::invalid_value(
-                                        serde::de::Unexpected::Str(err.as_str()),
-                                        &"a valid platform in lowercase",
-                                    ));
-                                }
-                            },
-                            id: parts[1].to_string(),
-                        });
-                    } else if parts.len() > 2 {
-                        return Err(E::custom("Invalid format for FeedDestination"));
-                    }
-                }
-                Ok(ExternalId {
-                    platform: None,
-                    id: v.to_string(),
+                ExternalId::try_from(v).map_err(|err| {
+                    E::invalid_value(
+                        serde::de::Unexpected::Str(err.to_string().as_str()),
+                        &"a valid platform in lowercase",
+                    )
                 })
             }
 
@@ -310,6 +325,45 @@ impl fmt::Display for ExternalId {
         } else {
             write!(f, "{}", self.id)
         }
+    }
+}
+impl TryFrom<&str> for ExternalId {
+    type Error = ParseExternalIdError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        ExternalId::parse(value)
+    }
+}
+impl TryFrom<String> for ExternalId {
+    type Error = ParseExternalIdError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ExternalId::parse(value)
+    }
+}
+impl From<SleeperUser> for ExternalId {
+    fn from(value: SleeperUser) -> Self {
+        ExternalId { platform: Some(Platform::Sleeper), id: value.user_id.clone() }
+    }
+}
+impl From<&SleeperUser> for ExternalId {
+    fn from(value: &SleeperUser) -> Self {
+        ExternalId { platform: Some(Platform::Sleeper), id: value.user_id.clone() }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub struct ParseExternalIdError {
+    reason: String,
+}
+impl ParseExternalIdError {
+    pub fn from<T: Into<String>>(reason: T) -> Self {
+        ParseExternalIdError {
+            reason: reason.into(),
+        }
+    }
+}
+impl fmt::Display for ParseExternalIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid external id: {}", self.reason)
     }
 }
 
@@ -408,8 +462,28 @@ impl<'de> Deserialize<'de> for QuotaKey {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct League {
     pub guild_id: String,
-    pub league_id: Option<ExternalId>,
-    pub member_map: HashMap<String, String>,
+    pub current_season: i32,
+    pub league_id_map: HashMap<i32, ExternalId>,
+    pub member_map: HashMap<String, HashMap<Platform, String>>,
+}
+impl League {
+    pub fn current_league_id(&self) -> Option<ExternalId> {
+        self.league_id_map
+            .get(&self.current_season)
+            .map(ExternalId::clone)
+    }
+    pub fn current_user_id<T: Into<String>>(&self, member_id: T) -> Option<ExternalId> {
+        self.current_league_id()
+            .map(ExternalId::get_platform)
+            .flatten()
+            .map(|current_league_platform: Platform| {
+                self.member_map
+                    .get(&member_id.into())
+                    .map(|m| m.get(&current_league_platform))
+                    .flatten()
+                    .map(|id| ExternalId::new(current_league_platform, id.to_string()))
+            }).flatten()
+    }
 }
 
 #[cfg(test)]

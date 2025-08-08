@@ -8,6 +8,7 @@ mod store;
 mod twitter;
 mod yt;
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -18,7 +19,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 
 use crate::bot::{AppContext, Handler};
-use crate::store::{DataStore, ExternalId, Feed, FeedEntry, FeedEvent};
+use crate::store::{DataStore, ExternalId, Feed, FeedEntry, FeedEvent, League};
 use crate::twitter::TweetResponse;
 
 const CHANNEL_BUFFER: usize = 1000;
@@ -56,6 +57,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             log::error!("Failed to list feeds: {}", e);
             return Err(e);
+        }
+    }
+
+    // if the ecr league isn't there, insert it
+    if store.get_league("4259898555563580599").is_err() {
+        if let Err(insertion_error) = store.save_league(&League {
+            current_season: 2025,
+            guild_id: String::from("4259898555563580599"),
+            league_id_map: HashMap::from([
+                (2025, ExternalId::try_from("sleeper:2489066589662560510")?),
+                (2024, ExternalId::try_from("sleeper:4581480575134427121")?),
+                (2023, ExternalId::try_from("sleeper:383786432088067320")?),
+                (2022, ExternalId::try_from("sleeper:323299806782982483")?),
+                (2021, ExternalId::try_from("sleeper:652490366221046118")?),
+                (2020, ExternalId::try_from("sleeper:121226934266994911")?),
+                (2019, ExternalId::try_from("sleeper:164974877262287888")?),
+                (2018, ExternalId::try_from("yahoo:129397")?),
+                (2017, ExternalId::try_from("yahoo:20028")?),
+                (2016, ExternalId::try_from("yahoo:564503")?),
+            ]),
+            member_map: HashMap::new(),
+        }) {
+            log::warn!("unable to setup missing ecr league: {insertion_error}");
         }
     }
 

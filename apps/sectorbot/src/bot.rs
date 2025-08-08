@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
 use serenity::all::{CacheHttp, ChannelId, Context, CreateMessage, EventHandler, GuildId, Member};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
-
-use sleeper_fantasy_rs::User;
 use sleeper_fantasy_rs::custom::Standings;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -98,8 +95,9 @@ impl Handler {
             }
             s
         };
+        let guild_id = &msg.guild_id;
         let mut guild_members = vec![];
-        if let Some(guild_id) = &msg.guild_id {
+        if let Some(guild_id) = guild_id {
             log::info!("fetching guild info for {}", guild_id);
             if let Some(guild) = ctx.cache.guild(guild_id) {
                 log::info!("fetching guild members for {}", guild.name);
@@ -117,9 +115,30 @@ impl Handler {
         let guild_members_string = if guild_members.is_empty() {
             na.clone()
         } else {
+            let league_meta_data = guild_id
+                .map(|guild_id| {
+                    self.store
+                        .get_league(guild_id.to_string())
+                        .inspect_err(|err| {
+                            log::warn!("can't find league for guild: {err}");
+                        })
+                        .ok()
+                })
+                .flatten();
+            // let member_map = guild_id.map(|guild_id| {
+            //     self.store.get_league(guild_id.to_string()).map(|l| l.member_map).ok()
+            // }).flatten().unwrap_or_default();
+
             let mut s = guild_members.len().to_string();
             for member in &guild_members {
-                s.push_str(format!("\n - {} ({})", member.display_name(), member.user.id).as_str());
+                let member_name = member.display_name();
+                let member_user_id = member.user.id.to_string();
+                let mapped_to = league_meta_data
+                    .as_ref()
+                    .map(|l| l.current_user_id(member_user_id.as_str()))
+                    .flatten()
+                    .map_or(String::from("UNMAPPED"), |id| id.to_string());
+                s.push_str(format!("\n - {member_name} ({member_user_id}) {mapped_to}").as_str());
             }
             s
         };
@@ -168,7 +187,7 @@ impl Handler {
         &self,
         league_id: &ExternalId,
         member: &Member,
-    ) -> Result<User, ECRError> {
+    ) -> Result<ExternalId, ECRError> {
         // perform a sleeper username lookup
         match &league_id.platform {
             Some(platform) => match platform {
@@ -185,6 +204,7 @@ impl Handler {
                             .into_iter()
                             .find(|user| user.display_name == member.user.display_name())
                     })?
+                    .map(ExternalId::from)
                     .ok_or_else(|| {
                         ECRError::NotFound(format!("did not match a user in sleeper league"))
                     }),
@@ -366,7 +386,7 @@ impl EventHandler for Handler {
         let member_user_id = new_member.user.id.to_string();
 
         // lookup league
-        let mut league = match self.store.get_league(guild_id.to_string()) {
+        let league = match self.store.get_league(guild_id.to_string()) {
             Ok(league) => league,
             Err(err) => {
                 log::warn!("unable to find league for guild: {err}");
@@ -374,34 +394,22 @@ impl EventHandler for Handler {
             }
         };
 
-        // check league user map ( not sure why yet)
-        // let external_league_user_id = league.member_map.get(member_user_id);
-
-        if let Some(league_id) = league.league_id {
-            // try to match display name
-            if let Ok(league_user) = self
-                .match_to_external_league_user(&league_id, &new_member)
-                .await
-            {
-                if league.member_map.values().any(|existing_external_user_id| {
-                    existing_external_user_id == &league_user.user_id
-                }) {
-                    // already mapped, skip
-                    log::info!(
-                        "a mapping already exists for league user {}",
-                        league_user.display_name
-                    );
-                } else {
-                    // save
-                    if let Err(store_error) = self.store.set_league_user_mapping(
+        // check to see if we can do an easy user_id map
+        if let Some(league_id) = league.current_league_id() {
+            if let Some(_current_league_user_id) = league.current_user_id(member_user_id.as_str()) {
+                // already mapped
+            } else {
+                // try to match display name
+                if let Ok(external_user_id) = self
+                    .match_to_external_league_user(&league_id, &new_member)
+                    .await
+                {
+                    // found a match, now update the DataStore
+                    self.store.set_league_user_mapping(
                         guild_id.to_string(),
-                        member_user_id,
-                        Some(league_user.user_id.clone()),
-                    ) {
-                        log::warn!(
-                            "failed to save the member to league user id mapping: {store_error}"
-                        )
-                    }
+                        member_user_id.as_str(),
+                        external_user_id,
+                    );
                 }
             }
         }
