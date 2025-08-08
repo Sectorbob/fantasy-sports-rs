@@ -3,7 +3,10 @@ use chrono_tz::US::Pacific;
 use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 use std::str::FromStr;
+
+use crate::ecr::service::ECRError;
 
 const DEFAULT_DESTINATION_PLATFORM: Platform = Platform::Discord;
 const DEFAULT_SOURCE_PLATFORM: Platform = Platform::Twitter;
@@ -13,12 +16,18 @@ const DEFAULT_SOURCE_PLATFORM: Platform = Platform::Twitter;
 pub struct DataStore {
     feeds: sled::Db,
     quotas: sled::Db,
+    leagues: sled::Db,
 }
 impl DataStore {
     pub fn new() -> Self {
         let feeds = sled::open("data_store/feeds").expect("Failed to open data store");
         let quotas = sled::open("data_store/quotas").expect("Failed to open quotas store");
-        DataStore { feeds, quotas }
+        let leagues = sled::open("data_store/leagues").expect("Failed to open leagues store");
+        DataStore {
+            feeds,
+            quotas,
+            leagues,
+        }
     }
 
     pub fn get_feed(&self, id: u64) -> Option<Feed> {
@@ -111,6 +120,63 @@ impl DataStore {
         let data = serde_json::to_vec(&quota_data)?;
         self.quotas.insert(String::from(key), data)?;
         self.quotas.flush()?;
+        Ok(())
+    }
+
+    pub fn get_league<T: Into<String>>(
+        &self,
+        guild_id: T,
+    ) -> Result<League, Box<dyn std::error::Error>> {
+        let guild_id: String = guild_id.into();
+
+        let bytes = self
+            .leagues
+            .get(guild_id.as_str())
+            .map_err(|err| Box::new(err))?
+            .ok_or(Box::new(ECRError::NotFound(format!(
+                "unable to find league metadata for discord guild: {guild_id}"
+            ))))?;
+        let value = serde_json::from_slice::<League>(&bytes).map_err(|err| Box::new(err))?;
+        Ok(value)
+    }
+
+    pub fn save_league(&self, league: &League) -> Result<(), Box<dyn std::error::Error>> {
+        let data = serde_json::to_vec(league)?;
+        self.feeds.insert(league.guild_id.to_string(), data)?;
+        self.feeds.flush()?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn set_league_user_mapping<G: Into<String>, M: Into<String>, L: Into<String>>(
+        &self,
+        guild_id: G,
+        member_id: M,
+        external_user_id: Option<L>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let guild_id = guild_id.into();
+        let member_id = member_id.into();
+
+        let mut league = self.get_league(guild_id)?;
+        let mut changed = false;
+        if let Some(external_user_id) = external_user_id {
+            let external_user_id = external_user_id.into();
+            // insert
+            let insertion_result = league
+                .member_map
+                .insert(member_id, external_user_id.clone());
+            if insertion_result.is_none() {
+                changed = true;
+            } else if let Some(previous_entry) = insertion_result {
+                changed = previous_entry != external_user_id;
+            }
+        } else {
+            // remove
+            changed = league.member_map.remove(member_id.as_str()).is_some();
+        }
+        if changed {
+            self.save_league(&league)?;
+        }
         Ok(())
     }
 }
@@ -251,7 +317,9 @@ impl fmt::Display for ExternalId {
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     Discord,
+    Sleeper,
     Twitter,
+    Yahoo,
     Youtube,
 }
 impl FromStr for Platform {
@@ -262,6 +330,8 @@ impl FromStr for Platform {
             "discord" => Ok(Platform::Discord),
             "twitter" => Ok(Platform::Twitter),
             "youtube" => Ok(Platform::Youtube),
+            "sleeper" => Ok(Platform::Sleeper),
+            "yahoo" => Ok(Platform::Yahoo),
             _ => Err(format!("Unknown platform: {}", s)),
         }
     }
@@ -272,6 +342,8 @@ impl fmt::Display for Platform {
             Platform::Discord => write!(f, "discord"),
             Platform::Twitter => write!(f, "twitter"),
             Platform::Youtube => write!(f, "youtube"),
+            Platform::Sleeper => write!(f, "sleeper"),
+            Platform::Yahoo => write!(f, "yahoo"),
         }
     }
 }
@@ -331,6 +403,13 @@ impl<'de> Deserialize<'de> for QuotaKey {
             NaiveDate::parse_from_str(parts[1], "%Y-%m-%d").map_err(serde::de::Error::custom)?;
         Ok(QuotaKey { platform, date })
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct League {
+    pub guild_id: String,
+    pub league_id: Option<ExternalId>,
+    pub member_map: HashMap<String, String>,
 }
 
 #[cfg(test)]

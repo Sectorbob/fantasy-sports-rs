@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use serenity::all::{CacheHttp, ChannelId, Context, CreateMessage, EventHandler, GuildId};
+use serenity::all::{CacheHttp, ChannelId, Context, CreateMessage, EventHandler, GuildId, Member};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 
+use sleeper_fantasy_rs::User;
 use sleeper_fantasy_rs::custom::Standings;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -12,14 +13,18 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::config::Config;
 use crate::ecr;
 use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
-use crate::store::{self, FeedEvent};
+use crate::store::{self, DataStore, ExternalId, FeedEvent};
 use crate::yt::YoutubeClient;
+
+const TEST_SERVER_ID: u64 = 0;
+const SECTORBOB_DISCORD_USER_ID: u64 = 87326629677516917;
 
 pub struct AppContext {
     pub config: Config,
-    pub store: store::DataStore,
+    pub store: Arc<store::DataStore>,
     pub new_tweets_sender: Sender<FeedEvent>,
     pub yt_client: Arc<crate::yt::YoutubeClient>,
+    pub sleeper_cli: Arc<sleeper_fantasy_rs::Client>,
 }
 impl Drop for AppContext {
     fn drop(&mut self) {}
@@ -29,6 +34,8 @@ pub struct Handler {
     pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
     pub ecr_service: ecr::service::Service,
+    pub sleeper_cli: sleeper_fantasy_rs::Client,
+    pub store: Arc<DataStore>,
 }
 impl Handler {
     async fn process_health_command(&self, ctx: &Context, msg: &Message) -> Result<(), ECRError> {
@@ -37,6 +44,97 @@ impl Handler {
             self.yt_client.credits_consumed()
         );
         send_as_code(&ctx, &msg, message).await;
+        Ok(())
+    }
+
+    async fn process_info_command(&self, ctx: &Context, msg: &Message) -> Result<(), ECRError> {
+        let mut text = String::new();
+        let na = String::from("N/A");
+
+        // let guild = msg.guild(&ctx.cache);
+
+        let channel_id = msg.channel_id.to_string();
+        let channel_name = msg
+            .channel_id
+            .name(&ctx.http)
+            .await
+            .map_or(na.clone(), |name| name);
+        let server_id = msg.guild_id.map(|id| id.to_string()).unwrap_or(na.clone());
+        let server_name = msg
+            .guild(&ctx.cache)
+            .map(|guild| guild.name.clone())
+            .unwrap_or(na.clone());
+        let league_id = Handler::league_id_for_server(server_id.as_str());
+        let league = if let Some(league_id) = league_id {
+            self.sleeper_cli.get_league(league_id).await.ok()
+        } else {
+            None
+        };
+        let league_owners = if let Some(league) = &league {
+            self.sleeper_cli
+                .get_users_for_league(league.league_id.as_str())
+                .await
+                .map_or_else(|err| vec![], |owners| owners)
+        } else {
+            vec![]
+        };
+        let league_id = league
+            .as_ref()
+            .map(|league| league.league_id.clone())
+            .unwrap_or(na.clone());
+        let league_name = league
+            .as_ref()
+            .map(|league| league.name.clone())
+            .unwrap_or(na.clone());
+        let league_size = league
+            .map(|league| league.settings.num_teams.to_string())
+            .unwrap_or(na.clone());
+        let league_owners_string = if league_owners.is_empty() {
+            na.clone()
+        } else {
+            let mut s = league_owners.len().to_string();
+            for owner in &league_owners {
+                s.push_str(format!("\n - {} ({})", owner.display_name, owner.user_id).as_str());
+            }
+            s
+        };
+        let mut guild_members = vec![];
+        if let Some(guild_id) = &msg.guild_id {
+            log::info!("fetching guild info for {}", guild_id);
+            if let Some(guild) = ctx.cache.guild(guild_id) {
+                log::info!("fetching guild members for {}", guild.name);
+                for (_member_id, member) in guild
+                    .members
+                    .iter()
+                    .filter(|(_user_id, member)| !member.user.bot)
+                {
+                    log::debug!("non-bot Member Name: {}", member.user.name);
+                    guild_members.push(member.clone());
+                    // Access other member properties as needed
+                }
+            }
+        }
+        let guild_members_string = if guild_members.is_empty() {
+            na.clone()
+        } else {
+            let mut s = guild_members.len().to_string();
+            for member in &guild_members {
+                s.push_str(format!("\n - {} ({})", member.display_name(), member.user.id).as_str());
+            }
+            s
+        };
+
+        text.push_str(format!("Server ID:    {server_id}\n").as_str());
+        text.push_str(format!("Server Name:  {server_name}\n").as_str());
+        text.push_str(format!("Channel ID:   {channel_id}\n").as_str());
+        text.push_str(format!("Channel Name: {channel_name}\n").as_str());
+        text.push_str(format!("League ID:    {league_id}\n").as_str());
+        text.push_str(format!("League Name:  {league_name}\n").as_str());
+        text.push_str(format!("League Size:  {league_size}\n").as_str());
+        text.push_str(format!("League Owners:  {league_owners_string}\n").as_str());
+        text.push_str(format!("Server Members: {guild_members_string}\n").as_str());
+
+        send_as_code(&ctx, &msg, text).await;
         Ok(())
     }
 
@@ -65,6 +163,58 @@ impl Handler {
         send_as_code(&ctx, &msg, text_report).await;
         Ok(())
     }
+
+    async fn match_to_external_league_user(
+        &self,
+        league_id: &ExternalId,
+        member: &Member,
+    ) -> Result<User, ECRError> {
+        // perform a sleeper username lookup
+        match &league_id.platform {
+            Some(platform) => match platform {
+                store::Platform::Sleeper => self
+                    .sleeper_cli
+                    .get_users_for_league(league_id.id.as_str())
+                    .await
+                    .inspect_err(|err| {
+                        log::warn!("unable to fetch league users: {err}");
+                        return;
+                    })
+                    .map(|users| {
+                        users
+                            .into_iter()
+                            .find(|user| user.display_name == member.user.display_name())
+                    })?
+                    .ok_or_else(|| {
+                        ECRError::NotFound(format!("did not match a user in sleeper league"))
+                    }),
+                store::Platform::Yahoo => {
+                    log::warn!("yahoo not yet implemented");
+                    Err(ECRError::Unknown(format!(
+                        "league_id yahoo platform not yet implemented: {league_id}"
+                    )))
+                }
+                _ => Err(ECRError::Unknown(format!(
+                    "league_id is not a proper platform: {league_id}"
+                ))),
+            },
+            None => Err(ECRError::Unknown(format!(
+                "league_id does not refer to a platform: {league_id}"
+            ))),
+        }
+    }
+
+    fn is_permitted(ctx: &Context, msg: &Message) -> bool {
+        msg.author.id.get() == SECTORBOB_DISCORD_USER_ID
+    }
+
+    fn league_id_for_server<T: Into<String>>(server_id: T) -> Option<String> {
+        let server_id = server_id.into();
+        match server_id.as_str() {
+            "4259898555563580599" => Some("2489066589662560510".to_string()),
+            _ => None,
+        }
+    }
 }
 
 #[async_trait]
@@ -83,6 +233,26 @@ impl EventHandler for Handler {
             }
             return;
         }
+
+        if msg.content.starts_with("!") && !Handler::is_permitted(&ctx, &msg) {
+            // block it and delete the message
+            log::warn!(
+                "{user}, is not permitted to run commands",
+                user = msg.author.display_name()
+            );
+            if let Err(why) = msg.delete(&ctx.http).await {
+                log::warn!("failed to delete message: {why}");
+            }
+            return;
+        }
+
+        if msg.content == "!info" {
+            if let Err(err) = self.process_info_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
+            }
+            return;
+        }
+
         if msg.content == "!health" {
             if let Err(err) = self.process_health_command(&ctx, &msg).await {
                 let_em_know(&ctx.http, &msg, err).await;
@@ -186,6 +356,86 @@ impl EventHandler for Handler {
                 }
             }
         });
+    }
+
+    async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
+        // You'll need to enable the `GUILD_MEMBERS` privileged intent for this event to fire.
+
+        // Get the Guild ID if possible
+        let guild_id = new_member.guild_id;
+        let member_user_id = new_member.user.id.to_string();
+
+        // lookup league
+        let mut league = match self.store.get_league(guild_id.to_string()) {
+            Ok(league) => league,
+            Err(err) => {
+                log::warn!("unable to find league for guild: {err}");
+                return;
+            }
+        };
+
+        // check league user map ( not sure why yet)
+        // let external_league_user_id = league.member_map.get(member_user_id);
+
+        if let Some(league_id) = league.league_id {
+            // try to match display name
+            if let Ok(league_user) = self
+                .match_to_external_league_user(&league_id, &new_member)
+                .await
+            {
+                if league.member_map.values().any(|existing_external_user_id| {
+                    existing_external_user_id == &league_user.user_id
+                }) {
+                    // already mapped, skip
+                    log::info!(
+                        "a mapping already exists for league user {}",
+                        league_user.display_name
+                    );
+                } else {
+                    // save
+                    if let Err(store_error) = self.store.set_league_user_mapping(
+                        guild_id.to_string(),
+                        member_user_id,
+                        Some(league_user.user_id.clone()),
+                    ) {
+                        log::warn!(
+                            "failed to save the member to league user id mapping: {store_error}"
+                        )
+                    }
+                }
+            }
+        }
+
+        // // Fetch the guild to get a relevant channel
+        // if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
+        //     // Find a channel to send the welcome message
+        //     // (e.g., a "welcome" channel or the first text channel)
+        //     if let Some(channel_id) = guild.system_channel_id {
+        //         // or a specific channel ID
+        //         let user_name = &new_member.user.name;
+
+        //         // Create an embed for a more visually appealing welcome message
+        //         let embed = CreateEmbed::new()
+        //             .title(format!("Welcome to {}!", guild.name))
+        //             .description(format!("Glad to have you here, {}!", user_name))
+        //             .field("Rules", "Make sure to read the rules!", false)
+        //             .thumbnail(new_member.user.avatar_url().unwrap_or_default())
+        //             .color(0x00FF00); // Green color
+
+        //         let builder = CreateMessage::new().embed(embed);
+
+        //         if let Err(why) = channel_id.send_message(&ctx.http, builder).await {
+        //             println!("Error sending welcome message: {:?}", why);
+        //         }
+        //     } else {
+        //         println!(
+        //             "Could not find a channel to send welcome message in guild: {}",
+        //             guild.name
+        //         );
+        //     }
+        // } else {
+        //     println!("Could not fetch guild from cache for ID: {}", guild_id);
+        // }
     }
 }
 

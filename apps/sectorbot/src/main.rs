@@ -67,12 +67,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.yt_api_key.clone(),
         None, // You can pass a custom HTTP client here if needed
     );
+    let sleeper_cli = sleeper_fantasy_rs::Client::new(None);
 
     let app_context = Arc::new(AppContext {
         config,
-        store,
+        store: Arc::new(store),
         new_tweets_sender: tx,
         yt_client: Arc::new(yt_client),
+        sleeper_cli: Arc::new(sleeper_cli),
     });
 
     let server_handle = tokio::spawn({
@@ -161,7 +163,10 @@ async fn setup_discord_bot(
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILDS // allows to get guild info
+        | GatewayIntents::GUILD_MEMBERS // allows to query for members in guilds
+        | GatewayIntents::GUILD_PRESENCES; // allows for updates to the guild's memebr list to be fetched
 
     // Create a new instance of the Client, logging in as a bot. This will automatically prepend
     // your bot token with "Bot ", which is a requirement by Discord for bot users.
@@ -170,6 +175,8 @@ async fn setup_discord_bot(
             yt_client: Arc::clone(&app_context.yt_client),
             events_receiver: Arc::new(Mutex::new(events_receiver)),
             ecr_service: ecr::service::Service::new(),
+            sleeper_cli: sleeper_fantasy_rs::Client::new(None),
+            store: Arc::clone(&app_context.store),
         })
         .await?;
 
