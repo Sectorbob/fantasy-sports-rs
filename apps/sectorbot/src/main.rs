@@ -164,6 +164,7 @@ async fn setup_discord_bot(
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILDS // allows to get guild info
         | GatewayIntents::GUILD_MEMBERS // allows to query for members in guilds
+        | GatewayIntents::AUTO_MODERATION_EXECUTION
         | GatewayIntents::GUILD_PRESENCES; // allows for updates to the guild's memebr list to be fetched
 
     // Create a new instance of the Client, logging in as a bot. This will automatically prepend

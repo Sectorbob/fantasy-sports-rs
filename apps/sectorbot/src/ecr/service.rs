@@ -6,6 +6,9 @@ use std::{
 
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
 use serde::{Deserialize, Serialize};
+use serenity::all::{
+    Colour, EditMember, EditRole, GuildId, Http, Member, Permissions, Role, RoleId, UserId,
+};
 use sleeper_fantasy_rs::{
     Draft, DraftPick, League as SleeperLeague, Player, Roster, Sport, User as SleeperUser,
 };
@@ -13,7 +16,7 @@ use sleeper_fantasy_rs::{
 use crate::{
     ecr::keepers::{Keepable, KeepablesReport, get_keeper_status, get_player_history},
     fantasypros,
-    store::{DataStore, DataStoreError, ExternalId, League},
+    store::{self, DataStore, DataStoreError, ExternalId, League, Platform},
 };
 
 pub const LEAGUE_ID: &str = "2489066589662560510";
@@ -297,6 +300,175 @@ impl Service {
             external_id,
         )
     }
+
+    pub async fn synchronize_manager_role(
+        &self,
+        guild_id: GuildId,
+        http: &Http,
+    ) -> Result<(), ECRError> {
+        // grab league context
+        let league: League = self.fetch_league_metadata(guild_id.to_string())?;
+        let current_league_id = league
+            .current_league_id()
+            .ok_or(ECRError::Unknown("no current league found".to_string()))?;
+        let current_platform: Platform = current_league_id.clone().platform.ok_or(
+            ECRError::Unknown("current league id platform not set".to_string()),
+        )?;
+        let external_league_managers = self.fetch_external_league_owners(current_league_id).await?;
+
+        // ensure manager role is setup
+        let mut existing_roles = guild_id.roles(&http).await?;
+        let manager_role = self
+            .get_existing_or_create(
+                guild_id,
+                &http,
+                &mut existing_roles,
+                "manager",
+                0x7E8C54,
+                Permissions::READ_MESSAGE_HISTORY |
+                // Permissions::CHANGE_NICKNAME |
+                Permissions::SEND_MESSAGES |
+                Permissions::SEND_MESSAGES_IN_THREADS,
+            )
+            .await?;
+        let mut non_bot_members = guild_id
+            .members(http, Some(1000), None)
+            .await?
+            .into_iter()
+            .filter(|m| !m.user.bot)
+            .map(|m| (m.user.id.clone(), m))
+            .collect::<HashMap<_, _>>();
+
+        // check existing member mappings
+        for user_mapping in league.member_map.iter() {
+            let discord_user_id = UserId::new(user_mapping.0.parse().unwrap());
+            // first check to see if member is a manager according to the external league
+            let external_manager = external_league_managers.iter().find(|u| {
+                user_mapping
+                    .1
+                    .get(&current_platform)
+                    .map(|platform_user_id| platform_user_id == &u.user_id)
+                    .unwrap_or(false)
+            });
+
+            // match to active discord member ref
+            let member = non_bot_members.get_mut(&discord_user_id);
+            if member.is_none() {
+                // discord user is no longer in server/guild
+                continue;
+            }
+            let member: &mut Member = member.unwrap();
+
+            // check if manager role is applied
+            if external_manager.is_some()
+                && member.roles.iter().find(|r| *r == &manager_role).is_none()
+            {
+                // add manager role to member
+                member.add_role(http, &manager_role).await?;
+                log::info!(
+                    "added {member} to managers",
+                    member = member.user.display_name()
+                )
+            }
+
+            // make sure that the usaer's nickname matches what their team display name is in the remote league
+            if let Some(external_manager) = external_manager {
+                if member.display_name() != external_manager.display_name {
+                    let nickname = external_manager.display_name.as_str();
+                    // let's make a nickname
+                    match member
+                        .edit(http, EditMember::new().nickname(nickname))
+                        .await
+                    {
+                        Ok(_) => {
+                            log::info!(
+                                "set {member}'s nickname to {nickname}",
+                                member = member.user.display_name(),
+                            );
+                        }
+                        Err(err) => {
+                            let err_msg = format!(
+                                "failed to set {member}'s nickname to {nickname}: {err}",
+                                member = member.user.display_name(),
+                            );
+                            log::info!("{err_msg}");
+                            // return Err(ECRError::Unknown(err_msg)); don't fail it
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_existing_or_create<C: Into<Colour>, R: Into<String>>(
+        &self,
+        guild_id: GuildId,
+        http: &Http,
+        existing_roles: &mut HashMap<RoleId, Role>,
+        role_name: R,
+        role_color: C,
+        permissions: Permissions,
+    ) -> Result<RoleId, ECRError> {
+        let role_name = role_name.into();
+        let role_id = if let Some(existing_role) =
+            existing_roles.iter().find(|(_id, r)| r.name == role_name)
+        {
+            existing_role.0.clone()
+        } else {
+            // create it
+            let new_role = guild_id
+                .create_role(
+                    http,
+                    EditRole::new()
+                        .name(role_name)
+                        .hoist(false)
+                        .colour(role_color) // Grey Color
+                        .permissions(permissions),
+                )
+                .await?;
+            let k = new_role.id.clone();
+            existing_roles.insert(new_role.id, new_role);
+            k
+        };
+        Ok(role_id)
+    }
+
+    pub async fn create_necessary_roles(
+        &self,
+        guild_id: GuildId,
+        http: &Http,
+    ) -> Result<Vec<RoleId>, ECRError> {
+        let mut existing_roles = guild_id.roles(&http).await?;
+
+        let bystander_role = self
+            .get_existing_or_create(
+                guild_id,
+                &http,
+                &mut existing_roles,
+                "bystander",
+                0x808080,
+                Permissions::READ_MESSAGE_HISTORY,
+            )
+            .await?;
+
+        let manager_role = self
+            .get_existing_or_create(
+                guild_id,
+                &http,
+                &mut existing_roles,
+                "manager",
+                0x7E8C54,
+                Permissions::READ_MESSAGE_HISTORY |
+                // Permissions::CHANGE_NICKNAME |
+                Permissions::SEND_MESSAGES |
+                Permissions::SEND_MESSAGES_IN_THREADS,
+            )
+            .await?;
+
+        Ok(vec![bystander_role, manager_role])
+    }
 }
 
 /// This function will look through provided sleeper league data structures and
@@ -362,6 +534,12 @@ pub enum ECRError {
 
     #[error("error fetching from fantasypros: {0}")]
     FantasyProsError(#[from] fantasypros::FantasyProsError),
+
+    #[error("error performing discord operation: {0}")]
+    DiscordError(#[from] serenity::Error),
+
+    #[error("error performing discord operation: {0}")]
+    DatastoreError(#[from] store::DataStoreError),
 
     #[error("Unknown error {0}")]
     Unknown(String),

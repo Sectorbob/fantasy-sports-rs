@@ -210,6 +210,42 @@ impl Handler {
         Ok(())
     }
 
+    async fn process_set_manager_command(
+        &self,
+        ctx: &Context,
+        msg: &Message,
+    ) -> Result<(), ECRError> {
+        log::error!("{:#?}", msg);
+
+        let command_parts = msg.content.split_ascii_whitespace().collect::<Vec<_>>();
+        if command_parts.len() != 3 {
+            send_as_code(&ctx, &msg, "invalid command syntax").await;
+            return Ok(());
+        }
+        let member_id = msg.mentions.first().ok_or(ECRError::Unknown(
+            "need a mention for the discord user".to_string(),
+        ))?;
+        let external_id = ExternalId::try_from(command_parts[2])
+            .map_err(|_| ECRError::Unknown("invalid external id format".to_string()))?;
+
+        if let Some(guild_id) = msg.guild_id {
+            self.ecr_service.save_user_mapping(
+                guild_id.to_string(),
+                member_id.id.to_string(),
+                external_id,
+            )?;
+            self.ecr_service
+                .synchronize_manager_role(guild_id, &ctx.http)
+                .await?;
+        }
+
+        let mut response = String::new();
+        response.push_str(format!("Content: {}", msg.content).as_str());
+
+        send_as_code(&ctx, &msg, response).await;
+        Ok(())
+    }
+
     async fn match_to_external_league_user(
         &self,
         league_id: &ExternalId,
@@ -288,6 +324,13 @@ impl EventHandler for Handler {
         }
         if msg.content == "!draftorder" {
             if let Err(err) = self.process_draft_order_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
+            }
+            return;
+        }
+
+        if msg.content.starts_with("!set-manager ") {
+            if let Err(err) = self.process_set_manager_command(&ctx, &msg).await {
                 let_em_know(&ctx.http, &msg, err).await;
             }
             return;
@@ -504,31 +547,70 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
     }
 }
 
-// mod tests {
-//     use std::collections::VecDeque;
+mod tests {
+    use std::collections::{HashMap, VecDeque};
 
-//     use serenity::all::{GetMessages, Http};
+    use serenity::all::{Colour, EditMember, GetMessages, Http, Permissions, Role, RoleId, UserId};
+    use serenity::builder::EditRole;
+    use serenity::futures::StreamExt;
 
-//     use super::*;
-//     use crate::yt::YoutubeClient;
+    use super::*;
+    use crate::ecr::service::Service;
+    use crate::store::{DataStore, Platform};
+    use crate::yt::YoutubeClient;
 
-//     #[tokio::test]
-//     async fn test_send_discord_message() {
-//         crate::config::load_config().expect("Failed to load config");
-//         // let nfl_news_channel_id: u64 = 2067967944778588584;
-//         let giants_news_channel_id: u64 = 7100738766260628716;
-//         let channel_id = ChannelId::new(giants_news_channel_id);
-//         let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
-//         let http = Http::new(discord_token.as_str());
+    // #[tokio::test]
+    // async fn test_send_discord_message() {
+    //     crate::config::load_config().expect("Failed to load config");
+    //     // let nfl_news_channel_id: u64 = 2067967944778588584;
+    //     let giants_news_channel_id: u64 = 7100738766260628716;
+    //     let channel_id = ChannelId::new(giants_news_channel_id);
+    //     let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
+    //     let http = Http::new(discord_token.as_str());
 
-//         let messages = channel_id
-//             .messages(&http, GetMessages::new().limit(1))//.after(1471143525422999373))
-//             .await
-//             .expect("Failed to fetch messages");
-//         log::info!("Fetched {} messages from channel {}", messages.len(), giants_news_channel_id);
-//         for message in &messages {
-//             log::info!("Message: {:#?}", message);
-//         }
-//         panic!("Test completed, check logs for messages");
-//     }
-// }
+    //     let messages = channel_id
+    //         .messages(&http, GetMessages::new().limit(1))//.after(1471143525422999373))
+    //         .await
+    //         .expect("Failed to fetch messages");
+    //     log::info!("Fetched {} messages from channel {}", messages.len(), giants_news_channel_id);
+    //     for message in &messages {
+    //         log::info!("Message: {:#?}", message);
+    //     }
+    //     panic!("Test completed, check logs for messages");
+    // }
+
+    // #[tokio::test]
+    // async fn test_create_role() {
+    //     crate::config::load_config().expect("Failed to load config");
+    //     // let nfl_news_channel_id: u64 = 2067967944778588584;
+    //     let giants_news_channel_id: u64 = 7100738766260628716;
+    //     let channel_id = ChannelId::new(giants_news_channel_id);
+    //     let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
+    //     let http = Http::new(discord_token.as_str());
+    //     let store = Arc::new(DataStore::new());
+    //     let svc: Service = Service::new(&store);
+
+    //     let sectorbobs_football_lounge_guild_id = 6828159027854455257;
+
+    //     let guild_id = GuildId::new(sectorbobs_football_lounge_guild_id);
+
+    //     let mut existing_roles = guild_id.roles(&http).await.expect("can't get roles");
+    //     let custom_roles = svc
+    //         .create_necessary_roles(guild_id, &http)
+    //         .await
+    //         .expect("can't setup custom roles");
+
+    //     svc.synchronize_manager_role(guild_id, &http)
+    //         .await
+    //         .expect("unable to syncropnize manager role");
+
+    //     // let new_role = guild_id.create_role(&http, role_builder).await;
+
+    //     // match new_role {
+    //     //     Ok(role) => println!("Successfully created role: {}", role.name),
+    //     //     Err(why) => println!("Error creating role: {:?}", why),
+    //     // }
+
+    //     panic!("Test completed, check logs for messages");
+    // }
+}
