@@ -8,13 +8,12 @@ use std::collections::{HashMap, HashSet};
 /// I want to place my own custom consumer code here
 ///
 ///
-
+#[derive(Debug, Clone)]
 pub struct FantasyMatchup {
     pub week: usize,
     pub left: FantasyMatchupSide,
     pub right: FantasyMatchupSide,
 }
-
 impl FantasyMatchup {
     pub fn from_stuff(
         week: usize,
@@ -177,6 +176,7 @@ impl FantasyMatchup {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FantasyMatchupSide {
     pub matchup: Matchup,
     pub roster: Roster,
