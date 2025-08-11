@@ -1,0 +1,16 @@
+#!/bin/bash
+
+source .env # Loads YAHOO_CLIENT_ID
+
+code=LOB6WUMP7YVG5AIIPOYJRPOL5J77JPVA
+code_verifier=SUPNBMW7UYMO726SULIBXQINZXG5INH5RAIUHDQ4IJ
+
+curl -v -X POST \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=${YAHOO_CLIENT_ID}&redirect_uri=oob&code=${code}&grant_type=authorization_code&code_verifier=${code_verifier}" \
+  "https://api.login.yahoo.com/oauth2/get_token"
+
+  # curl -v -X POST \
+#   -H "Content-Type: application/x-www-form-urlencoded" \
+#   -d "client_id=${YAHOO_CLIENT_ID}&redirect_uri=${YAHOO_REDIRECT_URI}&response_type=code" \
+#   "https://api.login.yahoo.com/oauth2/request_auth"

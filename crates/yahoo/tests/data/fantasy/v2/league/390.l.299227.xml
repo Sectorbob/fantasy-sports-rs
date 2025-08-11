@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fantasy_content xml:lang="en-US" yahoo:uri="http://fantasysports.yahooapis.com/fantasy/v2/league/390.l.299227" time="28.717041015625ms" copyright="Certain Data by Sportradar, Stats Perform and Rotowire" refresh_rate="60" xmlns:yahoo="http://www.yahooapis.com/v1/base.rng" xmlns="http://fantasysports.yahooapis.com/fantasy/v2/base.rng">
+ <league>
+  <league_key>390.l.299227</league_key>
+  <league_id>299227</league_id>
+  <name>Rapid League 17</name>
+  <url>https://football.fantasysports.yahoo.com/2019/f1/299227</url>
+  <logo_url></logo_url>
+  <password/>
+  <draft_status>predraft</draft_status>
+  <num_teams>1</num_teams>
+  <edit_key>16</edit_key>
+  <weekly_deadline/>
+  <league_update_timestamp/>
+  <scoring_type>head</scoring_type>
+  <league_type>private</league_type>
+  <renew>380_129397</renew>
+  <renewed/>
+  <felo_tier>bronze</felo_tier>
+  <iris_group_chat_id/>
+  <short_invitation_url>https://football.fantasysports.yahoo.com/2019/f1/299227/invitation?key=aae3330760d1d036&amp;ikey=3f6efabb5c07ba8a</short_invitation_url>
+  <allow_add_to_dl_extra_pos>0</allow_add_to_dl_extra_pos>
+  <is_pro_league>0</is_pro_league>
+  <is_cash_league>0</is_cash_league>
+  <current_week>16</current_week>
+  <start_week>1</start_week>
+  <start_date>2019-09-05</start_date>
+  <end_week>16</end_week>
+  <end_date>2019-12-23</end_date>
+  <is_plus_league>0</is_plus_league>
+  <game_code>nfl</game_code>
+  <season>2019</season>
+ </league>
+</fantasy_content>
+<!-- fantasy-sports-api- -public-production-bf1-7dbb5fc5b6-ldx55 Sat May 24 05:07:24 UTC 2025 -->

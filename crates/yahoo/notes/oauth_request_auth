@@ -1,0 +1,27 @@
+#!/bin/bash
+
+source .env
+
+# Generate a random code_verifier
+code_verifier=$(openssl rand -base64 32 | tr -d '=+/')
+
+# Generate the code_challenge using SHA-256 and Base64 URL encoding
+code_challenge=$(echo -n "$code_verifier" | openssl dgst -binary -sha256 | openssl base64 | tr -d '=+/')
+
+echo "Code Verifier: $code_verifier"
+echo "Code Challenge: $code_challenge"
+
+# TODO: I want to fiddle with requesting scopes and passing a state
+# SCOPES=fspt-r
+# STATE=foobar
+
+curl -v -X GET \
+  --get "https://api.login.yahoo.com/oauth2/request_auth" \
+  --data-urlencode "client_id=${YAHOO_CLIENT_ID}" \
+  --data-urlencode "redirect_uri=${YAHOO_REDIRECT_URI}" \
+  --data-urlencode "response_type=code" \
+  --data-urlencode "language=en-us" \
+  --data-urlencode "code_challenge=${code_challenge}" \
+  --data-urlencode "code_challenge_method=S256"
+#   --data-urlencode "scope=${SCOPE} \
+#   --data-urlencode "state=${STATE} \

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Pass in the refresh token via the command line
+REFRESH_TOKEN=$1
+
+source .env # Load the YAHOO_CLIENT_ID
+
+curl -v -X POST \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=${YAHOO_CLIENT_ID}&redirect_uri=oob&refresh_token=${REFRESH_TOKEN}&grant_type=refresh_token" \
+  "https://api.login.yahoo.com/oauth2/get_token"

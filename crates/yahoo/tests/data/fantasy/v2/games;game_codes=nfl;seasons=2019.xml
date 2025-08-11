@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fantasy_content xml:lang="en-US" yahoo:uri="http://fantasysports.yahooapis.com/fantasy/v2/games;game_codes=nfl;seasons=2019" time="20.421981811523ms" copyright="Certain Data by Sportradar, Stats Perform and Rotowire" refresh_rate="60" xmlns:yahoo="http://www.yahooapis.com/v1/base.rng" xmlns="http://fantasysports.yahooapis.com/fantasy/v2/base.rng">
+ <games count="1">
+  <game>
+   <game_key>390</game_key>
+   <game_id>390</game_id>
+   <name>Football</name>
+   <code>nfl</code>
+   <type>full</type>
+   <url>https://football.fantasysports.yahoo.com/2019/f1</url>
+   <season>2019</season>
+   <is_registration_over>1</is_registration_over>
+   <is_game_over>1</is_game_over>
+   <is_offseason>1</is_offseason>
+  </game>
+ </games>
+</fantasy_content>
+<!-- fantasy-sports-api- -public-production-bf1-7dbb5fc5b6-cvrtx Sat May 24 03:24:32 UTC 2025 -->
