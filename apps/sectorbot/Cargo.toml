@@ -8,6 +8,7 @@ axum = "0.8.4"
 chrono = "0.4.41"
 chrono-tz = "0.10.4"
 dotenv = "0.15.0"
+fantasy-core-rs = { version = "0.1.0", path = "../fantasy-core-rs" }
 html-escape = "0.2.13"
 log = "0.4.27"
 num = "0.4.3"
