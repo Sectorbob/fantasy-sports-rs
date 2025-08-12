@@ -421,11 +421,10 @@ async fn fetch_raw_tweets<T: Display>(
     twitter_username: T,
     twitter_cookie: T,
 ) -> Result<Vec<TweetResponse>, Box<dyn Error>> {
-    let twitter_timeline = twitter::syndication::fetch_user_timeline(
-        twitter_username.to_string(),
-        twitter_cookie.to_string(),
-    )
-    .await?;
+    let syndication_client = twitter::syndication::Client::new();
+    let twitter_timeline = syndication_client
+        .fetch_user_timeline(twitter_username.to_string(), twitter_cookie.to_string())
+        .await?;
     Ok(twitter_timeline
         .props
         .page_props

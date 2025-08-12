@@ -1,4 +1,6 @@
-use serenity::all::{CacheHttp, ChannelId, Context, CreateMessage, EventHandler, GuildId, Member};
+use serenity::all::{
+    CacheHttp, ChannelId, Context, CreateEmbed, CreateMessage, EventHandler, GuildId, Member,
+};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -550,34 +552,84 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
-    use serenity::all::{Colour, EditMember, GetMessages, Http, Permissions, Role, RoleId, UserId};
+    use serenity::all::{
+        Colour, CreateEmbedAuthor, CreateEmbedFooter, EditMember, GetMessages, Http,
+        MessageBuilder, Permissions, Role, RoleId, UserId,
+    };
     use serenity::builder::EditRole;
     use serenity::futures::StreamExt;
 
     use super::*;
     use crate::ecr::service::Service;
     use crate::store::{DataStore, Platform};
+    use crate::twitter::{TweetResponse, syndication};
     use crate::yt::YoutubeClient;
 
-    // #[tokio::test]
-    // async fn test_send_discord_message() {
-    //     crate::config::load_config().expect("Failed to load config");
-    //     // let nfl_news_channel_id: u64 = 2067967944778588584;
-    //     let giants_news_channel_id: u64 = 7100738766260628716;
-    //     let channel_id = ChannelId::new(giants_news_channel_id);
-    //     let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
-    //     let http = Http::new(discord_token.as_str());
+    #[tokio::test]
+    async fn test_send_discord_message() {
+        let config = crate::config::load_config().expect("Failed to load config");
+        // let nfl_news_channel_id: u64 = 2067967944778588584;
+        let giants_news_channel_id: u64 = 7100738766260628716;
+        let channel_id = ChannelId::new(giants_news_channel_id);
+        let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
+        let http = Http::new(discord_token.as_str());
 
-    //     let messages = channel_id
-    //         .messages(&http, GetMessages::new().limit(1))//.after(1471143525422999373))
-    //         .await
-    //         .expect("Failed to fetch messages");
-    //     log::info!("Fetched {} messages from channel {}", messages.len(), giants_news_channel_id);
-    //     for message in &messages {
-    //         log::info!("Message: {:#?}", message);
-    //     }
-    //     panic!("Test completed, check logs for messages");
-    // }
+        let messages = channel_id
+            .messages(
+                &http,
+                GetMessages::new().limit(1).after(8604299660934911324),
+            )
+            .await
+            .expect("Failed to fetch messages");
+        log::info!(
+            "Fetched {} messages from channel {}",
+            messages.len(),
+            giants_news_channel_id
+        );
+        for message in &messages {
+            log::info!("Message: {:#?}", message);
+        }
+        // panic!("Test completed, check logs for messages");
+        let syndication_client = syndication::Client::new();
+
+        let tweet = syndication_client
+            .fetch_tweet(3446382222382249349, config.twitter_cookie.clone())
+            .await
+            .expect("failed to get tweet");
+        println!("Tweet: {tweet:#?}");
+        channel_id
+            .send_message(
+                &http,
+                CreateMessage::new().add_embeds(discord_embed_for_tweet(tweet)),
+            )
+            .await
+            .expect("failed to send message");
+        // println!("Tweet: {tweet:#?}");
+        assert!(false);
+    }
+
+    const footer_twitter_icon: &str = "https://assets.fxembed.com/logos/fxtwitter-pride64.png";
+    const twitter_color_hex: u32 = 6513919;
+
+    fn discord_embed_for_tweet(tweet: TweetResponse) -> Vec<CreateEmbed> {
+        let mut embeds = vec![];
+        embeds.push(
+            CreateEmbed::new()
+                .author(
+                    CreateEmbedAuthor::new(&tweet.user.name)
+                        .url("https://x.com/BobbySkinner_/status/3446382222382249349")
+                        .icon_url("https://x.com/BobbySkinner_/status/3446382222382249349"),
+                )
+                .timestamp(tweet.created_at)
+                .footer(CreateEmbedFooter::new("Twitter").icon_url(footer_twitter_icon))
+                .colour(Colour::new(twitter_color_hex))
+                .description("Thought this went well\\. Excited to see what Jordan does with it\\.\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}See you all at Giants\\-Jets practice tomorrow\\. Recap to follow\n\n> **[Quoting](https://x.com/JordanRaanan/status/3713477757564328062) Jordan Raanan \\([@JordanRaanan](https://x.com/JordanRaanan)\\)**\n> \u{fe00}\n> Impressive Giants Rookies \\| Breaking Big Blue w/ Jordan Raanan\\. Better viewed on Youtube [youtube.com/live/YNvRkrzh2fo?feature=share](https://youtube.com/live/YNvRkrzh2fo?feature=share) [x.com/i/broadcasts/1mnxeNyLyjbKX](https://x.com/i/broadcasts/1mnxeNyLyjbKX)\n\n**[❤\u{fe0f}](https://x.com/intent/like?tweet_id=3446382222382249349) 2\u{2002}👁\u{fe0f} 57\u{2002}**")
+                .url("https://fxtwitter.com/BobbySkinner_/status/3446382222382249349"),
+        );
+
+        embeds
+        // MessageBuilder::new().emb.build()
+    }
 
     // #[tokio::test]
     // async fn test_create_role() {
