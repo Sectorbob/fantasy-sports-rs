@@ -16,6 +16,12 @@ impl Client {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn with_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
     pub async fn fetch_user_timeline<T: Display>(
         &self,
         username: T,
@@ -28,8 +34,8 @@ impl Client {
             token
         );
 
-        let client = reqwest::Client::new();
-        let req = client
+        let req = self
+            .cli
             .get(format!(
                 "{base_url}/srv/timeline-profile/screen-name/{username}",
                 base_url = self.base_url
@@ -39,9 +45,13 @@ impl Client {
             .header("Cookie", cookie.to_string()) // .query(&[("screen_name", username)/* , ("token", &token)*/])
             .build()?;
         log::debug!("Request URL: {}", req.url());
-        let res = client.execute(req).await?;
+        let res = self.cli.execute(req).await?;
         if res.status().is_success() {
             let html = res.text().await?;
+            // tokio::fs::File::create("timeline.html")
+            //     .await?
+            //     .write_all(html.as_bytes())
+            //     .await?;
             let re = Regex::new(
                 r#"<script id="__NEXT_DATA__" type="application/json">([^>]*)</script>"#,
             )
@@ -60,27 +70,30 @@ impl Client {
     }
 
     #[allow(dead_code)]
-    pub async fn fetch_tweet<T: Display>(
+    pub async fn fetch_tweet(
         &self,
         tweet_id: u64,
-        cookie: T,
     ) -> Result<TweetResponse, Box<dyn std::error::Error>> {
         let token = get_token(tweet_id);
         log::info!("Fetching tweet with ID: {} and token: {}", tweet_id, token);
 
-        let client = reqwest::Client::new();
-        let req = client
+        let req = self
+            .cli
             .get(format!("{base_url}/tweet-result", base_url = self.base_url))
             .header("User-Agent", "curl/8.7.1")
             .header("Accept", "application/json")
-            // .header("Cookie", cookie.to_string())
             .query(&[("id", &tweet_id.to_string()), ("token", &token.to_string())])
             .build()?;
         log::info!("Request URL: {}", req.url());
-        let res = client.execute(req).await?;
+        let res = self.cli.execute(req).await?;
         if res.status().is_success() {
             log::info!("Request was successful");
-            Ok(res.json::<TweetResponse>().await?)
+            let text = res.text().await?;
+            // tokio::fs::File::create("tweet_response.json")
+            //     .await?
+            //     .write_all(text.as_bytes())
+            //     .await?;
+            Ok(serde_json::from_str(text.as_str())?)
         } else {
             Err(format!("Failed to fetch tweet: {}", res.status()).into())
         }
@@ -118,40 +131,99 @@ fn get_token(id: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::File,
-        io::{self, BufReader},
+    use chrono::DateTime;
+    use tokio::fs::{self};
+    use wiremock::{
+        Mock, ResponseTemplate,
+        matchers::{self},
     };
 
     use super::*;
 
-    #[test]
-    fn test_decode_tweet_result() {
-        let tweet_response_json = io::read_to_string(BufReader::new(
-            File::open("testdata/twitter/tweet.json").expect("failed to open file"),
-        ))
-        .expect("failed to load file");
+    #[tokio::test]
+    async fn test_fetch_timeline() {
+        let twitter_user = "DanSchneierNFL";
+        let test_data_file = "testdata/timeline.html";
 
-        let tweet_response: TweetResponse =
-            serde_json::from_str(tweet_response_json.as_str()).expect("failed to deserilaize tweet");
+        // setup
+        let mock_server = wiremock::MockServer::builder().start().await;
+        mock_server
+            .register(
+                Mock::given(matchers::method("GET"))
+                    .and(matchers::path(format!(
+                        "/srv/timeline-profile/screen-name/{twitter_user}"
+                    )))
+                    .respond_with(
+                        ResponseTemplate::new(200)
+                            .append_header("content-language", "en")
+                            .append_header("content-type", "text/html; charset=UTF-8")
+                            .set_body_bytes(
+                                fs::read(test_data_file).await.expect(
+                                    format!("failed to load file: {test_data_file}").as_str(),
+                                ),
+                            ),
+                    ),
+            )
+            .await;
+        let fixture = Client::new().with_base_url(mock_server.uri());
 
+        // execute
+        let timeline = fixture
+            .fetch_user_timeline(twitter_user, "")
+            .await
+            .expect("failed to fetch twitter timeline");
+
+        // assert
+        debug_assert!(
+            mock_server.received_requests().await.is_some(),
+            "mock not called"
+        );
+        debug_assert_eq!(
+            101,
+            timeline.props.page_props.timeline.entries.len(),
+            "did not receive the expected number of tweets"
+        );
+        // for tweet in timeline.tweets() {
+        //     println!("Entry: {tweet:#?}");
+        // }
+        // assert!(false)
+    }
+
+    #[tokio::test]
+    async fn test_decode_tweet_result() {
+        let test_data_files = vec![
+            // "testdata/twitter/tweet.json",
+            "testdata/tweet_response.json",
+        ];
+        for filename in test_data_files {
+            let tweet_response_json = fs::read_to_string(filename)
+                .await
+                .expect("failed to open file");
+
+            let tweet_response: TweetResponse = serde_json::from_str(tweet_response_json.as_str())
+                .expect("failed to deserialize tweet");
+            assert_eq!(
+                DateTime::parse_from_rfc3339("2023-01-01T21:01:16.000Z").unwrap(),
+                tweet_response.created_at
+            )
+        }
     }
 
     #[test]
     fn test_get_token_black_box() {
         let tweet_id = "145634895654321";
         let token = get_token(tweet_id.parse::<u64>().unwrap());
-        // assert_eq!(token, "ggyb6ihoy75");
-        assert_eq!(token, ".ggyb6ihoy75");
+        assert_eq!(token, "ggyb6ihoy75");
+        // assert_eq!(token, ".ggyb6ihoy75");
 
         let tweet_id = "1609656024901861377";
         let token = get_token(tweet_id.parse::<u64>().unwrap());
-        // assert_eq!(token, "3wgvt2kcol");
-        assert_eq!(token, "3wg.vt2kcol");
+        assert_eq!(token, "3wgvt2kcol");
+        // assert_eq!(token, "3wg.vt2kcol");
 
         let tweet_id = "1955088451830710676";
         let token = get_token(tweet_id.parse::<u64>().unwrap());
-        // assert_eq!(token, "4qm3alu2l4h");
-        assert_eq!(token, "4qm.3alu2l4h");
+        assert_eq!(token, "4qm3alu2l4h");
+        // assert_eq!(token, "4qm.3alu2l4h");
     }
 }

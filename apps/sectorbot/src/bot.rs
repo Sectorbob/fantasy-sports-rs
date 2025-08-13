@@ -1,5 +1,6 @@
 use serenity::all::{
-    CacheHttp, ChannelId, Context, CreateEmbed, CreateMessage, EventHandler, GuildId, Member,
+    CacheHttp, ChannelId, Colour, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
+    CreateMessage, EventHandler, GuildId, Member,
 };
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -10,12 +11,12 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
-use crate::ecr;
 use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
 use crate::store::{self, ExternalId, FeedEvent, League};
+use crate::twitter::syndication;
 use crate::yt::YoutubeClient;
+use crate::{ecr, twitter};
 
-const TEST_SERVER_ID: u64 = 0;
 const SECTORBOB_DISCORD_USER_ID: u64 = 87326629677516917;
 
 pub struct AppContext {
@@ -271,7 +272,7 @@ impl Handler {
             .ok_or_else(|| ECRError::NotFound(format!("did not match a user in sleeper league")))
     }
 
-    fn is_permitted(ctx: &Context, msg: &Message) -> bool {
+    fn is_permitted(_ctx: &Context, msg: &Message) -> bool {
         msg.author.id.get() == SECTORBOB_DISCORD_USER_ID
     }
 }
@@ -383,13 +384,27 @@ impl EventHandler for Handler {
         // Consumer: receive feed events and send to Discord
         log::info!("Starting event receiver task...");
         tokio::spawn(async move {
+            let syndication_client = syndication::Client::new();
             let mut rx = feed_rx.lock().await;
             while let Some(feed_msg) = rx.recv().await {
                 let channel_id = ChannelId::new(feed_msg.destination.id.parse().unwrap());
 
-                let content = format!("{}\n{}", feed_msg.entry.title, feed_msg.entry.link);
+                let mut message: Option<CreateMessage> = None;
+                if let Some(_platform) = &feed_msg.entry.id.platform {
+                    if let Ok(tweet_id) = feed_msg.entry.id.id.parse::<u64>() {
+                        if let Ok(tweet) = syndication_client.fetch_tweet(tweet_id).await {
+                            message = Some(
+                                CreateMessage::new().add_embed(discord_embed_for_tweet(&tweet)),
+                            )
+                        }
+                    }
+                }
 
-                let message = CreateMessage::new().content(content);
+                // default formatting
+                if message.is_none() {
+                    let content = format!("{}\n{}", feed_msg.entry.title, feed_msg.entry.link);
+                    message = Some(CreateMessage::new().content(content));
+                }
 
                 // // add a timestamp embed for youtube videos
                 // if feed_msg.entry.id.platform == Some(store::Platform::Youtube) {
@@ -416,15 +431,16 @@ impl EventHandler for Handler {
                 //             .author(CreateEmbedAuthor::new(author.name.clone()).url(author.url.clone())),
                 //     );
                 // }
-
-                if let Err(e) = channel_id.send_message(&ctx_clone.http, message).await {
-                    log::error!("Failed to send message: {:?}", e);
+                if let Some(message) = message {
+                    if let Err(e) = channel_id.send_message(&ctx_clone.http, message).await {
+                        log::error!("Failed to send message: {:?}", e);
+                    }
                 }
             }
         });
     }
 
-    async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
+    async fn guild_member_addition(&self, _ctx: Context, new_member: Member) {
         // You'll need to enable the `GUILD_MEMBERS` privileged intent for this event to fire.
 
         // Get the Guild ID if possible
@@ -499,6 +515,8 @@ const MAX_MESSAGE_LEN: usize = 2000;
 const CODE_MAX_CONTENT_LEN: usize = MAX_MESSAGE_LEN - 8;
 const CODE_PFX: &str = "```\n";
 const CODE_SFX: &str = "```";
+const FOOTER_TWITTER_ICON: &str = "https://assets.fxembed.com/logos/fxtwitter-pride64.png";
+const TWITTER_COLOR_HEX: u32 = 6513919;
 
 async fn send_as_code<T: Into<String>>(ctx: &Context, msg: &Message, text: T) {
     let text: String = text.into();
@@ -549,120 +567,123 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
     }
 }
 
+fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
+    // let mut embeds = vec![];
+
+    let link = format!("https://x.com{}", tweet.link());
+
+    let mut description = encode_text(tweet.text().as_str());
+
+    if let Some(quoted) = &tweet.quoted_tweet {
+        description.push_str("\n\n> **[Quoting](https://x.com");
+        description.push_str(&quoted.link());
+        description.push_str(") ");
+        description.push_str(&quoted.user.name);
+        description.push_str(
+            format!(
+                " \\([@{screen_name}](https://x.com/{screen_name})\\)**\n> \u{fe00}\n> ",
+                screen_name = quoted.user.screen_name
+            )
+            .as_str(),
+        );
+        description.push_str(encode_text(&quoted.text()).as_str());
+        description.push_str(format!("\n\n**[🔁](https://x.com/intent/retweet?tweet_id={tweet_id}) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id={tweet_id}) 19\u{2002}👁\u{fe0f} 720\u{2002}**", tweet_id = tweet.id_str).as_str());
+
+        // "\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"
+    }
+
+    let mut embed = CreateEmbed::new()
+        .author(
+            CreateEmbedAuthor::new(format!("{} (@{})", tweet.user.name, tweet.user.screen_name))
+                .url(link.as_str())
+                .icon_url(tweet.user.profile_image_url_https.as_str()),
+        )
+        .timestamp(tweet.created_at)
+        .footer(CreateEmbedFooter::new("Twitter").icon_url(FOOTER_TWITTER_ICON))
+        .colour(Colour::new(TWITTER_COLOR_HEX))
+        .description(description)
+        .url(link.as_str());
+
+    embed = insert_from_media_details(embed, tweet);
+    if let Some(quoted) = &tweet.quoted_tweet {
+        embed = insert_from_media_details(embed, quoted);
+    }
+
+    embed
+}
+
+fn encode_text(s: &str) -> String {
+    let mut s = regex::escape(s);
+    s = s.replace("\n", "\n\u{fe00}\u{fe00}");
+    s
+}
+
+fn insert_from_media_details(
+    mut embed: CreateEmbed,
+    tweet: &twitter::TweetResponse,
+) -> CreateEmbed {
+    if let Some(media_details) = &tweet.media_details {
+        for media in media_details {
+            match media.r#type {
+                twitter::MediaType::Photo => {
+                    embed = embed.image(media.media_url_https.as_str());
+                }
+                twitter::MediaType::Video => {
+                    // TODO: figure out how I want to do this. discord doesn't allow me to add video embeds
+                    // embed.(media.url);
+                }
+            }
+        }
+    }
+    embed
+}
+
+#[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, VecDeque};
-
-    use serenity::all::{
-        Colour, CreateEmbedAuthor, CreateEmbedFooter, EditMember, GetMessages, Http,
-        MessageBuilder, Permissions, Role, RoleId, UserId,
-    };
-    use serenity::builder::EditRole;
-    use serenity::futures::StreamExt;
-
     use super::*;
-    use crate::ecr::service::Service;
-    use crate::store::{DataStore, Platform};
-    use crate::twitter::{TweetResponse, syndication};
-    use crate::yt::YoutubeClient;
+    use crate::twitter::TweetResponse;
+    use serenity::all::Embed;
 
     #[tokio::test]
-    async fn test_send_discord_message() {
-        let config = crate::config::load_config().expect("Failed to load config");
-        // let nfl_news_channel_id: u64 = 2067967944778588584;
-        let giants_news_channel_id: u64 = 7100738766260628716;
-        let channel_id = ChannelId::new(giants_news_channel_id);
-        let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
-        let http = Http::new(discord_token.as_str());
-
-        let messages = channel_id
-            .messages(
-                &http,
-                GetMessages::new().limit(1).after(8604299660934911324),
-            )
-            .await
-            .expect("Failed to fetch messages");
-        log::info!(
-            "Fetched {} messages from channel {}",
-            messages.len(),
-            giants_news_channel_id
+    async fn test_tweet_to_embed() {
+        let tweet_id: u64 = 7294395550069598126;
+        let tweet_str =
+            tokio::fs::read_to_string(format!("testdata/twitter/tweet_{tweet_id}.json"))
+                .await
+                .expect("failed to load test data file");
+        let tweet: TweetResponse =
+            serde_json::from_str(tweet_str.as_str()).expect("failed to deserialize tweet json");
+        let embed = to_embed(discord_embed_for_tweet(&tweet));
+        let expected = to_embed(CreateEmbed::new()
+            .url(format!("https://x.com/DanSchneierNFL/status/{tweet_id}")) // I am using x.com instead of fxtwitter.com
+            .author(
+                CreateEmbedAuthor::new("Dan Schneier (@DanSchneierNFL)")
+                    .url(format!("https://x.com/DanSchneierNFL/status/{tweet_id}"))
+                    .icon_url(
+                        "https://pbs.twimg.com/profile_images/7587230746533314994/U99feYNK_normal.jpg", // FIXME: adjusted to _normal from _200x200.jpg
+                    ),
+            ).image("https://pbs.twimg.com/media/GyPznmKWYAEOe0l.jpg")
+            .footer(CreateEmbedFooter::new("FxTwitter").icon_url("https://assets.fxembed.com/logos/fxtwitter-pride64.png"))
+            .colour(Colour(6513919))
+            .description("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"),
         );
-        for message in &messages {
-            log::info!("Message: {:#?}", message);
-        }
-        // panic!("Test completed, check logs for messages");
-        let syndication_client = syndication::Client::new();
-
-        let tweet = syndication_client
-            .fetch_tweet(3446382222382249349, config.twitter_cookie.clone())
-            .await
-            .expect("failed to get tweet");
-        println!("Tweet: {tweet:#?}");
-        channel_id
-            .send_message(
-                &http,
-                CreateMessage::new().add_embeds(discord_embed_for_tweet(tweet)),
-            )
-            .await
-            .expect("failed to send message");
-        // println!("Tweet: {tweet:#?}");
-        assert!(false);
-    }
-
-    const footer_twitter_icon: &str = "https://assets.fxembed.com/logos/fxtwitter-pride64.png";
-    const twitter_color_hex: u32 = 6513919;
-
-    fn discord_embed_for_tweet(tweet: TweetResponse) -> Vec<CreateEmbed> {
-        let mut embeds = vec![];
-        embeds.push(
-            CreateEmbed::new()
-                .author(
-                    CreateEmbedAuthor::new(&tweet.user.name)
-                        .url("https://x.com/BobbySkinner_/status/3446382222382249349")
-                        .icon_url("https://x.com/BobbySkinner_/status/3446382222382249349"),
-                )
-                .timestamp(tweet.created_at)
-                .footer(CreateEmbedFooter::new("Twitter").icon_url(footer_twitter_icon))
-                .colour(Colour::new(twitter_color_hex))
-                .description("Thought this went well\\. Excited to see what Jordan does with it\\.\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}See you all at Giants\\-Jets practice tomorrow\\. Recap to follow\n\n> **[Quoting](https://x.com/JordanRaanan/status/3713477757564328062) Jordan Raanan \\([@JordanRaanan](https://x.com/JordanRaanan)\\)**\n> \u{fe00}\n> Impressive Giants Rookies \\| Breaking Big Blue w/ Jordan Raanan\\. Better viewed on Youtube [youtube.com/live/YNvRkrzh2fo?feature=share](https://youtube.com/live/YNvRkrzh2fo?feature=share) [x.com/i/broadcasts/1mnxeNyLyjbKX](https://x.com/i/broadcasts/1mnxeNyLyjbKX)\n\n**[❤\u{fe0f}](https://x.com/intent/like?tweet_id=3446382222382249349) 2\u{2002}👁\u{fe0f} 57\u{2002}**")
-                .url("https://fxtwitter.com/BobbySkinner_/status/3446382222382249349"),
+        debug_assert_eq!(expected.author, embed.author, "embed author is not right");
+        debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
+        debug_assert_eq!(expected.url, embed.url, "embed url is not right");
+        debug_assert_eq!(expected.image, embed.image, "embed image is not right");
+        debug_assert_eq!(
+            expected.description, embed.description,
+            "embed description is not right"
         );
 
-        embeds
-        // MessageBuilder::new().emb.build()
+        // left: Some("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**")
+        //right: Some("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}@MarcusMbow\u{2069}^^^^^^^^^^^^^^^^^^^^^^^^^^^^ has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child https://t\\.co/uTPhhvGpCm\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**")
+        // debug_assert_eq!(expected, embed, "blarg");
+        // debug_assert_eq!(expected)
     }
 
-    // #[tokio::test]
-    // async fn test_create_role() {
-    //     crate::config::load_config().expect("Failed to load config");
-    //     // let nfl_news_channel_id: u64 = 2067967944778588584;
-    //     let giants_news_channel_id: u64 = 7100738766260628716;
-    //     let channel_id = ChannelId::new(giants_news_channel_id);
-    //     let discord_token = std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
-    //     let http = Http::new(discord_token.as_str());
-    //     let store = Arc::new(DataStore::new());
-    //     let svc: Service = Service::new(&store);
-
-    //     let sectorbobs_football_lounge_guild_id = 6828159027854455257;
-
-    //     let guild_id = GuildId::new(sectorbobs_football_lounge_guild_id);
-
-    //     let mut existing_roles = guild_id.roles(&http).await.expect("can't get roles");
-    //     let custom_roles = svc
-    //         .create_necessary_roles(guild_id, &http)
-    //         .await
-    //         .expect("can't setup custom roles");
-
-    //     svc.synchronize_manager_role(guild_id, &http)
-    //         .await
-    //         .expect("unable to syncropnize manager role");
-
-    //     // let new_role = guild_id.create_role(&http, role_builder).await;
-
-    //     // match new_role {
-    //     //     Ok(role) => println!("Successfully created role: {}", role.name),
-    //     //     Err(why) => println!("Error creating role: {:?}", why),
-    //     // }
-
-    //     panic!("Test completed, check logs for messages");
-    // }
+    fn to_embed(create_embed: CreateEmbed) -> Embed {
+        let json = serde_json::to_string(&create_embed).expect("fail");
+        serde_json::from_str(json.as_str()).expect("fail")
+    }
 }

@@ -186,8 +186,6 @@ async fn setup_discord_bot(
     Ok(())
 }
 
-const FX_TWITTER: &str = "https://fxtwitter.com";
-
 async fn do_feed_fetch(
     feed_id: u64,
     tx: &Sender<FeedEvent>,
@@ -338,8 +336,8 @@ async fn do_feed_fetch(
         for new_tweet in new_tweets.into_iter() {
             log::info!("----------------------------------");
             log::info!("Created At: {}", new_tweet.created_at);
-            log::info!("Text: {}", new_tweet.full_text);
-            log::info!("Link: {FX_TWITTER}{}", new_tweet.permalink);
+            log::info!("Text: {}", new_tweet.text());
+            log::info!("Link: {}{}", twitter::FX_TWITTER, new_tweet.link());
             log::info!("----------------------------------");
             let entry = store::FeedEntry::from(new_tweet);
             feed.entries.push(entry.clone());
@@ -425,27 +423,30 @@ async fn fetch_raw_tweets<T: Display>(
     let twitter_timeline = syndication_client
         .fetch_user_timeline(twitter_username.to_string(), twitter_cookie.to_string())
         .await?;
-    Ok(twitter_timeline
-        .props
-        .page_props
-        .timeline
-        .entries
-        .into_iter()
-        .filter_map(|e| e.content.tweet)
-        .collect())
+    Ok(
+        twitter_timeline //TODO: look into replacing with timeline.tweets()
+            .props
+            .page_props
+            .timeline
+            .entries
+            .into_iter()
+            .filter_map(|e| e.content.tweet)
+            .collect(),
+    )
 }
 
 impl From<TweetResponse> for FeedEntry {
     fn from(tweet: TweetResponse) -> Self {
+        let txt = tweet.text();
         FeedEntry {
             id: ExternalId {
                 platform: Some(store::Platform::Twitter),
                 id: tweet.id_str.clone(),
             },
-            title: tweet.full_text.clone(),
-            link: format!("{FX_TWITTER}{}", tweet.permalink),
+            title: txt.clone(), // TODO: ???????
+            link: format!("{}{}", twitter::FX_TWITTER, tweet.link()),
             source_ts: tweet.created_at.to_utc(),
-            content: tweet.full_text.clone(),
+            content: txt,
             published_at: None, // You can set this to Some(Utc::now()) if you want
         }
     }
@@ -503,16 +504,19 @@ mod tests {
     fn test_feed_entry_from_tweet() {
         let tweet = TweetResponse {
             id_str: "1234567890".to_string(),
-            full_text: "Test tweet".to_string(),
+            full_text: Some("Test tweet".to_string()),
             created_at: chrono::Utc::now().into(),
-            permalink: "/status/1234567890".to_string(),
+            permalink: Some("/status/1234567890".to_string()),
             text: "other text".to_string(),
             user: User {
                 id_str: "user123".to_string(),
                 name: "Test User".to_string(),
                 screen_name: "testuser".to_string(),
+                profile_image_url_https: "".to_string(),
             },
             lang: "en-us".to_string(),
+            quoted_tweet: None,
+            media_details: None,
         };
         let entry: FeedEntry = tweet.into();
         assert_eq!(entry.id.id, "1234567890");
