@@ -459,13 +459,29 @@ pub struct Snippet {
     pub channel_id: Option<String>,
     pub title: String,
     pub description: String,
-    // pub thumbnails: Thumbnails,
+    pub thumbnails: Thumbnails,
     pub channel_title: Option<String>,
     pub live_broadcast_content: Option<String>,
     pub publish_time: Option<DateTime<Utc>>,
     pub custom_url: Option<String>,
     pub country: Option<String>,
     pub resource_id: Option<ItemId>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Thumbnails {
+    pub default: Thumbnail,
+    pub medium: Thumbnail,
+    pub high: Thumbnail,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Thumbnail {
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

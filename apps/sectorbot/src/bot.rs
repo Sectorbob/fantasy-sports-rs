@@ -14,7 +14,7 @@ use crate::config::Config;
 use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
 use crate::store::{self, ExternalId, FeedEvent, League};
 use crate::twitter::syndication;
-use crate::yt::YoutubeClient;
+use crate::yt::{self, YoutubeClient};
 use crate::{ecr, twitter};
 
 const SECTORBOB_DISCORD_USER_ID: u64 = 87326629677516917;
@@ -515,8 +515,10 @@ const MAX_MESSAGE_LEN: usize = 2000;
 const CODE_MAX_CONTENT_LEN: usize = MAX_MESSAGE_LEN - 8;
 const CODE_PFX: &str = "```\n";
 const CODE_SFX: &str = "```";
-const FOOTER_TWITTER_ICON: &str = "https://assets.fxembed.com/logos/fxtwitter-pride64.png";
+const FOOTER_TWITTER_ICON: &str = "https://cdn-icons-png.flaticon.com/64/145/145812.png"; //"https://assets.fxembed.com/logos/fxtwitter-pride64.png";
+const FOOTER_YOUTUBE_ICON: &str = "https://cdn-icons-png.flaticon.com/64/174/174883.png";
 const TWITTER_COLOR_HEX: u32 = 6513919;
+const YOUTUBE_COLOR_HEX: u32 = 16711680;
 
 async fn send_as_code<T: Into<String>>(ctx: &Context, msg: &Message, text: T) {
     let text: String = text.into();
@@ -567,11 +569,83 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
     }
 }
 
+fn channel_icon_url_for<T: Into<String>>(channel_id: T) -> Option<String> {
+    let channel_id: String = channel_id.into();
+    match channel_id.as_str() {
+        "UC-AfHSMCZfj9_SB__lDiVGQ" => Some("https://yt3.ggpht.com/tRo8f2fdVJxU4reo2GkwQM7KObcOGkizJ2a_1y5Q77asZszVPSuWYSHiZMvGXm5Ob06A6dFc=s48-c-k-c0x00ffffff-no-rj".to_string()),
+        "UCJ5JxdXQ6xh48GL8kGQJT0w" => Some("https://yt3.ggpht.com/ytc/AIdro_lzKU60jKmyyAQsfIY5qke_sjpRbIJ6jYt3O8T2gpv5IA=s88-c-k-c0x00ffffff-no-r".to_string()),
+        "UC2uN7halHCl7g2GW_r7p6DA" => Some("https://yt3.ggpht.com/vR_Vl3WywEfr5gaOfbdF9HkLsKmJadpf2HKmwMtkORTA-Whs3T7sl5l6TWEMC0DP8UG_GnQ52A=s88-c-k-c0x00ffffff-no-rj".to_string()),
+        "UCF_O9xJbBoQ0D7x8Q8F0mAA" => Some("https://yt3.ggpht.com/BFI-S3ZFf3lQTOTuXjmip5Q5_sE3m9UbCO1Iv8jXJdLl0RonRBv0270q6LeM-aRj65ufSt5q=s88-c-k-c0x00ffffff-no-rj".to_string()),
+        // "" => Some("".to_string()),
+        _ => None
+    }
+}
+
+fn discord_embed_for_youtube(video: &yt::Item) -> Option<CreateEmbed> {
+    let channel_name = video
+        .snippet
+        .as_ref()
+        .map(|snippet| snippet.channel_title.clone())
+        .flatten()?;
+    let channel_id = video
+        .snippet
+        .as_ref()
+        .map(|snippet| snippet.channel_id.clone())
+        .flatten()?;
+    let channel_icon = channel_icon_url_for(&channel_id);
+    let link = video.link()?;
+    let title = video.title();
+    let description = encode_text(video.description().as_str());
+    let thumbnail_image_url = video
+        .snippet
+        .as_ref()
+        .map(|s| s.thumbnails.medium.url.clone());
+    let timestamp = video
+        .snippet
+        .as_ref()
+        .map(|snippet| snippet.published_at.clone())?;
+
+    // if let Some(quoted) = &tweet.quoted_tweet {
+    //     description.push_str("\n\n> **[Quoting](https://x.com");
+    //     description.push_str(&quoted.link());
+    //     description.push_str(") ");
+    //     description.push_str(&quoted.user.name);
+    //     description.push_str(
+    //         format!(
+    //             " \\([@{screen_name}](https://x.com/{screen_name})\\)**\n> \u{fe00}\n> ",
+    //             screen_name = quoted.user.screen_name
+    //         )
+    //         .as_str(),
+    //     );
+    //     description.push_str(encode_text(&quoted.text()).as_str());
+    //     description.push_str(format!("\n\n**[🔁](https://x.com/intent/retweet?tweet_id={tweet_id}) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id={tweet_id}) 19\u{2002}👁\u{fe0f} 720\u{2002}**", tweet_id = tweet.id_str).as_str());
+
+    //     // "\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"
+    // }
+
+    let mut embed_author = CreateEmbedAuthor::new(channel_name).url(link.as_str());
+    if let Some(channel_icon) = channel_icon {
+        embed_author = embed_author.icon_url(channel_icon.as_str());
+    }
+
+    let mut embed = CreateEmbed::new()
+        .author(embed_author)
+        .timestamp(timestamp)
+        .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
+        .colour(Colour::new(YOUTUBE_COLOR_HEX))
+        .description(description)
+        .title(title)
+        .url(link.as_str());
+
+    if let Some(thumbnail_image_url) = thumbnail_image_url {
+        embed = embed.image(thumbnail_image_url.as_str());
+    }
+
+    Some(embed)
+}
+
 fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
-    // let mut embeds = vec![];
-
     let link = format!("https://x.com{}", tweet.link());
-
     let mut description = encode_text(tweet.text().as_str());
 
     if let Some(quoted) = &tweet.quoted_tweet {
@@ -588,8 +662,6 @@ fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
         );
         description.push_str(encode_text(&quoted.text()).as_str());
         description.push_str(format!("\n\n**[🔁](https://x.com/intent/retweet?tweet_id={tweet_id}) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id={tweet_id}) 19\u{2002}👁\u{fe0f} 720\u{2002}**", tweet_id = tweet.id_str).as_str());
-
-        // "\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"
     }
 
     let mut embed = CreateEmbed::new()
@@ -615,6 +687,7 @@ fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
 fn encode_text(s: &str) -> String {
     let mut s = regex::escape(s);
     s = s.replace("\n", "\n\u{fe00}\u{fe00}");
+    s = s.replace("\\.", "."); // undo the period escape
     s
 }
 
@@ -642,6 +715,7 @@ fn insert_from_media_details(
 mod tests {
     use super::*;
     use crate::twitter::TweetResponse;
+    use crate::yt;
     use serenity::all::Embed;
 
     #[tokio::test]
@@ -685,5 +759,46 @@ mod tests {
     fn to_embed(create_embed: CreateEmbed) -> Embed {
         let json = serde_json::to_string(&create_embed).expect("fail");
         serde_json::from_str(json.as_str()).expect("fail")
+    }
+
+    #[tokio::test]
+    async fn test_youtube_to_embed() {
+        let youtube_playlist_videos_str =
+            tokio::fs::read_to_string(format!("testdata/yt/list_playlist_items.json"))
+                .await
+                .expect("failed to load test data file");
+        let yt_videos_response: yt::Response =
+            serde_json::from_str(youtube_playlist_videos_str.as_str())
+                .expect("failed to deserialize list channels json");
+
+        let videos = match yt_videos_response {
+            yt::Response::PlaylistItemListResponse { items, .. } => Some(items),
+            _ => None,
+        }
+        .expect("no videos loaded");
+
+        let embed = to_embed(discord_embed_for_youtube(&videos[0]).expect("no embed created"));
+        let expected = to_embed(CreateEmbed::new()
+            .url(format!("https://www.youtube.com/watch?v=LWeK8jJpK3s")) // I am using x.com instead of fxtwitter.com
+            .author(
+                CreateEmbedAuthor::new("Big Blue Banter")
+                    .url(format!("https://www.youtube.com/watch?v=LWeK8jJpK3s"))
+                    .icon_url(
+                        "https://yt3.ggpht.com/ytc/AIdro_lzKU60jKmyyAQsfIY5qke_sjpRbIJ6jYt3O8T2gpv5IA=s88-c-k-c0x00ffffff-no-r",
+                    ),
+            ).image("https://i.ytimg.com/vi/LWeK8jJpK3s/mqdefault.jpg")
+            .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
+            .colour(Colour(6513919))
+            .title("Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ")
+            .description("Dan and Nick break down the last two Giants practices and discuss the moment Malik Nabers said Ah ha with Russ Wilson based on a coverage Russ diagnosed pre snap, they also discuss Jaxson Dart’s best practice and break down the video clips of his throws, plus Russ 50 yard bomb to Nabers, the Slayton one handed catch and two insanely skilled pass rushing moves by Abdul Carter. That and a whole lot more!\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}\\#Giants \\#nyg \\#newyorkgiants \\#football \\#giantsfootball \\#nfceast \\#maliknabers \\#russellwilson \\#bluewirevideo \\#bigblue \\#newyorkcity \\#trainingcamp")
+        );
+        debug_assert_eq!(expected.author, embed.author, "embed author is not right");
+        debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
+        debug_assert_eq!(expected.url, embed.url, "embed url is not right");
+        debug_assert_eq!(expected.image, embed.image, "embed image is not right");
+        debug_assert_eq!(
+            expected.description, embed.description,
+            "embed description is not right"
+        );
     }
 }
