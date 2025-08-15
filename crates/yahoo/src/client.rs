@@ -6,14 +6,24 @@ use crate::{
         LeagueKey, Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token,
         Transaction, User,
     },
+    token,
 };
 use chrono::NaiveDate;
 use core::str;
 use itertools::join;
 use log::{debug, error, info};
 use quick_xml::de::from_str;
-use std::{error::Error as _, path::PathBuf};
+use std::{
+    env::{self, VarError},
+    error::Error as _,
+    path::PathBuf,
+    sync::Arc,
+};
+use tokio::sync::Mutex;
 
+const YAHOO_CLIENT_ID: &str = "YAHOO_CLIENT_ID";
+const YAHOO_REDIRECT_URI: &str = "YAHOO_REDIRECT_URI";
+const YAHOO_TOKEN_FILE: &str = "YAHOO_TOKEN_FILE";
 const USER_AGENT: &str = "reqwest";
 
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
@@ -25,74 +35,76 @@ pub struct Client {
     base_url: String,
     client: reqwest::Client,
     client_no_redirects: reqwest::Client,
-    client_id: String,
-    redirect_uri: String,
-    code_verifier: Option<String>,
-    pub token: Option<Token>,
+    pub client_id: String,
+    pub redirect_uri: String,
+    code_verifier: Arc<Mutex<Option<String>>>,
+    pub token_file: Option<String>,
+    token: Arc<Mutex<Option<Token>>>,
     cache: Option<Box<dyn Cacheable + Send + Sync>>,
 }
 impl Client {
-    pub fn with_token<T: Into<PathBuf>>(
-        client_id: String,
-        redirect_uri: String,
-        token: Token,
-        base_url: Option<String>,
-        cache_dir: Option<T>,
-    ) -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .build()
-            .unwrap();
-        let client_no_redirects = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap();
+    pub fn new_from_env() -> Result<Self, VarError> {
+        let client_id = env::var(YAHOO_CLIENT_ID)?;
+        let redirect_uri = env::var(YAHOO_REDIRECT_URI)?;
+        Ok(Client::new(client_id, redirect_uri))
+    }
 
+    pub fn new<C: Into<String>, R: Into<String>>(client_id: C, redirect_uri: R) -> Self {
         Client {
-            base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
-            client,
-            client_no_redirects,
-            client_id,
-            redirect_uri,
-            code_verifier: Option::None,
-            token: Some(token),
-            cache: cache_dir.map(|dir| {
-                Box::new(FileSystemCacher::new(dir)) as Box<dyn Cacheable + Send + Sync>
-            }),
+            base_url: YAHOO_FANTASY_API_BASE_URL.to_string(),
+            client: reqwest::Client::builder()
+                .user_agent(USER_AGENT)
+                .build()
+                .expect("dev error creating http client for yahoo client"),
+            client_no_redirects: reqwest::Client::builder()
+                .user_agent(USER_AGENT)
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("dev error creating http client (no redirects) for yahoo client"),
+            client_id: client_id.into(),
+            redirect_uri: redirect_uri.into(),
+            code_verifier: Arc::new(Mutex::new(None)),
+            token_file: None,
+            token: Arc::new(Mutex::new(None)),
+            cache: None,
         }
     }
 
-    pub fn new<T: Into<PathBuf>>(
-        client_id: String,
-        redirect_uri: String,
-        base_url: Option<String>,
-        cache_dir: Option<T>,
-    ) -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("reqwest")
-            .build()
-            .unwrap();
-        let client_no_redirects = reqwest::Client::builder()
-            .user_agent("reqwest")
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap();
-        Client {
-            base_url: base_url.unwrap_or(YAHOO_FANTASY_API_BASE_URL.to_string()),
-            client,
-            client_no_redirects,
-            client_id,
-            redirect_uri,
-            code_verifier: Option::None,
-            token: Option::None,
-            cache: cache_dir.map(|dir| {
-                Box::new(FileSystemCacher::new(dir)) as Box<dyn Cacheable + Send + Sync>
-            }),
-        }
+    pub fn with_base_url<U: Into<String>>(mut self, url: U) -> Self {
+        self.base_url = url.into();
+        self
     }
 
-    pub async fn get_request_auth_url(&mut self) -> Result<String, Error> {
+    pub fn with_cache(mut self, cache: Box<dyn Cacheable + Send + Sync>) -> Self {
+        self.cache = Some(cache);
+        self
+    }
+
+    pub fn with_cache_dir<D: Into<PathBuf>>(mut self, cache_dir: D) -> Self {
+        self.cache =
+            Some(Box::new(FileSystemCacher::new(cache_dir.into()))
+                as Box<dyn Cacheable + Send + Sync>);
+        self
+    }
+
+    pub fn with_token(mut self, token: Token) -> Self {
+        self.token = Arc::new(Mutex::new(Some(token)));
+        self
+    }
+
+    pub async fn with_token_file<F: Into<String>>(
+        mut self,
+        token_file: Option<F>,
+    ) -> Result<Self, token::Error> {
+        let token_file = token_file
+            .map_or(env::var(YAHOO_TOKEN_FILE).ok(), |f| Some(f.into()))
+            .ok_or(token::Error::FilenameRequired)?;
+        let token = token::load_token_file(&token_file).await?;
+        self.token_file = Some(token_file);
+        Ok(self.with_token(token))
+    }
+
+    pub async fn get_request_auth_url(&self) -> Result<String, Error> {
         let code_verifier = pkce::code_verifier(43);
         let code_challenge = pkce::code_challenge(&code_verifier);
         let code_challenge_method = "S256";
@@ -138,13 +150,20 @@ impl Client {
 
         let location = resp.headers().get("location").unwrap();
 
-        self.code_verifier = Some(String::from_utf8(code_verifier).unwrap());
+        let mut v = self.code_verifier.lock().await;
+        let _ = v.insert(String::from_utf8(code_verifier).unwrap());
 
         return Ok(location.to_str().unwrap().to_string());
     }
 
-    pub async fn get_token(&mut self, code: &str) -> Result<Token, Error> {
-        let code_verifier = self.code_verifier.as_ref().unwrap();
+    pub async fn get_token(&self, code: &str) -> Result<Token, Error> {
+        let code_verifier_lock = self.code_verifier.lock().await;
+        let code_verifier = code_verifier_lock.as_ref().map_or(
+            Err(Error::UnknownError(String::from(
+                "no code_verifier available",
+            ))),
+            |v| Ok(v),
+        )?;
 
         let form = [
             ("client_id", self.client_id.as_str()),
@@ -184,25 +203,36 @@ impl Client {
             )));
         }
 
-        match resp.json::<Token>().await {
-            Ok(token) => {
-                self.token = Some(token.clone());
-                Ok(token)
-            }
-            Err(err) => Err(Error::UnknownError(format!(
-                "Failed to parse response body as Token: {}",
-                err
-            ))),
+        // TODO: unset the codeverifier
+
+        let token = resp.json::<Token>().await.map_err(|err| {
+            Error::UnknownError(format!("Failed to parse response body as Token: {}", err))
+        })?;
+
+        let mut token_arc = self.token.lock().await;
+        let _ = token_arc.insert(token.clone());
+
+        // save to file if filename is active
+        if let Some(token_file) = &self.token_file {
+            token::save_token_file(token_file, &token)
+                .await
+                .map_err(|err| {
+                    Error::UnknownError(format!("failed to save token file after get_token: {err}"))
+                })?;
         }
+        Ok(token)
     }
 
-    pub async fn refresh_token(&mut self) -> Result<Token, Error> {
+    pub async fn refresh_token(&self) -> Result<Token, Error> {
+        let mut token_lock = self.token.lock().await;
+        let token = token_lock.as_ref().map_or(
+            Err(Error::UnknownError("no token available".to_string())),
+            |t| Ok(t),
+        )?;
+
         let form = [
             ("client_id", self.client_id.as_str()),
-            (
-                "refresh_token",
-                self.token.as_mut().unwrap().refresh_token.as_str(),
-            ),
+            ("refresh_token", token.refresh_token.as_str()),
             ("grant_type", "refresh_token"),
             ("redirect_uri", "oob"),
         ];
@@ -240,16 +270,32 @@ impl Client {
             )));
         }
 
-        match resp.json::<Token>().await {
-            Ok(token) => {
-                self.token = Some(token.clone());
-                Ok(token)
-            }
-            Err(err) => Err(Error::UnknownError(format!(
-                "Failed to parse response body as Token: {}",
-                err
-            ))),
+        let token = resp.json::<Token>().await.map_err(|err| {
+            Error::UnknownError(format!("Failed to parse response body as Token: {}", err))
+        })?;
+
+        // update arc mutex
+        let _ = token_lock.insert(token.clone());
+
+        // save to file if filename is active
+        if let Some(token_file) = &self.token_file {
+            token::save_token_file(token_file, &token)
+                .await
+                .map_err(|err| {
+                    Error::UnknownError(format!("failed to save token file after refresh: {err}"))
+                })?;
         }
+
+        Ok(token)
+    }
+
+    /// Gets a copy of the token on this client
+    pub(crate) async fn token(&self) -> Result<Option<Token>, Error> {
+        self.token
+            .lock()
+            .await
+            .as_ref()
+            .map_or(Ok(None), |t| Ok(Some(t.clone())))
     }
 
     pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, Error> {
@@ -270,14 +316,16 @@ impl Client {
         }
         debug!("GET {}", url);
 
+        let token = self
+            .token()
+            .await? // should never return an err
+            .ok_or(Error::UnknownError(String::from("no token available")))?;
+
         let req = match self
             .client
             .get(url)
             .header("Accept", "application/xml")
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.token.as_ref().unwrap().access_token),
-            )
+            .header("Authorization", format!("Bearer {}", token.access_token))
             .build()
         {
             Ok(req) => req,
@@ -853,19 +901,16 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fixture = Client::with_token::<String>(
-            "".to_string(),
-            "".to_string(),
-            Token {
+        let fixture = Client::new("", "")
+            .with_base_url(mock_server.uri())
+            .with_token(Token {
                 access_token: "foo".to_string(),
                 token_type: "bearer".to_string(),
                 expires_in: 3600,
                 refresh_token: "bar".to_string(),
                 scope: None,
-            },
-            Some(mock_server.uri()),
-            None,
-        );
+            });
+
         (fixture, mock_server)
     }
     async fn setup_with_error(p: &str, code: u16, error: &str) -> (Client, MockServer) {
@@ -898,19 +943,15 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fixture = Client::with_token::<String>(
-            "".to_string(),
-            "".to_string(),
-            Token {
+        let fixture = Client::new("", "")
+            .with_base_url(mock_server.uri())
+            .with_token(Token {
                 access_token: "foo".to_string(),
                 token_type: "bearer".to_string(),
                 expires_in: 3600,
                 refresh_token: "bar".to_string(),
                 scope: None,
-            },
-            Some(mock_server.uri()),
-            None,
-        );
+            });
         (fixture, mock_server)
     }
 

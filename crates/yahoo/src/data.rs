@@ -8,6 +8,7 @@ use std::{fmt, str::FromStr};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "yahoo:error")]
+#[allow(dead_code)]
 pub(crate) struct Error {
     #[serde(rename = "description")]
     pub description: Option<String>,
