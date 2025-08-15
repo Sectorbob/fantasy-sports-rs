@@ -97,14 +97,17 @@ impl Service {
             let user = ctx
                 .users
                 .iter()
-                .find(|u| u.user_id == roster.owner_id)
+                .find(|u| roster.owner_id.is_some() && roster.owner_id.clone().unwrap() == u.user_id)
                 .map(SleeperUser::clone)
                 .unwrap_or_else(|| {
-                    log::warn!("for some reason, we could not find the user info {user_id} for roster({roster_id})",user_id =roster.owner_id, roster_id = roster.roster_id);
+                    log::warn!("for some reason, we could not find the user info {user_id:?} for roster({roster_id})",
+                        user_id = roster.owner_id, 
+                        roster_id = roster.roster_id,
+                    );
                     SleeperUser {
                         username: None,
-                        user_id: roster.owner_id.clone(),
-                        display_name: format!("Unknown User({})", roster.owner_id),
+                        user_id: roster.owner_id.clone().unwrap_or_default(),
+                        display_name: format!("Roster({:?})", roster.owner_id),
                         avatar: None,
                         league_details: None,
                         other_data: HashMap::new(),
