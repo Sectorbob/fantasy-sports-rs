@@ -148,7 +148,7 @@ impl Service {
                         .find(|p| p.player_name == player_name)
                         .map(|pr| {
                             let round = pr.rank_ecr / num_teams + 1;
-                            let pick_in_round = pr.rank_ecr % num_teams;
+                            let pick_in_round = pr.rank_ecr % num_teams + 1;
                             format!("{round}.{pick_in_round}")
                         });
                     keepables.push(Keepable {
