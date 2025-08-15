@@ -221,7 +221,10 @@ impl League {
                 rosters,
                 transactions: _,
                 user_id,
-            } => match rosters.iter().find(|r| &r.owner_id == user_id) {
+            } => match rosters
+                .iter()
+                .find(|r| r.owner_id.is_some() && &r.owner_id.clone().unwrap() == user_id)
+            {
                 Some(roster) => format!(
                     "{}-{}-{}",
                     match roster.settings.get("wins") {
@@ -302,7 +305,10 @@ impl League {
                 rosters,
                 transactions: _,
                 user_id,
-            } => match rosters.iter().find(|r| &r.owner_id == user_id) {
+            } => match rosters
+                .iter()
+                .find(|r| r.owner_id.is_some() && &r.owner_id.clone().unwrap() == user_id)
+            {
                 Some(roster) => roster
                     .settings
                     .get("points")
