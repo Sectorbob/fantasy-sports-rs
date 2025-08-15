@@ -229,6 +229,10 @@ pub struct FeedEntry {
     pub source_ts: DateTime<Utc>,
     pub content: String,
     pub published_at: Option<DateTime<Utc>>,
+    pub author_icon_url: Option<String>,
+    pub author_name: Option<String>,
+    pub author_id: Option<String>,
+    pub embed_image_url: Option<String>,
 }
 
 #[allow(dead_code)]

@@ -12,7 +12,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
 use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
-use crate::store::{self, ExternalId, FeedEvent, League};
+use crate::store::{self, ExternalId, FeedEvent, League, Platform};
 use crate::twitter::syndication;
 use crate::yt::{self, YoutubeClient};
 use crate::{ecr, twitter};
@@ -390,14 +390,66 @@ impl EventHandler for Handler {
                 let channel_id = ChannelId::new(feed_msg.destination.id.parse().unwrap());
 
                 let mut message: Option<CreateMessage> = None;
-                if let Some(_platform) = &feed_msg.entry.id.platform {
-                    if let Ok(tweet_id) = feed_msg.entry.id.id.parse::<u64>() {
-                        if let Ok(tweet) = syndication_client.fetch_tweet(tweet_id).await {
-                            message = Some(
-                                CreateMessage::new().add_embed(discord_embed_for_tweet(&tweet)),
-                            )
+                if let Some(platform) = &feed_msg.entry.id.platform {
+                    if platform == &Platform::Twitter {
+                        if let Ok(tweet_id) = feed_msg.entry.id.id.parse::<u64>() {
+                            if let Ok(tweet) = syndication_client.fetch_tweet(tweet_id).await {
+                                message = Some(
+                                    CreateMessage::new().add_embed(discord_embed_for_tweet(&tweet)),
+                                )
+                            }
                         }
                     }
+                }
+                // default formatting if all the optional values are included
+                if message.is_none()
+                    && feed_msg.entry.author_name.is_some()
+                    && feed_msg.entry.author_id.is_some()
+                {
+                    let mut embed_author =
+                        CreateEmbedAuthor::new(feed_msg.entry.author_name.unwrap_or_default())
+                            .url(feed_msg.entry.link.clone());
+                    if let Some(author_icon) = feed_msg.entry.author_icon_url {
+                        embed_author = embed_author.icon_url(author_icon.as_str());
+                    }
+
+                    let color = if let Some(platform) = &feed_msg.entry.id.platform {
+                        match platform {
+                            store::Platform::Twitter => Some(Colour::new(TWITTER_COLOR_HEX)),
+                            store::Platform::Youtube => Some(Colour::new(YOUTUBE_COLOR_HEX)),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    let footer = if let Some(platform) = &feed_msg.entry.id.platform {
+                        match platform {
+                            store::Platform::Twitter => Some(
+                                CreateEmbedFooter::new("Twitter").icon_url(FOOTER_TWITTER_ICON),
+                            ),
+                            store::Platform::Youtube => Some(
+                                CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON),
+                            ),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+
+                    let mut embed = CreateEmbed::new()
+                        .author(embed_author)
+                        .timestamp(feed_msg.entry.source_ts)
+                        .description(feed_msg.entry.content)
+                        .title(feed_msg.entry.title.clone())
+                        .url(feed_msg.entry.link.clone());
+                    if let Some(color) = color {
+                        embed = embed.color(color);
+                    }
+                    if let Some(footer) = footer {
+                        embed = embed.footer(footer);
+                    }
+
+                    message = Some(CreateMessage::new().embed(embed));
                 }
 
                 // default formatting

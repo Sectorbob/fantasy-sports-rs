@@ -448,23 +448,42 @@ impl From<TweetResponse> for FeedEntry {
             source_ts: tweet.created_at.to_utc(),
             content: txt,
             published_at: None, // You can set this to Some(Utc::now()) if you want
+            author_icon_url: None, // TODO: ???????
+            author_name: None,  // TODO: ???????
+            author_id: None,    // TODO: ???????
+            embed_image_url: None, // TODO: ???????
         }
     }
 }
 impl From<yt::Item> for FeedEntry {
     fn from(video: yt::Item) -> Self {
         let video_id = video.video_id().unwrap_or_default();
-        let link = format!("https://www.youtube.com/watch?v={video_id}");
+        let link = video.link().unwrap_or_default();
         FeedEntry {
             id: ExternalId {
                 platform: Some(store::Platform::Youtube),
                 id: video_id,
             },
             title: video.title(),
-            link,
+            link: link.clone(),
             source_ts: video.published_at().unwrap_or_default(),
             content: video.description(),
             published_at: None, // You can set this to Some(Utc::now()) if you want
+            author_icon_url: video.link(),
+            author_name: video
+                .snippet
+                .as_ref()
+                .map(|snippet| snippet.channel_title.clone())
+                .flatten(),
+            author_id: video
+                .snippet
+                .as_ref()
+                .map(|snippet| snippet.channel_id.clone())
+                .flatten(),
+            embed_image_url: video
+                .snippet
+                .as_ref()
+                .map(|s| s.thumbnails.medium.url.clone()),
         }
     }
 }

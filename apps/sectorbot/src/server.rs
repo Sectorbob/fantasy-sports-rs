@@ -219,6 +219,10 @@ mod tests {
                 .unwrap()
                 .with_timezone(&Utc),
             published_at: None,
+            author_icon_url: None,
+            author_name: None,
+            author_id: None,
+            embed_image_url: None,
         };
 
         let feed = Feed {
