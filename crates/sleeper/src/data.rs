@@ -621,7 +621,10 @@ pub struct LastMessageDetails {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Roster {
     pub roster_id: u8,
-    pub owner_id: String,
+    
+    /// The unique identifier of the owner, if available. Is None when a roster
+    /// is unassigned.
+    pub owner_id: Option<String>,
     pub league_id: String,
     pub starters: Vec<String>,
     pub settings: HashMap<String, Number>,

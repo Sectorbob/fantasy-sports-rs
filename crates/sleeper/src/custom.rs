@@ -70,26 +70,38 @@ impl FantasyMatchup {
                         )));
                     }
                 };
-            let owner_0 =
-                match owners.binary_search_by_key(&(&roster_0.owner_id), |user| &user.user_id) {
+            let owner_0 = if let Some(owner_id) = &roster_0.owner_id {
+                match owners.binary_search_by_key(&owner_id, |user| &user.user_id) {
                     Ok(index) => owners[index].clone(),
                     Err(_) => {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::Other,
-                            format!("invalid owner '{}'", &roster_0.owner_id),
+                            format!("invalid owner '{}'", owner_id),
                         )));
                     }
-                };
-            let owner_1 =
-                match owners.binary_search_by_key(&(&roster_1.owner_id), |user| &user.user_id) {
+                }
+            } else {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("roster {} does not have an owner", &roster_0.roster_id),
+                )));
+            };
+            let owner_1 = if let Some(owner_id) = &roster_1.owner_id {
+                match owners.binary_search_by_key(&owner_id, |user| &user.user_id) {
                     Ok(index) => owners[index].clone(),
                     Err(_) => {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::Other,
-                            format!("invalid owner '{}'", &roster_1.owner_id),
+                            format!("invalid owner '{}'", owner_id),
                         )));
                     }
-                };
+                }
+            } else {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("roster {} does not have an owner", &roster_1.roster_id),
+                )));
+            };
 
             let players_0 = game.0.players.clone();
             let players_1 = game.1.players.clone();
@@ -309,8 +321,14 @@ impl Standings {
         for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
             let slot = i + 1;
             let roster = roster_map.get(roster_id).unwrap();
-            let user = user_map.get(roster.owner_id.as_str()).unwrap();
-            text.push_str(format!("{slot}: {}", user.display_name).as_str());
+            let username = roster
+                .owner_id
+                .as_ref()
+                .map(|owner_id| user_map.get(owner_id.as_str()))
+                .flatten()
+                .map(|user| user.display_name.clone())
+                .unwrap_or(format!("Roster {roster_id}"));
+            text.push_str(format!("{slot}: {username}").as_str());
             text.push('\n');
         }
         Ok(text)
@@ -517,8 +535,12 @@ mod custom_tests {
         for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
             let slot = i + 1;
             let roster = roster_map.get(roster_id).unwrap();
-            let user = user_map.get(roster.owner_id.as_str()).unwrap();
-            println!("{slot}: {}", user.display_name)
+            let user = roster
+                .owner_id
+                .as_ref()
+                .map(|owner_id| user_map.get(owner_id.as_str()))
+                .flatten();
+            println!("{slot}: {:?}", user.map(|u| u.display_name.clone()))
         }
     }
 }

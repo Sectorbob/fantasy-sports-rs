@@ -454,7 +454,7 @@ mod client_tests {
             .collect::<HashSet<String>>(),
             rosters
                 .iter()
-                .map(|roster| roster.owner_id.clone())
+                .filter_map(|roster| roster.owner_id.clone())
                 .collect::<HashSet<String>>()
         );
     }
