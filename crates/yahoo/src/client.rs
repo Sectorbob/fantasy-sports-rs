@@ -604,7 +604,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::Users(users) => return Ok(users.users),
+                FantasyContent::Users(users) => return Ok(users),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Users, got: {:?}",
                     other
@@ -646,7 +646,7 @@ impl Client {
         let mut return_me: Vec<Team> = vec![];
 
         if let FantasyContent::Users(users) = content.content {
-            for user in users.users {
+            for user in users {
                 for game in user.games {
                     for team in game.teams {
                         return_me.push(team);

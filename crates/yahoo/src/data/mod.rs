@@ -5,6 +5,7 @@ mod league;
 mod player;
 mod team;
 mod transaction;
+mod user;
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -22,6 +23,7 @@ pub use crate::data::{
         TeamStandings,
     },
     transaction::Transaction,
+    user::User,
 };
 
 #[derive(Deserialize, Debug)]
@@ -65,8 +67,8 @@ pub enum FantasyContent {
     League(League),
     #[serde(rename = "game")]
     Game(Game),
-    #[serde(rename = "users")]
-    Users(Users),
+    #[serde(rename = "users", deserialize_with = "User::deserialize_users")]
+    Users(Vec<User>),
     #[serde(rename = "games", deserialize_with = "Game::deserialize_games")]
     Games(Vec<Game>),
     #[serde(rename = "leagues", deserialize_with = "League::deserialize_leagues")]
@@ -158,30 +160,6 @@ impl fmt::Display for GameCode {
             GameCode::OTHER(str) => write!(f, "{}", str),
         }
     }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename = "users")]
-pub struct Users {
-    #[serde(rename = "user", default)]
-    pub users: Vec<User>,
-}
-
-//region User Resource
-#[derive(Deserialize, Debug)]
-pub struct User {
-    // user_id: String,
-    pub guid: String,
-    #[serde(deserialize_with = "Game::deserialize_games")]
-    pub games: Vec<Game>,
-    // nickname: String,
-    // profile_url: String,
-    // image_url: String,
-    // status: String,
-    // #[serde(rename = "yahoo_guid")]
-    // yahoo_guid: String,
-    // #[serde(rename = "yahoo_id")]
-    // yahoo_id: String,
 }
 
 //endregion
