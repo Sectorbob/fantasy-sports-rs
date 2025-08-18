@@ -5,5 +5,9 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
+futures = "0.3.31"
+log = "0.4.27"
 sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
+thiserror = "2.0.14"
+tokio = "1.47.1"
 yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }

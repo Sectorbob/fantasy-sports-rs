@@ -95,7 +95,7 @@ pub enum League {
         players: HashMap<String, SleeperPlayer>,
         rosters: Vec<sleeper_fantasy_rs::Roster>,
         transactions: Vec<sleeper_fantasy_rs::Transaction>,
-        user_id: String,
+        user_id: Option<String>,
     },
     Yahoo {
         draft_results: Vec<yahoo_fantasy_rs::DraftResult>,
@@ -105,7 +105,7 @@ pub enum League {
         rosters: HashMap<u32, yahoo_fantasy_rs::Roster>,
         settings: yahoo_fantasy_rs::Settings,
         standings: yahoo_fantasy_rs::Standings,
-        team: yahoo_fantasy_rs::Team,
+        team: Option<yahoo_fantasy_rs::Team>,
     },
 }
 impl League {
@@ -223,7 +223,7 @@ impl League {
                 user_id,
             } => match rosters
                 .iter()
-                .find(|r| r.owner_id.is_some() && &r.owner_id.clone().unwrap() == user_id)
+                .find(|r| r.owner_id.is_some() && &r.owner_id == user_id)
             {
                 Some(roster) => format!(
                     "{}-{}-{}",
@@ -251,7 +251,11 @@ impl League {
                 settings: _,
                 standings,
                 team,
-            } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
+            } => match standings
+                .teams()
+                .iter()
+                .find(|t| Some(t.team_id) == team.as_ref().map(|t| t.team_id))
+            {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => format!(
                         "{}-{}-{}",
@@ -277,10 +281,13 @@ impl League {
                 rosters: _,
                 transactions: _,
                 user_id,
-            } => match owners.get(user_id) {
-                Some(owner) => owner.team_name(),
-                None => format!("Unknown User ({})", user_id),
-            },
+            } => user_id
+                .as_ref()
+                .map(|user_id| match owners.get(user_id) {
+                    Some(owner) => owner.team_name(),
+                    None => format!("Unknown User ({})", user_id),
+                })
+                .unwrap_or(format!("Unknown User (None)")),
             League::Yahoo {
                 draft_results: _,
                 league: _,
@@ -290,7 +297,7 @@ impl League {
                 settings: _,
                 standings: _,
                 team,
-            } => team.name.clone(),
+            } => team.as_ref().map(|t| t.name.clone()).unwrap_or_default(),
         }
     }
     pub fn total_points(&self) -> f64 {
@@ -307,7 +314,7 @@ impl League {
                 user_id,
             } => match rosters
                 .iter()
-                .find(|r| r.owner_id.is_some() && &r.owner_id.clone().unwrap() == user_id)
+                .find(|r| r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id)
             {
                 Some(roster) => roster
                     .settings
@@ -325,7 +332,11 @@ impl League {
                 settings: _,
                 standings,
                 team,
-            } => match standings.teams().iter().find(|t| t.team_id == team.team_id) {
+            } => match standings
+                .teams()
+                .iter()
+                .find(|t| Some(t.team_id) == team.as_ref().map(|t| t.team_id))
+            {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => team_standings.points_for as f64,
                     None => -1.0,
@@ -581,7 +592,11 @@ impl std::fmt::Display for League {
         }
     }
 }
-
+impl From<yahoo_fantasy_rs::League> for League {
+    fn from(value: yahoo_fantasy_rs::League) -> Self {
+        todo!()
+    }
+}
 #[derive(Debug)]
 pub struct LeagueSettings {
     /// The week number in the season when the playoffs begin.
