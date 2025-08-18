@@ -532,14 +532,14 @@ mod tests {
                 204, /* draft pick count */
                 497, /* transactions count */
             ),
-            // (
-            //     "sleeper:652490366221046118",
-            //     "2021",
-            //     "Sleeper",
-            //     349, /* players */
-            //     204, /* draft pick count */
-            //     474, /* transactions count */
-            // ),
+            (
+                "sleeper:652490366221046118",
+                "2021",
+                "Sleeper",
+                353, /* players */
+                204, /* draft pick count */
+                474, /* transactions count */
+            ),
             (
                 "sleeper:323299806782982483",
                 "2022",

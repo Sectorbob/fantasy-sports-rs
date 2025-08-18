@@ -22,11 +22,15 @@ impl Draft {
             1 => Some(drafts[0].clone()),
             _ => {
                 // prioritize drafts with Some(start_time)
-                let filtered = drafts
+                let mut filtered = drafts
                     .iter()
                     .filter(|d| d.start_time.is_some())
                     .collect::<Vec<&sleeper_fantasy_rs::Draft>>();
                 if filtered.len() == 1 {
+                    Some(filtered[0].clone())
+                } else if filtered.len() > 1 {
+                    filtered.sort_by_key(|d| d.start_time);
+                    filtered.reverse();
                     Some(filtered[0].clone())
                 } else {
                     None
