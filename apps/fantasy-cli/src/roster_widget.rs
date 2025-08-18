@@ -41,9 +41,14 @@ impl RosterWidget {
                 settings: _,
                 standings: _,
                 team,
-            } => rosters
-                .get(&team.team_id)
-                .map(|r| RosterWidget::from_yahoo(&team, r)),
+            } => team
+                .as_ref()
+                .map(|t| {
+                    rosters
+                        .get(&t.team_id)
+                        .map(|r| RosterWidget::from_yahoo(t, r))
+                })
+                .flatten(),
         }
     }
 
@@ -54,10 +59,12 @@ impl RosterWidget {
     ) -> Self {
         RosterWidget {
             roster_id: roster.roster_id.to_string(),
-            team_name: match owners.get(&roster.owner_id) {
-                Some(owner) => owner.team_name(),
-                None => format!("User({})", roster.owner_id),
-            },
+            team_name: roster
+                .owner_id
+                .as_ref()
+                .map(|owner_id| owners.get(owner_id).map(|owner| owner.display_name.clone()))
+                .flatten()
+                .unwrap_or(format!("User({:?})", roster.owner_id)),
             players: roster
                 .players
                 .iter()

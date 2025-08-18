@@ -1,5 +1,6 @@
 use std::env;
 
+use fantasy_core_rs::{sleeper_utils};
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 
@@ -13,7 +14,6 @@ mod leagues_page;
 mod matchups_list_widget;
 mod roster_widget;
 mod settings_list_widget;
-mod sleeper_utils;
 mod tui;
 mod yahoo_utils;
 

@@ -1,86 +1,30 @@
+use crate::config;
 use log::*;
-use serde_json;
 use std::{
     collections::{HashMap, HashSet},
-    env,
     error::Error as StdError,
     io::{Error as IOError, ErrorKind},
 };
-use tokio::{
-    fs,
-    io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-};
-
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use yahoo_fantasy_rs::{
     Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
     Team, TeamStandings, Token, Transaction,
 };
 
-use crate::{config, constants::{ENV_YAHOO_CLIENT_ID, ENV_YAHOO_REDIRECT_URI, ENV_YAHOO_TOKEN_FILE}};
-
 pub async fn build_client() -> Result<Client, YahooError> {
-    let yahoo_client_id = match env::var(ENV_YAHOO_CLIENT_ID) {
-        Ok(id) => id,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_CLIENT_ID.to_string() + " environment variable not set",
-            ));
-        }
-    };
-    let yahoo_redirect_uri = match env::var(ENV_YAHOO_REDIRECT_URI) {
-        Ok(uri) => uri,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_REDIRECT_URI.to_string() + " environment variable not set",
-            ));
-        }
-    };
-    let yahoo_token_file = match env::var(ENV_YAHOO_TOKEN_FILE) {
-        Ok(file) => file,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_TOKEN_FILE.to_string() + " environment variable not set",
-            ));
-        }
-    };
-
     let cache_dir = config::config_dir().join("yahoo");
-
-    let mut client = Client::new(yahoo_client_id, yahoo_redirect_uri, None, Some(cache_dir));
-
-    debug!("loading token file: {}", yahoo_token_file);
-
-    let token = match load_token_file(&yahoo_token_file).await {
-        Ok(token) => token,
-        // If fails, perform auth flow
-        Err(err) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(format!(
-                "Failed to load token file: {}",
-                err
-            )));
-            // println!(
-            //     "No token found or failed to load ({}). Performing OAuth flow...",
-            //     err
-            // );
-            // match perform_oauth_flow(&mut client).await {
-            //     Ok(token) => token,
-            //     Err(_) => {
-            //         println!("Failed to perform OAuth flow. Exiting.");
-            //         return Err(yahoo_fantasy_rs::Error::UnknownError(
-            //             "Failed to perform OAuth flow".to_string(),
-            //         ));
-            //     }
-
-            // }
-        }
-    };
-    client.token = Some(token);
-    debug!("loaded token: {:#?}", client.token);
-    info!("refreshing token");
-    let new_token = client.refresh_token().await?;
-    save_token_file(&yahoo_token_file, new_token)
+    let client = Client::new_from_env()
+        .map_err(|err| YahooError::UnknownError(err.to_string()))?
+        .with_token_file::<String>(None)
         .await
-        .map_err(|err: IOError| YahooError::UnknownError(format!("{:?}", err)))?;
+        .map_err(|err| YahooError::UnknownError(err.to_string()))?
+        .with_cache_dir(cache_dir);
+    info!(
+        "yahoo token file: {}",
+        client.token_file.as_ref().unwrap_or(&"None".to_string())
+    );
+    info!("refreshing token");
+    let _new_token = client.refresh_token().await?;
     Ok(client)
 }
 
@@ -257,39 +201,6 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
         }
     }
 
-    Ok(())
-}
-
-async fn load_token_file(file: &String) -> Result<Token, IOError> {
-    // Open the file asynchronously
-    let mut f = fs::File::open(file).await?;
-    let mut contents = Vec::new();
-
-    // Read the file contents asynchronously
-    f.read_to_end(&mut contents).await?;
-
-    // Deserialize JSON from the buffer into Token struct
-    let token: Token = serde_json::from_slice(&contents)?;
-
-    Ok(token)
-}
-
-async fn save_token_file(file: &String, token: Token) -> Result<(), IOError> {
-    // Serialize to Vec<u8>
-    let json_bytes = serde_json::to_vec(&token).unwrap();
-
-    // Async file and writer
-    let f = fs::OpenOptions::new()
-        .write(true)
-        .create(true) // creates if not exists or opens
-        .truncate(true)
-        .open(file)
-        .await?;
-    let mut writer = BufWriter::new(f);
-
-    // Write bytes asynchronously
-    writer.write_all(&json_bytes).await?;
-    writer.flush().await?;
     Ok(())
 }
 

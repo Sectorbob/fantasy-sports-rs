@@ -1,12 +1,10 @@
-use std::collections::{HashMap, HashSet};
-
-use fantasy_core_rs::{Draft, League};
+use crate::{config, yahoo_utils};
+use fantasy_core_rs::{Draft, League, sleeper_utils};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use log::{error, info};
 use sleeper_fantasy_rs::{self as sleeper};
+use std::collections::{HashMap, HashSet};
 use yahoo_fantasy_rs::{self as yahoo};
-
-use crate::{config, sleeper_utils, yahoo_utils};
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
@@ -233,7 +231,7 @@ async fn get_sleeper_leagues(
             rosters,
             transactions,
             matchups,
-            user_id: sleeper_user_id.clone(),
+            user_id: Some(sleeper_user_id.clone()),
         });
     }
 
@@ -344,7 +342,7 @@ async fn get_yahoo_leagues(
                 rosters,
                 settings,
                 standings,
-                team: yahoo_team,
+                team: Some(yahoo_team),
             })
         });
     }
