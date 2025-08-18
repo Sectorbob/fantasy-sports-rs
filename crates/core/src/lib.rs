@@ -7,4 +7,4 @@ pub use data::{
     Draft, DraftPick, League, LeagueSettings, Player, Roster, ScoringSettings, Transaction,
 };
 pub use external_id::{ExternalId, ParseExternalIdError, Platform};
-pub use fetch::{LeagueAccessor};
+pub use fetch::{Error, LeagueAccessor};
