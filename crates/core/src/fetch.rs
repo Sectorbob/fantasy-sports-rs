@@ -23,10 +23,12 @@ impl LeagueAccessor {
             cache_dir: None,
         }
     }
+
     pub fn with_cache_dir<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
         self.cache_dir = Some(cache_dir.into());
         self
     }
+
     pub async fn init(&mut self) -> Result<(), Error> {
         let (sleeper_cache_dir, yahoo_cache_dir, player_cache) = match &self.cache_dir {
             Some(cache_dir) => (
@@ -277,61 +279,102 @@ pub(crate) async fn fetch_sleeper_league_context(
 
 pub(crate) async fn fetch_yahoo_league_context(
     cli: &yahoo::Client,
-    player_cache: Option<&PlayerCache>,
+    optional_player_cache: Option<&PlayerCache>,
     league_key: yahoo::LeagueKey,
 ) -> Result<core::League, Error> {
+    // Fire out http requests
     let yahoo_league_future = cli.get_league(&league_key);
-
     let standings_future = cli.get_league_standings(&league_key);
     let rosters_future = cli.get_rosters_in_league(&league_key);
     let settings_future = cli.get_league_settings(&league_key);
+    let transactions_future = cli.get_league_transactions(&league_key);
+
+    // Build out draft results
     let draft_results = cli.get_draft_results(&league_key).await?;
 
+    // Build out Rosters
+    let rosters = rosters_future
+        .await?
+        .into_iter()
+        .map(|team| (team.team_id, team.roster.unwrap()))
+        .collect::<HashMap<u32, yahoo::Roster>>();
+
+    // build out transactions
+    let transactions = transactions_future.await?;
+
+    // Gather set of all player keys in the league
     let mut player_key_set: HashSet<yahoo::PlayerKey> = HashSet::new();
     draft_results.iter().for_each(|p| {
         player_key_set.insert(p.player_key.clone());
     });
-    //TODO: add player keys from transactions and ending rosters
+    rosters.iter().for_each(|(_, roster)| {
+        roster.players.iter().for_each(|player| {
+            player_key_set.insert(player.player_key.clone());
+        });
+    });
+    transactions.iter().for_each(|txn| {
+        txn.players().into_iter().for_each(|k| {
+            player_key_set.insert(k);
+        })
+    });
     // we may be able to borrow the player info from the rosters
 
-    let mut player_keys: Vec<yahoo::PlayerKey> = player_key_set.into_iter().collect();
-    log::debug!(
-        "{} player keys must be looked up for {league_key}",
-        player_keys.len()
-    );
-
-    let mut players: Vec<yahoo_fantasy_rs::Player> = vec![];
-    while !player_keys.is_empty() {
-        let popped = if player_keys.len() > 25 {
-            player_keys.split_off(player_keys.len() - 25)
-        } else {
-            player_keys.split_off(0)
-        };
-        players.extend(
-            cli.get_players_for_league(&league_key, Some(&popped))
-                .await?,
-        );
+    let mut player_cache_misses = HashSet::new();
+    let mut players_in_league = HashMap::new();
+    // check player cache for player
+    if let Some(player_cache) = optional_player_cache {
+        for player_key in player_key_set.into_iter() {
+            if let Some(player) = player_cache.get_yahoo_player(player_key.to_string()) {
+                // found player
+                players_in_league.insert(player_key, player);
+            } else {
+                // cache miss
+                player_cache_misses.insert(player_key);
+            }
+        }
+    } else {
+        player_cache_misses.extend(player_key_set);
     }
 
-    log::debug!("got {} yahoo players in {league_key}", players.len());
+    log::error!(
+        "{} player keys must be looked up for {league_key}",
+        player_cache_misses.len()
+    );
+
+    let mut player_cache_misses = player_cache_misses.into_iter().collect::<Vec<_>>();
+    while !player_cache_misses.is_empty() {
+        let popped = if player_cache_misses.len() > 25 {
+            player_cache_misses.split_off(player_cache_misses.len() - 25)
+        } else {
+            player_cache_misses.split_off(0)
+        };
+        for player in cli
+            .get_players_for_league(&league_key, Some(&popped))
+            .await?
+        {
+            if let Some(player_cache) = optional_player_cache {
+                player_cache.insert_yahoo_player(&player);
+            }
+            players_in_league.insert(player.player_key.clone(), player.into());
+        }
+    }
+
+    log::debug!(
+        "got {} yahoo players in {league_key}",
+        players_in_league.len()
+    );
     Ok(core::League::Yahoo {
         draft_results,
         league: yahoo_league_future
             .await?
             .ok_or(Error::new("yahoo league not found"))?,
         matchups: HashMap::new(), // TODO: Yahoo does not provide matchups in the same way as Sleeper
-        players: players
-            .into_iter()
-            .map(|p| (p.player_key.clone(), p))
-            .collect(),
-        rosters: rosters_future
-            .await?
-            .into_iter()
-            .map(|team| (team.team_id, team.roster.unwrap()))
-            .collect::<HashMap<u32, yahoo::Roster>>(),
+        players: players_in_league,
+        rosters,
         settings: settings_future.await?,
         standings: standings_future.await?,
         team: None,
+        transactions,
     })
 }
 
@@ -447,10 +490,80 @@ mod tests {
     use crate::fetch::{ExternalId, LeagueAccessor};
 
     #[tokio::test]
-    async fn test_thing() {
+    async fn test_fetch_league_context() {
         let cases = [
-            ("yahoo:359.l.564503", "2016", "Yahoo", 0),
-            ("sleeper:164974877262287888", "2019", "Sleeper", 334), // was 278 before adding all player_ids from draft and transactions
+            (
+                "yahoo:359.l.564503",
+                "2016",
+                "Yahoo",
+                291, /* players */
+                180, /* draft pick count */
+                323, /* transactions count */
+            ),
+            (
+                "yahoo:371.l.20028",
+                "2017",
+                "Yahoo",
+                300, /* players */
+                180, /* draft pick count */
+                331, /* transactions count */
+            ),
+            (
+                "yahoo:380.l.129397",
+                "2018",
+                "Yahoo",
+                317, /* players */
+                204, /* draft pick count */
+                298, /* transactions count */
+            ),
+            (
+                "sleeper:164974877262287888",
+                "2019",
+                "Sleeper",
+                334, /* players (was 278 before adding all player_ids from draft and transactions) */
+                204, /* draft pick count */
+                379, /* transactions count */
+            ),
+            (
+                "sleeper:121226934266994911",
+                "2020",
+                "Sleeper",
+                345, /* players */
+                204, /* draft pick count */
+                497, /* transactions count */
+            ),
+            // (
+            //     "sleeper:652490366221046118",
+            //     "2021",
+            //     "Sleeper",
+            //     349, /* players */
+            //     204, /* draft pick count */
+            //     474, /* transactions count */
+            // ),
+            (
+                "sleeper:323299806782982483",
+                "2022",
+                "Sleeper",
+                342, /* players */
+                204, /* draft pick count */
+                415, /* transactions count */
+            ),
+            (
+                "sleeper:383786432088067320",
+                "2023",
+                "Sleeper",
+                298, /* players */
+                192, /* draft pick count */
+                379, /* transactions count */
+            ),
+            (
+                "sleeper:4581480575134427121",
+                "2024",
+                "Sleeper",
+                302, /* players */
+                192, /* draft pick count */
+                294, /* transactions count */
+            ),
         ];
 
         let mut fixture = LeagueAccessor::new().with_cache_dir("cache");
@@ -460,18 +573,39 @@ mod tests {
         debug_assert!(fixture.yahoo_enabled(), "yahoo not enabled");
 
         // Execute and Assert
-        for (league_id, season, platform, num_of_players) in cases {
+        for (league_id, season, platform, num_of_players, number_of_draft_picks, num_of_txns) in
+            cases
+        {
             let external_id = ExternalId::try_from(league_id).expect("invalid league_id");
             let league = fixture
                 .fetch_league_context(&external_id)
                 .await
                 .expect("failed to get sleeper league");
-            debug_assert_eq!(season, league.season(), "season is incorrect");
-            debug_assert_eq!(platform, league.platform(), "platform is incorrect");
+            debug_assert_eq!(
+                season,
+                league.season(),
+                "season is incorrect for {league_id}"
+            );
+            debug_assert_eq!(
+                platform,
+                league.platform(),
+                "platform is incorrect for {league_id}"
+            );
             debug_assert_eq!(
                 num_of_players,
                 league.players().len(),
                 "num of players is incorrect in {league_id}",
+            );
+            debug_assert!(league.draft().is_some(), "no draft for {league_id}");
+            debug_assert_eq!(
+                number_of_draft_picks,
+                league.draft().unwrap().picks.len(),
+                "num of draft picks is incorrect in {league_id}",
+            );
+            debug_assert_eq!(
+                num_of_txns,
+                league.transactions().len(),
+                "num of transactions is incorrect in {league_id}",
             );
         }
 
@@ -481,6 +615,10 @@ mod tests {
             fixture.sleeper_cli.unwrap().request_count(),
             "sleeper api was hit"
         );
-        debug_assert_eq!(0, fixture.yahoo_cli.unwrap().request_count(), "yahoo api was hit");
+        debug_assert_eq!(
+            1, // because of token refresh
+            fixture.yahoo_cli.unwrap().request_count(),
+            "yahoo api was hit"
+        );
     }
 }

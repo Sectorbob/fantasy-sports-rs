@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use core::fmt;
+use serde::{Deserialize, Serialize};
 use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
 use std::collections::HashMap;
 use yahoo_fantasy_rs as yahoo;
@@ -102,11 +102,12 @@ pub enum League {
         draft_results: Vec<yahoo::DraftResult>,
         league: yahoo::League,
         matchups: HashMap<usize, Vec<FantasyMatchup>>,
-        players: HashMap<yahoo::PlayerKey, yahoo::Player>,
+        players: HashMap<yahoo::PlayerKey, crate::Player>,
         rosters: HashMap<u32, yahoo::Roster>,
         settings: yahoo::Settings,
         standings: yahoo::Standings,
         team: Option<yahoo::Team>,
+        transactions: Vec<yahoo::Transaction>,
     },
 }
 impl League {
@@ -248,16 +249,10 @@ impl League {
                 .iter()
                 .map(|(id, p)| (id.clone(), Player::from(p)))
                 .collect::<HashMap<String, Player>>(),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => HashMap::new(),
+            League::Yahoo { players, .. } => players
+                .iter()
+                .map(|(_, player)| (player._id.clone(), player.clone()))
+                .collect(),
         }
     }
     pub fn draft(&self) -> Option<Draft> {
@@ -285,7 +280,7 @@ impl League {
                                     round: p.round,
                                     pick: p.pick,
                                     overall_pick: p.pick,
-                                    player: Player::from(player),
+                                    player: player.clone(),
                                     roster_id: p.team_key.to_string(),
                                 }
                             } else {
@@ -319,16 +314,9 @@ impl League {
             League::Sleeper { transactions, .. } => {
                 transactions.iter().map(Transaction::from_sleeper).collect()
             }
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => vec![],
+            League::Yahoo { transactions, .. } => {
+                transactions.iter().map(Transaction::from_yahoo).collect()
+            }
         }
     }
 }
@@ -365,11 +353,7 @@ impl std::fmt::Display for League {
         }
     }
 }
-impl From<yahoo_fantasy_rs::League> for League {
-    fn from(value: yahoo_fantasy_rs::League) -> Self {
-        todo!()
-    }
-}
+
 #[derive(Debug)]
 pub struct LeagueSettings {
     /// The week number in the season when the playoffs begin.
@@ -942,6 +926,7 @@ impl Transaction {
                 status,
                 timestamp,
                 players: _,
+                picks: _,
             } => Transaction {
                 id: transaction_key.clone(),
                 transaction_type: "trade".to_string(),

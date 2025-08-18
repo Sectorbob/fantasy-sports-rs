@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::{self as core, ExternalId};
 use sleeper_fantasy_rs as sleeper;
@@ -61,7 +61,7 @@ impl PlayerCache {
         let core_player = core::Player::from(player);
         self.yahoo
             .insert(
-                player.player_id.to_string(),
+                player.player_key.to_string(),
                 serde_json::to_vec(&core_player)
                     .expect("failed to serialize yahoo player (core) to json"),
             )
