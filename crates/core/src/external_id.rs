@@ -1,0 +1,182 @@
+use std::{fmt, str::FromStr};
+
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{Error, Visitor},
+};
+use sleeper_fantasy_rs as sleeper;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExternalId {
+    pub platform: Platform,
+    pub id: String,
+}
+impl ExternalId {
+    pub fn new(platform: Platform, id: String) -> Self {
+        ExternalId {
+            platform: platform,
+            id,
+        }
+    }
+    fn parse<T: Into<String>>(v: T) -> Result<Self, ParseExternalIdError> {
+        let v = v.into();
+        if v.contains(':') {
+            let parts: Vec<&str> = v.split(':').collect();
+            if parts.len() == 2 {
+                // Reconstruct the string or store the parts as needed
+                return Ok(ExternalId {
+                    platform: Platform::from_str(parts[0]).map_err(ParseExternalIdError::from)?,
+
+                    id: parts[1].to_string(),
+                });
+            } else if parts.len() > 2 {
+                return Err(ParseExternalIdError::from(
+                    "expecting a string with two segments delinted by a :",
+                ));
+            }
+        }
+        return Err(ParseExternalIdError::from(
+            "expecting a string with two segments delinted by a :",
+        ));
+    }
+}
+impl<'de> Deserialize<'de> for ExternalId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct FeedDestinationVisitor;
+
+        impl<'de> Visitor<'de> for FeedDestinationVisitor {
+            type Value = ExternalId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string with or without a colon delimiter")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                ExternalId::try_from(v).map_err(|err| {
+                    E::invalid_value(
+                        serde::de::Unexpected::Str(err.to_string().as_str()),
+                        &"a valid platform in lowercase",
+                    )
+                })
+            }
+        }
+
+        deserializer.deserialize_any(FeedDestinationVisitor)
+    }
+}
+impl Serialize for ExternalId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+impl fmt::Display for ExternalId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.platform.to_string(), self.id)
+    }
+}
+impl TryFrom<&str> for ExternalId {
+    type Error = ParseExternalIdError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        ExternalId::parse(value)
+    }
+}
+impl TryFrom<String> for ExternalId {
+    type Error = ParseExternalIdError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ExternalId::parse(value)
+    }
+}
+impl From<sleeper::League> for ExternalId {
+    fn from(value: sleeper::League) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.league_id.clone(),
+        }
+    }
+}
+impl From<&sleeper::League> for ExternalId {
+    fn from(value: &sleeper::League) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.league_id.clone(),
+        }
+    }
+}
+impl From<sleeper::User> for ExternalId {
+    fn from(value: sleeper::User) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.user_id.clone(),
+        }
+    }
+}
+impl From<&sleeper::User> for ExternalId {
+    fn from(value: &sleeper::User) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.user_id.clone(),
+        }
+    }
+}
+
+
+#[derive(thiserror::Error, Debug)]
+pub struct ParseExternalIdError {
+    reason: String,
+}
+impl ParseExternalIdError {
+    pub fn from<T: Into<String>>(reason: T) -> Self {
+        ParseExternalIdError {
+            reason: reason.into(),
+        }
+    }
+}
+impl fmt::Display for ParseExternalIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid external id: {}", self.reason)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Discord,
+    Sleeper,
+    Twitter,
+    Yahoo,
+    Youtube,
+}
+impl FromStr for Platform {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "discord" => Ok(Platform::Discord),
+            "twitter" => Ok(Platform::Twitter),
+            "youtube" => Ok(Platform::Youtube),
+            "sleeper" => Ok(Platform::Sleeper),
+            "yahoo" => Ok(Platform::Yahoo),
+            _ => Err(format!("Unknown platform: {}", s)),
+        }
+    }
+}
+impl fmt::Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Platform::Discord => write!(f, "discord"),
+            Platform::Twitter => write!(f, "twitter"),
+            Platform::Youtube => write!(f, "youtube"),
+            Platform::Sleeper => write!(f, "sleeper"),
+            Platform::Yahoo => write!(f, "yahoo"),
+        }
+    }
+}

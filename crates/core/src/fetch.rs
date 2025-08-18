@@ -1,43 +1,87 @@
-use crate::{data as core, sleeper_utils};
+use crate::{ExternalId, Platform, data as core, player_cache::PlayerCache, sleeper_utils};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use sleeper_fantasy_rs::{self as sleeper};
 use std::{
     collections::{HashMap, HashSet},
-    path,
+    path::PathBuf,
     str::FromStr,
 };
 use yahoo_fantasy_rs::{self as yahoo};
 
 pub struct LeagueAccessor {
     sleeper_cli: Option<sleeper::Client>,
-    sleeper_players_cache: HashMap<sleeper::Sport, HashMap<String, sleeper::Player>>,
+    players_cache: Option<PlayerCache>,
     yahoo_cli: Option<yahoo::Client>,
-    yahoo_players_cache: HashMap<yahoo::PlayerKey, yahoo::Player>,
+    cache_dir: Option<PathBuf>,
 }
 impl LeagueAccessor {
     pub fn new() -> Self {
-        let cache_dir = path::Path::new("cache");
-        let sleeper_cache_dir = cache_dir.join("sleeper");
-        let sleeper_cli = sleeper::Client::new_with_cache(None, sleeper_cache_dir);
-        let yahoo_cache_dir = cache_dir.join("yahoo");
-        let yahoo_cli = yahoo::Client::new_from_env()
-            .expect("failed to configure yahoo client from env")
-            .with_cache_dir(yahoo_cache_dir);
-        let sleeper_players_store = HashMap::new();
-        let yahoo_players_store = HashMap::new();
         LeagueAccessor {
-            sleeper_cli: Some(sleeper_cli),
-            sleeper_players_cache: sleeper_players_store,
-            yahoo_cli: Some(yahoo_cli),
-            yahoo_players_cache: yahoo_players_store,
+            sleeper_cli: None,
+            players_cache: None,
+            yahoo_cli: None,
+            cache_dir: None,
         }
     }
+    pub fn with_cache_dir<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
+        self.cache_dir = Some(cache_dir.into());
+        self
+    }
+    pub async fn init(&mut self) -> Result<(), Error> {
+        let (sleeper_cache_dir, yahoo_cache_dir, player_cache) = match &self.cache_dir {
+            Some(cache_dir) => (
+                Some(cache_dir.join("sleeper")),
+                Some(cache_dir.join("yahoo")),
+                Some(cache_dir.join("players")),
+            ),
+            None => (None, None, None),
+        };
+        let player_cache =
+            player_cache.map(|player_cache| PlayerCache::new_with_path(&player_cache));
 
-    pub async fn fetch_league_context(&self, id: ExternalId) -> Result<core::League, Error> {
-        match id.platform {
+        let sleeper_cli = match sleeper_cache_dir {
+            Some(sleeper_cache_dir) => sleeper::Client::new_with_cache(None, sleeper_cache_dir),
+            None => sleeper::Client::new(None),
+        };
+        let mut yahoo_cli = yahoo::Client::new_from_env()
+            .inspect_err(|err| log::warn!("failed to setup yahoo cli: {err}"))
+            .ok();
+        if let Some(cli) = yahoo_cli {
+            let tmp = cli.with_token_file::<String>(None).await.map_err(|err| {
+                yahoo::Error::UnknownError(format!("failed to load token file: {err}"))
+            })?;
+            tmp.refresh_token().await?;
+            yahoo_cli = Some(tmp)
+        }
+        if let Some(yahoo_cache_dir) = yahoo_cache_dir {
+            if let Some(cli) = yahoo_cli {
+                yahoo_cli = Some(cli.with_cache_dir(yahoo_cache_dir));
+            }
+        }
+        self.players_cache = player_cache;
+        self.sleeper_cli = Some(sleeper_cli);
+        self.yahoo_cli = yahoo_cli;
+        Ok(())
+    }
+
+    pub fn sleeper_enabled(&self) -> bool {
+        self.sleeper_cli.is_some()
+    }
+
+    pub fn yahoo_enabled(&self) -> bool {
+        self.yahoo_cli.is_some()
+    }
+
+    pub async fn fetch_league_context(&self, id: &ExternalId) -> Result<core::League, Error> {
+        match &id.platform {
             Platform::Sleeper => {
                 if let Some(cli) = &self.sleeper_cli {
-                    fetch_sleeper_league_context_by_id(cli, id.id).await
+                    fetch_sleeper_league_context_by_id(
+                        cli,
+                        self.players_cache.clone().as_ref(),
+                        id.id.clone(),
+                    )
+                    .await
                 } else {
                     Err(Error::new("sleeper cli not configured"))
                 }
@@ -46,6 +90,7 @@ impl LeagueAccessor {
                 if let Some(cli) = &self.yahoo_cli {
                     fetch_yahoo_league_context(
                         cli,
+                        self.players_cache.clone().as_ref(),
                         yahoo::LeagueKey::from_str(&id.id).map_err(|err| {
                             Error::DevError(format!("unable to parse yahoo league key: {err}"))
                         })?,
@@ -55,23 +100,30 @@ impl LeagueAccessor {
                     Err(Error::new("yahoo cli not configured"))
                 }
             }
+            other => Err(Error::new(format!("{other} is not supported"))),
         }
     }
 }
 
 pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
     cli: &sleeper::Client,
+    player_cache: Option<&PlayerCache>,
     league_id: T,
 ) -> Result<core::League, Error> {
     let sleeper_league = cli.get_league(league_id.into()).await?;
-    fetch_sleeper_league_context(cli, &sleeper_league).await
+    fetch_sleeper_league_context(cli, player_cache, &sleeper_league).await
 }
 
 pub(crate) async fn fetch_sleeper_league_context(
     cli: &sleeper::Client,
+    optional_player_cache: Option<&PlayerCache>,
     sleeper_league: &sleeper::League,
 ) -> Result<core::League, Error> {
-    let players_future = cli.fetch_all_players(&sleeper_league.sport);
+    let mut optional_players_future = if optional_player_cache.is_none() {
+        Some(cli.fetch_all_players(&sleeper_league.sport))
+    } else {
+        None
+    };
     let owners_future = cli.get_users_for_league(&sleeper_league.league_id);
     let rosters_future = cli.get_rosters_for_league(&sleeper_league.league_id);
     let (owners_result, rosters_result) = tokio::join!(owners_future, rosters_future);
@@ -91,36 +143,6 @@ pub(crate) async fn fetch_sleeper_league_context(
             HashMap::new()
         }
     };
-
-    // Obtain set of all player_ids used by this league
-    let mut player_id_set: HashSet<String> = HashSet::new();
-    rosters.iter().for_each(|r| {
-        r.players.iter().for_each(|pid| {
-            player_id_set.insert(pid.clone());
-        })
-    });
-    matchups.iter().for_each(|(_, fmups)| {
-        fmups.iter().for_each(|fmup| {
-            fmup.left.players().into_iter().for_each(|owned_player_id| {
-                player_id_set.insert(owned_player_id);
-            });
-            fmup.right
-                .players()
-                .into_iter()
-                .for_each(|owned_player_id| {
-                    player_id_set.insert(owned_player_id);
-                });
-        })
-    });
-    let players = players_future.await?;
-    // TODO: add player_ids for drafted players
-    let players_in_league: HashMap<String, sleeper::Player> = player_id_set
-        .into_iter()
-        .filter_map(|owned_player_id| match players.get(&owned_player_id) {
-            Some(player_ref) => Some((owned_player_id, player_ref.clone())),
-            None => None,
-        })
-        .collect::<HashMap<String, sleeper::Player>>();
 
     let drafts = match cli
         .get_drafts_for_league(sleeper_league.league_id.clone())
@@ -164,6 +186,82 @@ pub(crate) async fn fetch_sleeper_league_context(
                 vec![]
             }
         };
+
+    // Obtain set of all player_ids used by this league
+    let mut player_id_set: HashSet<String> = HashSet::new();
+    rosters.iter().for_each(|r| {
+        r.players.iter().for_each(|pid| {
+            player_id_set.insert(pid.clone());
+        })
+    });
+    matchups.iter().for_each(|(_, fmups)| {
+        fmups.iter().for_each(|fmup| {
+            fmup.left.players().into_iter().for_each(|owned_player_id| {
+                player_id_set.insert(owned_player_id);
+            });
+            fmup.right
+                .players()
+                .into_iter()
+                .for_each(|owned_player_id| {
+                    player_id_set.insert(owned_player_id);
+                });
+        })
+    });
+    transactions.iter().for_each(|txn| {
+        txn.adds.keys().for_each(|k| {
+            player_id_set.insert(k.to_string());
+        });
+        txn.drops.keys().for_each(|k| {
+            player_id_set.insert(k.to_string());
+        });
+    });
+    draft_picks.iter().for_each(|pick| {
+        player_id_set.insert(pick.player_id.clone());
+    });
+
+    // try to find data on all players
+    let mut player_cache_misses = HashSet::new();
+    let mut players_in_league: HashMap<String, sleeper::Player> = HashMap::new();
+    if let Some(player_cache) = optional_player_cache {
+        for player_id in player_id_set.into_iter() {
+            if let Some(player) = player_cache.get_sleeper_player(&player_id) {
+                players_in_league.insert(player.player_id.clone(), player);
+            } else {
+                // cache miss
+                player_cache_misses.insert(player_id);
+            }
+        }
+    }
+
+    // if we have cache missed and a sleep player update request is not yet in flight, then fetch players
+    if !player_cache_misses.is_empty() && optional_players_future.is_none() {
+        optional_players_future = Some(cli.fetch_all_players(&sleeper_league.sport));
+    }
+
+    let mut unmatched_players = HashSet::new();
+    if let Some(players_future) = optional_players_future {
+        let players = players_future.await?;
+        for player_id in player_cache_misses.into_iter() {
+            if let Some(player) = players.get(&player_id) {
+                // add to cache
+                if let Some(player_cache) = optional_player_cache {
+                    player_cache.insert_sleeper_player(player);
+                }
+                players_in_league.insert(player_id, player.clone());
+            } else {
+                unmatched_players.insert(player_id);
+                continue;
+            }
+        }
+    }
+
+    if !unmatched_players.is_empty() {
+        log::warn!(
+            "unable to match all players for sleeper league. unmatched: {}",
+            unmatched_players.len()
+        );
+    }
+
     Ok(core::League::Sleeper {
         draft,
         draft_picks,
@@ -179,6 +277,7 @@ pub(crate) async fn fetch_sleeper_league_context(
 
 pub(crate) async fn fetch_yahoo_league_context(
     cli: &yahoo::Client,
+    player_cache: Option<&PlayerCache>,
     league_key: yahoo::LeagueKey,
 ) -> Result<core::League, Error> {
     let yahoo_league_future = cli.get_league(&league_key);
@@ -241,7 +340,7 @@ async fn get_sleeper_leagues(
     seasons: &[String],
     sleeper_user_id: &String,
     sleeper_sport: &sleeper::Sport,
-    players: &HashMap<String, sleeper::Player>,
+    player_cache: Option<&PlayerCache>,
 ) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
     let mut sleeper_leagues_for_season_tasks: FuturesUnordered<_> = seasons
         .iter()
@@ -273,7 +372,11 @@ async fn get_sleeper_leagues(
     let mut league_futures = FuturesUnordered::new();
 
     for sleeper_league in sleeper_leagues.iter() {
-        league_futures.push(fetch_sleeper_league_context(sleeper_client, sleeper_league));
+        league_futures.push(fetch_sleeper_league_context(
+            sleeper_client,
+            player_cache,
+            sleeper_league,
+        ));
     }
 
     let mut leagues = vec![];
@@ -286,6 +389,7 @@ async fn get_sleeper_leagues(
 
 async fn get_yahoo_leagues_for_user(
     yahoo_client: &yahoo_fantasy_rs::Client,
+    player_cache: Option<&PlayerCache>,
     seasons: &[String],
     yahoo_game_code: yahoo::GameCode,
 ) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
@@ -312,6 +416,7 @@ async fn get_yahoo_leagues_for_user(
     for yahoo_team in yahoo_teams {
         yahoo_teams_tasks.push(fetch_yahoo_league_context(
             yahoo_client,
+            player_cache,
             yahoo_team.team_key.league_key,
         ));
     }
@@ -320,16 +425,6 @@ async fn get_yahoo_leagues_for_user(
     }
 
     Ok(leagues)
-}
-
-pub struct ExternalId {
-    pub id: String,
-    pub platform: Platform,
-}
-
-pub enum Platform {
-    Sleeper,
-    Yahoo,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -347,31 +442,45 @@ impl Error {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::fetch::{ExternalId, LeagueAccessor, Platform};
+#[cfg(test)]
+mod tests {
+    use crate::fetch::{ExternalId, LeagueAccessor};
 
-//     #[tokio::test]
-//     async fn test_thing() {
-//         let sleeper_league_id = "164974877262287888";
-//         let yahoo_league_key = "359.l.564503";
+    #[tokio::test]
+    async fn test_thing() {
+        let cases = [
+            ("yahoo:359.l.564503", "2016", "Yahoo", 0),
+            ("sleeper:164974877262287888", "2019", "Sleeper", 334), // was 278 before adding all player_ids from draft and transactions
+        ];
 
-//         let fixture = LeagueAccessor::new();
-//         let league = fixture
-//             .fetch_league_context(ExternalId {
-//                 id: sleeper_league_id.to_string(),
-//                 platform: Platform::Sleeper,
-//             })
-//             .await
-//             .expect("failed to get sleeper league");
+        let mut fixture = LeagueAccessor::new().with_cache_dir("cache");
+        fixture.init().await.expect("failed to initialized");
 
-//         let season = league.season();
-//         let league_name = league.name();
-//         let league_platform = league.platform();
+        debug_assert!(fixture.sleeper_enabled(), "sleeper not enabled");
+        debug_assert!(fixture.yahoo_enabled(), "yahoo not enabled");
 
-//         println!("Season:      {season}");
-//         println!("League Name: {league_name}");
-//         println!("League Plat: {league_platform}");
-//         assert!(false);
-//     }
-// }
+        // Execute and Assert
+        for (league_id, season, platform, num_of_players) in cases {
+            let external_id = ExternalId::try_from(league_id).expect("invalid league_id");
+            let league = fixture
+                .fetch_league_context(&external_id)
+                .await
+                .expect("failed to get sleeper league");
+            debug_assert_eq!(season, league.season(), "season is incorrect");
+            debug_assert_eq!(platform, league.platform(), "platform is incorrect");
+            debug_assert_eq!(
+                num_of_players,
+                league.players().len(),
+                "num of players is incorrect in {league_id}",
+            );
+        }
+
+        // assert that only cache is hit
+        debug_assert_eq!(
+            0,
+            fixture.sleeper_cli.unwrap().request_count(),
+            "sleeper api was hit"
+        );
+        debug_assert_eq!(0, fixture.yahoo_cli.unwrap().request_count(), "yahoo api was hit");
+    }
+}

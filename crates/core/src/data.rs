@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use core::fmt;
 use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
 use std::collections::HashMap;
@@ -408,7 +409,7 @@ impl LeagueSettings {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Player {
     pub _id: String,
     pub name: String,
