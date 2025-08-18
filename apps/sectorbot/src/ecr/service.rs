@@ -1,7 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    u64,
+    collections::{HashMap, HashSet}, env::VarError, path, sync::Arc, u64
 };
 
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
@@ -9,9 +7,7 @@ use serde::{Deserialize, Serialize};
 use serenity::all::{
     Colour, EditMember, EditRole, GuildId, Http, Member, Permissions, Role, RoleId, UserId,
 };
-use sleeper_fantasy_rs::{
-    Draft, DraftPick, League as SleeperLeague, Player, Roster, Sport, User as SleeperUser,
-};
+use sleeper_fantasy_rs as sleeper;
 
 use crate::{
     ecr::keepers::{Keepable, KeepablesReport, get_keeper_status, get_player_history},
@@ -20,26 +16,33 @@ use crate::{
 };
 
 pub const LEAGUE_ID: &str = "2489066589662560510";
-pub const SPORT: Sport = Sport::NFL;
+pub const SPORT: sleeper::Sport = sleeper::Sport::NFL;
 
 pub struct Service {
     sleeper_cli: sleeper_fantasy_rs::Client,
+    yahoo_fantasy_cli: yahoo_fantasy_rs::Client,
     fantasypros_cli: fantasypros::Client,
     store: Arc<DataStore>,
 }
 impl Service {
-    pub fn new(store_arc: &Arc<DataStore>) -> Self {
-        Service {
-            sleeper_cli: sleeper_fantasy_rs::Client::new(None),
+    pub async fn new(store_arc: &Arc<DataStore>) -> Result<Self, ECRError> {
+        let cache_dir = path::Path::new("fantasy_cache");
+        let sleeper_cache_dir = cache_dir.join("sleeper");
+        let yahoo_cache_dir = cache_dir.join("yahoo");
+        Ok(Service {
+            sleeper_cli: sleeper_fantasy_rs::Client::new_with_cache(None, sleeper_cache_dir),
+            yahoo_fantasy_cli: yahoo_fantasy_rs::Client::new_from_env()?
+                .with_cache_dir(yahoo_cache_dir)
+                .with_token_file::<String>(None).await?,
             fantasypros_cli: fantasypros::Client::new(),
             store: Arc::clone(store_arc),
-        }
+        })
     }
 
     pub async fn fetch_keepable_context<T: Into<String>>(
         &self,
         league_id: T,
-        sport: &Sport,
+        sport: &sleeper::Sport,
     ) -> Result<KeepablesContext, ECRError> {
         let ecr_response_future = self.fantasypros_cli.fetch_ecr_half_ppr();
         let league_id: String = league_id.into();
@@ -98,13 +101,13 @@ impl Service {
                 .users
                 .iter()
                 .find(|u| roster.owner_id.is_some() && roster.owner_id.clone().unwrap() == u.user_id)
-                .map(SleeperUser::clone)
+                .map(sleeper::User::clone)
                 .unwrap_or_else(|| {
                     log::warn!("for some reason, we could not find the user info {user_id:?} for roster({roster_id})",
                         user_id = roster.owner_id, 
                         roster_id = roster.roster_id,
                     );
-                    SleeperUser {
+                    sleeper::User {
                         username: None,
                         user_id: roster.owner_id.clone().unwrap_or_default(),
                         display_name: format!("Roster({:?})", roster.owner_id),
@@ -186,7 +189,7 @@ impl Service {
 
     async fn fetch_all_draft_history_sleeper(
         &self,
-        league: SleeperLeague,
+        league: sleeper::League,
     ) -> Result<Vec<DraftResult>, ECRError> {
         let mut drafts: Vec<DraftResult> = vec![];
         let mut draft_futures = vec![];
@@ -214,7 +217,7 @@ impl Service {
         league_id: T,
     ) -> Result<DraftResult, ECRError> {
         let league_id: String = league_id.into();
-        let mut drafts: Vec<Draft> = self
+        let mut drafts: Vec<sleeper::Draft> = self
             .sleeper_cli
             .get_drafts_for_league(league_id.clone())
             .await?
@@ -253,7 +256,7 @@ impl Service {
     pub async fn fetch_external_league_info<T: Into<ExternalId>>(
         &self,
         league_id: T,
-    ) -> Result<SleeperLeague, ECRError> {
+    ) -> Result<sleeper::League, ECRError> {
         let league_id: ExternalId = league_id.into();
         match &league_id.platform {
             Some(platform) => match platform {
@@ -261,7 +264,7 @@ impl Service {
                 crate::store::Platform::Sleeper => {
                     Ok(self.sleeper_cli.get_league(league_id.id.as_str()).await?)
                 }
-                // TODO: crate::store::Platform::Yahoo => todo!(),
+                crate::store::Platform::Yahoo => todo!(),
                 other => Err(ECRError::Unknown(format!(
                     "league_id platform not implemented: {other}"
                 ))),
@@ -273,7 +276,7 @@ impl Service {
     pub async fn fetch_external_league_owners<T: Into<ExternalId>>(
         &self,
         league_id: T,
-    ) -> Result<Vec<SleeperUser>, ECRError> {
+    ) -> Result<Vec<sleeper::User>, ECRError> {
         let league_id: ExternalId = league_id.into();
         match &league_id.platform {
             Some(platform) => match platform {
@@ -482,9 +485,9 @@ impl Service {
 /// a 5 year league history context from 14MB to 1MB on disk. This was
 /// effectively a player_map size of 11388 reduced down to 476 entries.
 fn reduce_players_map(
-    players: &mut HashMap<String, Player>,
+    players: &mut HashMap<String, sleeper::Player>,
     draft_results: Option<&Vec<DraftResult>>,
-    rosters: Option<&Vec<Roster>>,
+    rosters: Option<&Vec<sleeper::Roster>>,
     // transactions: Option<&Vec<Transaction>>,
 ) {
     let mut player_ids: HashSet<String> = HashSet::new();
@@ -508,19 +511,19 @@ fn reduce_players_map(
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DraftResult {
-    pub draft: Draft,
-    pub picks: Vec<DraftPick>,
+    pub draft: sleeper::Draft,
+    pub picks: Vec<sleeper::DraftPick>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeepablesContext {
     #[serde(with = "ts_milliseconds")]
     pub fetched_at: DateTime<Utc>,
-    pub current_league: SleeperLeague,
+    pub current_league: sleeper::League,
     pub draft_history: HashMap<String, DraftResult>,
-    pub players: HashMap<String, Player>,
-    pub rosters: Vec<Roster>,
-    pub users: Vec<SleeperUser>,
+    pub players: HashMap<String, sleeper::Player>,
+    pub rosters: Vec<sleeper::Roster>,
+    pub users: Vec<sleeper::User>,
     pub rankings: fantasypros::ECRResponse,
 }
 
@@ -544,6 +547,15 @@ pub enum ECRError {
     #[error("error performing discord operation: {0}")]
     DatastoreError(#[from] store::DataStoreError),
 
+    #[error("yahoo error: {0}")]
+    YahooError(#[from] yahoo_fantasy_rs::Error),
+
+    #[error("yahoo token error: {0}")]
+    YahooTokenError(#[from] yahoo_fantasy_rs::token::Error),
+
+    #[error("env variable error: {0}")]
+    EnvVarError(#[from] VarError),
+
     #[error("Unknown error {0}")]
     Unknown(String),
 }
@@ -564,7 +576,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_keepables_report() {
         let store = Arc::new(DataStore::new());
-        let svc = Service::new(&store);
+        let svc = Service::new(&store).await.expect("failed to create service");
+        // FIXME: this fucked up, need to find a way to not blow up if I am not using yahoo
 
         let keepables_context: KeepablesContext = load_keepables_context_testdata()
             .await

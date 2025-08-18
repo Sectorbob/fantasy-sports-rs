@@ -26,6 +26,7 @@ sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
 thiserror = "2.0.12"
 tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.19"
+yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }
 
 [dev-dependencies]
 flate2 = "1.1.2"
