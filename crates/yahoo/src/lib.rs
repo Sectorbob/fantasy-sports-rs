@@ -1,6 +1,7 @@
 mod cache;
 mod client;
 mod data;
+pub mod filters;
 pub mod token;
 
 pub use client::{Client, Error};
