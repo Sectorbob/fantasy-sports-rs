@@ -346,3 +346,32 @@ impl Error {
         Error::DevError(msg.into())
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::fetch::{ExternalId, LeagueAccessor, Platform};
+
+//     #[tokio::test]
+//     async fn test_thing() {
+//         let sleeper_league_id = "164974877262287888";
+//         let yahoo_league_key = "359.l.564503";
+
+//         let fixture = LeagueAccessor::new();
+//         let league = fixture
+//             .fetch_league_context(ExternalId {
+//                 id: sleeper_league_id.to_string(),
+//                 platform: Platform::Sleeper,
+//             })
+//             .await
+//             .expect("failed to get sleeper league");
+
+//         let season = league.season();
+//         let league_name = league.name();
+//         let league_platform = league.platform();
+
+//         println!("Season:      {season}");
+//         println!("League Name: {league_name}");
+//         println!("League Plat: {league_platform}");
+//         assert!(false);
+//     }
+// }
