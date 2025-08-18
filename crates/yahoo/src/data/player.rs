@@ -9,7 +9,7 @@ use crate::{TransactionData, data::game::GameKey};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct Players {
+pub(crate)struct Players {
     #[serde(rename = "player", default)]
     pub players: Vec<Player>,
 }
@@ -41,6 +41,17 @@ pub struct Player {
     pub has_player_notes: Option<bool>,
     pub player_notes_last_timestamp: Option<i64>, //>1747583890</player_notes_last_timestamp>
     pub transaction_data: Option<TransactionData>,
+}
+impl Player {
+    // This method is called when the deserializer encounters a newtype struct
+    pub(crate) fn deserialize_players<'de, D>(
+        deserializer: D,
+    ) -> Result<Vec<Player>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Players::deserialize(deserializer).map(|r| r.players)
+    }
 }
 
 ///
@@ -248,7 +259,7 @@ mod tests {
     use crate::{FantasyContent, data::FantasyContentWrapper};
 
     #[test]
-    fn test_deserilaize_players() {
+    fn test_deserialize_players() {
         let xml_file_reader = BufReader::new(
             File::open("tests/data/players.xml").expect("failed to open test data file"),
         );
@@ -256,13 +267,12 @@ mod tests {
             quick_xml::de::from_reader(xml_file_reader).expect("failed to parse test xml file");
 
         let players = if let FantasyContent::League(league) = wrapper.content {
-            debug_assert!(league.players.is_some(), "expected that league has players");
-            league.players.unwrap()
+            league.players
         } else {
             debug_assert!(false, "wrong type");
             return;
         };
 
-        assert_eq!(25, players.players.len());
+        assert_eq!(25, players.len());
     }
 }

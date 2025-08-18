@@ -587,7 +587,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::Games(games) => return Ok(games.games),
+                FantasyContent::Games(games) => return Ok(games),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Games, got: {:?}",
                     other
@@ -650,12 +650,10 @@ impl Client {
 
         if let FantasyContent::Users(users) = content.content {
             for user in users.users {
-                if let Some(games) = user.games {
-                    for game in games.games {
-                        if let Some(teams) = game.teams {
-                            for team in teams.teams {
-                                return_me.push(team);
-                            }
+                for game in user.games {
+                    if let Some(teams) = game.teams {
+                        for team in teams.teams {
+                            return_me.push(team);
                         }
                     }
                 }
@@ -712,10 +710,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => match league.players {
-                    Some(players) => Ok(players.players),
-                    None => Ok(vec![]),
-                },
+                FantasyContent::League(league) => Ok(league.players),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::League, got: {:?}",
                     other
@@ -839,10 +834,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => match league.draft_results {
-                    Some(draft_results) => Ok(draft_results.draft_results),
-                    None => Err(Error::NotFound),
-                },
+                FantasyContent::League(league) => Ok(league.draft_results),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::League, got: {:?}",
                     other
@@ -1139,11 +1131,10 @@ mod tests {
     async fn test_get_roster_players_for_team() {
         let league_key = LeagueKey::new(GameKey::Id(390), 299227);
         let (fixture, _mock_server) = setup_with_200("/team/390.l.299227.t.1/roster").await;
-        let resp = fixture
+        let roster = fixture
             .get_roster_for_team(&TeamKey::new(league_key, 1))
-            .await;
-        assert!(resp.is_ok());
-        let roster = resp.unwrap();
+            .await
+            .expect("request failed");
         assert_eq!(Some("16".to_string()), roster.week);
     }
 
@@ -1151,24 +1142,22 @@ mod tests {
     async fn test_get_rosters_for_league() {
         let league_key = LeagueKey::new(GameKey::Id(380), 129397);
         let (fixture, _mock_server) = setup_with_200("/league/380.l.129397/teams/roster").await;
-        let resp = fixture.get_rosters_in_league(&league_key).await;
-        assert!(resp.is_ok());
-        let teams_w_roster = resp.unwrap();
+        let teams_w_roster = fixture
+            .get_rosters_in_league(&league_key)
+            .await
+            .expect("request failed");
         assert_eq!(12, teams_w_roster.len());
-        // assert_eq!(Some("16".to_string()), roster.week);
     }
 
     #[tokio::test]
     async fn test_get_draft_results_for_league() {
         let league_key = LeagueKey::new(GameKey::Id(380), 129397);
         let (fixture, _mock_server) = setup_with_200("/league/380.l.129397/draftresults").await;
-        let resp = fixture.get_draft_results(&league_key).await;
-        assert!(resp.is_ok());
-        let draft_results = resp.unwrap();
+        let draft_results = fixture
+            .get_draft_results(&league_key)
+            .await
+            .expect("request failed");
         assert_eq!(204, draft_results.len());
-        // for draft_result in draft_results.iter() {
-        //     log::debug!("{:?}", draft_result);
-        // }
         assert_eq!(1, draft_results[0].pick);
     }
 }

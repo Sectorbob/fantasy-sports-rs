@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use crate::data::Transactions;
 use crate::data::helpers::{ParseError, deserialize_naive_date, empty_string_as_none};
-use crate::{DraftResults, GameCode, GameKey, Team, Teams};
-use crate::{DraftStatus, data::Players};
+use crate::{DraftResult, GameCode, GameKey, Player, Team, Teams};
+use crate::{DraftStatus};
 
 #[derive(Deserialize, Debug)]
 pub struct Leagues {
@@ -31,7 +31,8 @@ pub struct League {
     pub start_week: u32,
     pub end_week: u32,
     pub is_finished: Option<bool>,
-    pub players: Option<Players>,
+    #[serde(default, deserialize_with = "Player::deserialize_players")]
+    pub players: Vec<Player>,
     pub scoreboard: Option<Scoreboard>,
     pub settings: Option<Settings>,
     pub standings: Option<Standings>,
@@ -43,7 +44,8 @@ pub struct League {
     #[serde(deserialize_with = "deserialize_naive_date")]
     pub end_date: NaiveDate,
     pub season: String,
-    pub draft_results: Option<DraftResults>,
+    #[serde(default, deserialize_with = "DraftResult::deserialize_draft_results")]
+    pub draft_results: Vec<DraftResult>,
     pub game_code: GameCode,
     pub is_plus_league: bool,
     pub is_pro_league: bool,

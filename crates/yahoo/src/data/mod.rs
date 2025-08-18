@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use crate::data::{
-    draft::{DraftResult, DraftResults, DraftStatus},
-    game::{Game, GameKey, Games},
+    draft::{DraftResult, DraftStatus},
+    game::{Game, GameKey},
     league::{
         Division, Divisions, League, LeagueKey, Leagues, Matchup, Scoreboard, Settings, Standings,
     },
     player::{
         Headshot, KeeperSummary, Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions,
-        Players, PositionType, Weeks,
+        PositionType, Weeks,
     },
     team::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,
@@ -69,8 +69,8 @@ pub enum FantasyContent {
     Game(Game),
     #[serde(rename = "users")]
     Users(Users),
-    #[serde(rename = "games")]
-    Games(Games),
+    #[serde(rename = "games", deserialize_with = "Game::deserialize_games")]
+    Games(Vec<Game>),
     #[serde(rename = "leagues")]
     Leagues(Leagues),
     #[serde(rename = "team")]
@@ -227,7 +227,8 @@ pub struct Users {
 pub struct User {
     // user_id: String,
     pub guid: String,
-    pub games: Option<Games>,
+    #[serde(deserialize_with = "Game::deserialize_games")]
+    pub games: Vec<Game>,
     // nickname: String,
     // profile_url: String,
     // image_url: String,

@@ -2,7 +2,7 @@ use super::helpers::empty_string_as_none;
 use core::fmt;
 use serde::{Deserialize, Deserializer, de};
 
-use crate::data::{game::GameKey, league::LeagueKey, player::Players};
+use crate::{data::{game::GameKey, league::LeagueKey}, Player};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -195,7 +195,8 @@ pub struct Roster {
     pub week: Option<String>,
     pub is_prescoring: Option<bool>,
     pub is_editable: Option<bool>,
-    pub players: Players,
+    #[serde(deserialize_with = "Player::deserialize_players")]
+    pub players: Vec<Player>,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
