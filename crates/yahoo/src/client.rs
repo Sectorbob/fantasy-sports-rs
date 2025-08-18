@@ -974,23 +974,44 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_games_2009_2025_nfl() {
+        let cases = vec![
+            ("2009", 222),
+            ("2010", 242),
+            ("2011", 257),
+            ("2012", 273),
+            ("2013", 314),
+            ("2014", 331),
+            ("2015", 348),
+            ("2016", 359),
+            ("2017", 371),
+            ("2018", 380),
+            ("2019", 390),
+            ("2020", 399),
+            ("2021", 406),
+            ("2022", 414),
+            ("2023", 423),
+            ("2024", 449),
+            ("2025", 461),
+        ];
+
         let (fixture, _mock_server) = setup_with_200("/games;game_codes=nfl;seasons=2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025").await;
         let games = fixture
-            .get_games(
-                vec![GameCode::NFL],
-                vec![
-                    "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018",
-                    "2019", "2020", "2021", "2022", "2023", "2024", "2025",
-                ],
-            )
+            .get_games(vec![GameCode::NFL], cases.iter().map(|(s, _)| *s).collect())
             .await
             .expect("should return ok (although should be empty)");
 
         assert_eq!(17, games.len());
         // all are NFL
-        for game in &games {
+        for (i, game) in games.iter().enumerate() {
             assert_eq!(GameCode::NFL, game.code);
             assert_eq!("Football", game.name);
+            debug_assert_eq!(cases[i].0, game.season, "season does not match");
+            debug_assert_eq!(
+                cases[i].1,
+                game.game_id,
+                "game id does not match for {szn}",
+                szn = game.season
+            );
         }
     }
 
