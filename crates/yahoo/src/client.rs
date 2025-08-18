@@ -29,8 +29,6 @@ const USER_AGENT: &str = "reqwest";
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
 const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fantasy/v2";
 
-const DEBUG_ENABLED: bool = false;
-
 pub struct Client {
     base_url: String,
     client: reqwest::Client,
@@ -141,7 +139,7 @@ impl Client {
             }
         };
         if !resp.status().is_redirection() {
-            println!("Failed: {}", resp.status());
+            log::warn!("Failed: {}", resp.status());
             return Err(Error::UnknownError(format!(
                 "Got unexpected response for GET /request_auth. Code {}",
                 resp.status(),
@@ -263,7 +261,7 @@ impl Client {
         if !resp.status().is_success() {
             let status = resp.status();
             let body_text = resp.text().await.unwrap();
-            println!("Err: body: {}", body_text);
+            log::warn!("Err: body: {}", body_text);
             return Err(Error::UnknownError(format!(
                 "Failed to refresh token: {}",
                 status
@@ -357,15 +355,13 @@ impl Client {
                     )));
                 }
             };
-            if DEBUG_ENABLED {
-                println!("Status:   {}", code);
-                println!("Raw Body: {}", body);
-            }
+            log::debug!("Status:   {code}");
+            log::debug!("Raw Body: {body}");
+
             match serde_xml_rs::from_str::<crate::data::Error>(body.as_str()) {
                 Ok(yahoo_error) => {
-                    if DEBUG_ENABLED {
-                        println!("Yahoo Error: {:?}", yahoo_error);
-                    }
+                    log::debug!("Yahoo Error: {yahoo_error:?}");
+
                     if code == 401
                         && yahoo_error
                             .description()
@@ -373,10 +369,10 @@ impl Client {
                     {
                         // This is a special case where the token has expired.
                         // We should refresh the token and try again.
-                        // println!("Token expired, refreshing...");
+                        // log::info!("Token expired, refreshing...");
                         // match self.refresh_token().await {
                         //     Ok(new_token) => {
-                        //         println!("New token: {:?}", new_token);
+                        //         log::info!("New token: {:?}", new_token);
                         //         // Update the token in the client
                         //         self.token = Some(new_token);
                         //         // Retry the request with the new token
@@ -432,9 +428,7 @@ impl Client {
                 )));
             }
         };
-        if DEBUG_ENABLED {
-            println!("Body: {}", body_text);
-        }
+        log::debug!("Body: {body_text}");
 
         // cache it
         if let Some(cacher) = &self.cache {
@@ -1173,7 +1167,7 @@ mod tests {
         let draft_results = resp.unwrap();
         assert_eq!(204, draft_results.len());
         // for draft_result in draft_results.iter() {
-        //     println!("{:?}", draft_result);
+        //     log::debug!("{:?}", draft_result);
         // }
         assert_eq!(1, draft_results[0].pick);
     }

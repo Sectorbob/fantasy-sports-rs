@@ -128,7 +128,7 @@ impl<'de> Deserialize<'de> for PlayerPositions {
             where
                 E: de::Error,
             {
-                println!("Value: {}", v);
+                log::debug!("Value: {}", v);
                 let mut items: Vec<PlayerPosition> = v
                     .split(',')
                     .map(|s| s.trim())
