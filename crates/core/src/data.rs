@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use core::fmt;
-use sleeper_fantasy_rs::{Player as SleeperPlayer, custom::FantasyMatchup};
+use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
 use std::collections::HashMap;
-use yahoo_fantasy_rs::PlayerKey;
+use yahoo_fantasy_rs as yahoo;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -87,140 +87,56 @@ impl From<&sleeper_fantasy_rs::DraftPick> for DraftPick {
 #[derive(Debug, Clone)]
 pub enum League {
     Sleeper {
-        draft: Option<sleeper_fantasy_rs::Draft>,
-        draft_picks: Vec<sleeper_fantasy_rs::DraftPick>,
-        league: sleeper_fantasy_rs::League,
+        draft: Option<sleeper::Draft>,
+        draft_picks: Vec<sleeper::DraftPick>,
+        league: sleeper::League,
         matchups: HashMap<usize, Vec<FantasyMatchup>>,
-        owners: HashMap<String, sleeper_fantasy_rs::User>,
-        players: HashMap<String, SleeperPlayer>,
-        rosters: Vec<sleeper_fantasy_rs::Roster>,
-        transactions: Vec<sleeper_fantasy_rs::Transaction>,
+        owners: HashMap<String, sleeper::User>,
+        players: HashMap<String, sleeper::Player>,
+        rosters: Vec<sleeper::Roster>,
+        transactions: Vec<sleeper::Transaction>,
         user_id: Option<String>,
     },
     Yahoo {
-        draft_results: Vec<yahoo_fantasy_rs::DraftResult>,
-        league: yahoo_fantasy_rs::League,
+        draft_results: Vec<yahoo::DraftResult>,
+        league: yahoo::League,
         matchups: HashMap<usize, Vec<FantasyMatchup>>,
-        players: HashMap<PlayerKey, yahoo_fantasy_rs::Player>,
-        rosters: HashMap<u32, yahoo_fantasy_rs::Roster>,
-        settings: yahoo_fantasy_rs::Settings,
-        standings: yahoo_fantasy_rs::Standings,
-        team: Option<yahoo_fantasy_rs::Team>,
+        players: HashMap<yahoo::PlayerKey, yahoo::Player>,
+        rosters: HashMap<u32, yahoo::Roster>,
+        settings: yahoo::Settings,
+        standings: yahoo::Standings,
+        team: Option<yahoo::Team>,
     },
 }
 impl League {
     pub fn id(&self) -> String {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => league.league_id.clone(),
-            League::Yahoo {
-                draft_results: _,
-                league,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => league.league_key.to_string(),
+            League::Sleeper { league, .. } => league.league_id.clone(),
+            League::Yahoo { league, .. } => league.league_key.to_string(),
         }
     }
     pub fn name(&self) -> String {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => league.name.clone(),
-            League::Yahoo {
-                draft_results: _,
-                league,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => league.name.clone(),
+            League::Sleeper { league, .. } => league.name.clone(),
+            League::Yahoo { league, .. } => league.name.clone(),
         }
     }
     pub fn platform(&self) -> String {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => String::from("Sleeper"),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => String::from("Yahoo"),
+            League::Sleeper { .. } => String::from("Sleeper"),
+            League::Yahoo { .. } => String::from("Yahoo"),
         }
     }
     pub fn season(&self) -> String {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => league.season.clone(),
-            League::Yahoo {
-                draft_results: _,
-                league,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => league.season.clone(),
+            League::Sleeper { league, .. } => league.season.clone(),
+            League::Yahoo { league, .. } => league.season.clone(),
         }
     }
     pub fn record(&self) -> String {
         match self {
             League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters,
-                transactions: _,
-                user_id,
+                rosters, user_id, ..
             } => match rosters
                 .iter()
                 .find(|r| r.owner_id.is_some() && &r.owner_id == user_id)
@@ -243,16 +159,9 @@ impl League {
                 None => "n/a".to_string(),
             },
             League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings,
-                team,
+                standings, team, ..
             } => match standings
-                .teams()
+                .teams
                 .iter()
                 .find(|t| Some(t.team_id) == team.as_ref().map(|t| t.team_id))
             {
@@ -272,15 +181,7 @@ impl League {
     pub fn team_name(&self) -> String {
         match self {
             League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id,
+                owners, user_id, ..
             } => user_id
                 .as_ref()
                 .map(|user_id| match owners.get(user_id) {
@@ -288,30 +189,13 @@ impl League {
                     None => format!("Unknown User ({})", user_id),
                 })
                 .unwrap_or(format!("Unknown User (None)")),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team,
-            } => team.as_ref().map(|t| t.name.clone()).unwrap_or_default(),
+            League::Yahoo { team, .. } => team.as_ref().map(|t| t.name.clone()).unwrap_or_default(),
         }
     }
     pub fn total_points(&self) -> f64 {
         match self {
             League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters,
-                transactions: _,
-                user_id,
+                rosters, user_id, ..
             } => match rosters
                 .iter()
                 .find(|r| r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id)
@@ -324,16 +208,9 @@ impl League {
                 None => -1.0,
             },
             League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings,
-                team,
+                standings, team, ..
             } => match standings
-                .teams()
+                .teams
                 .iter()
                 .find(|t| Some(t.team_id) == team.as_ref().map(|t| t.team_id))
             {
@@ -347,93 +224,26 @@ impl League {
     }
     pub fn settings(&self) -> LeagueSettings {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => LeagueSettings::from_sleeper(&league),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings,
-                standings: _,
-                team: _,
-            } => LeagueSettings::from_yahoo(settings),
+            League::Sleeper { league, .. } => LeagueSettings::from_sleeper(&league),
+            League::Yahoo { settings, .. } => LeagueSettings::from_yahoo(settings),
         }
     }
     #[allow(dead_code)]
     pub fn raw(&self) -> String {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => format!("Raw: {:#?}", league.settings),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings,
-                standings: _,
-                team: _,
-            } => format!("Raw: {:#?}", settings),
+            League::Sleeper { league, .. } => format!("Raw: {:#?}", league.settings),
+            League::Yahoo { settings, .. } => format!("Raw: {:#?}", settings),
         }
     }
     pub fn matchups(&self) -> &HashMap<usize, Vec<FantasyMatchup>> {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => matchups,
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => matchups, // Yahoo leagues do not have matchups in the same way
+            League::Sleeper { matchups, .. } => matchups,
+            League::Yahoo { matchups, .. } => matchups, // Yahoo leagues do not have matchups in the same way
         }
     }
     pub fn players(&self) -> HashMap<String, Player> {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners: _,
-                players,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => players
+            League::Sleeper { players, .. } => players
                 .iter()
                 .map(|(id, p)| (id.clone(), Player::from(p)))
                 .collect::<HashMap<String, Player>>(),
@@ -452,25 +262,14 @@ impl League {
     pub fn draft(&self) -> Option<Draft> {
         match self {
             League::Sleeper {
-                draft,
-                draft_picks,
-                league: _,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
+                draft, draft_picks, ..
             } => draft.as_ref().map(|d| Draft::from((d, draft_picks))),
             League::Yahoo {
                 draft_results,
                 league,
-                matchups: _,
                 players,
-                rosters: _,
                 settings,
-                standings: _,
-                team: _,
+                ..
             } => match draft_results.len() {
                 0 => None,
                 _ => Some(Draft {
@@ -516,17 +315,9 @@ impl League {
     }
     pub fn transactions(&self) -> Vec<Transaction> {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions,
-                user_id: _,
-            } => transactions.iter().map(Transaction::from_sleeper).collect(),
+            League::Sleeper { transactions, .. } => {
+                transactions.iter().map(Transaction::from_sleeper).collect()
+            }
             League::Yahoo {
                 draft_results: _,
                 league: _,
@@ -543,17 +334,7 @@ impl League {
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league,
-                matchups: _,
-                owners: _,
-                players: _,
-                rosters: _,
-                transactions: _,
-                user_id: _,
-            } => write!(
+            League::Sleeper { league, .. } => write!(
                 f,
                 "[{season}] {name} (Sleeper) - {status}    Record: {record}",
                 season = league.season,
@@ -566,16 +347,7 @@ impl std::fmt::Display for League {
                 },
                 record = self.record(),
             ),
-            League::Yahoo {
-                draft_results: _,
-                league,
-                matchups: _,
-                players: _,
-                rosters: _,
-                settings: _,
-                standings: _,
-                team: _,
-            } => write!(
+            League::Yahoo { league, .. } => write!(
                 f,
                 "[{}] {} (Yahoo) - {}       Record: {}",
                 league.season,
@@ -728,7 +500,6 @@ impl From<(&u32, &yahoo_fantasy_rs::Roster)> for Roster {
             id: value.0.to_string(),
             player_ids: value
                 .1
-                .players
                 .players
                 .iter()
                 .map(|p| p.player_id.to_string())
