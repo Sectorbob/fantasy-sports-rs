@@ -20,21 +20,21 @@ pub struct Player {
     pub player_key: PlayerKey,
     pub player_id: u32,
     pub name: PlayerName,
-    pub url: String,                      // https://sports.yahoo.com/nfl/players/7241
-    pub status: Option<String>,           // NA
-    pub status_full: Option<String>,      // Inactive: Coach's Decision or Not on Roster
-    pub editorial_player_key: String,     // nfl.p.7241
-    pub editorial_team_key: String,       // nfl.t.20
-    pub editorial_team_full_name: String, // New York Jets
-    pub editorial_team_abbr: String,      // NYJ
-    pub editorial_team_url: String,       // https://sports.yahoo.com/nfl/teams/ny-jets/
-    pub bye_weeks: Weeks,
-    pub is_keeper: KeeperSummary,
+    pub url: Option<String>,    // https://sports.yahoo.com/nfl/players/7241
+    pub status: Option<String>, // NA
+    pub status_full: Option<String>, // Inactive: Coach's Decision or Not on Roster
+    pub editorial_player_key: Option<String>, // nfl.p.7241
+    pub editorial_team_key: Option<String>, // nfl.t.20
+    pub editorial_team_full_name: Option<String>, // New York Jets
+    pub editorial_team_abbr: String, // NYJ
+    pub editorial_team_url: Option<String>, // https://sports.yahoo.com/nfl/teams/ny-jets/
+    pub bye_weeks: Option<Weeks>,
+    pub is_keeper: Option<KeeperSummary>,
     pub uniform_number: Option<String>, // can be an empty string
     pub display_position: PlayerPositions, //PlayerPosition,
-    pub headshot: Headshot,
-    pub image_url: String,
-    pub is_undroppable: bool,
+    pub headshot: Option<Headshot>,
+    pub image_url: Option<String>,
+    pub is_undroppable: Option<bool>,
     pub position_type: PositionType,
     // pub eligible_positions:
     // pub eligible_positions_to_add:

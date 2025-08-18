@@ -17,7 +17,7 @@ use std::{
     env::{self, VarError},
     error::Error as _,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, atomic::AtomicU64},
 };
 use tokio::sync::Mutex;
 
@@ -39,6 +39,7 @@ pub struct Client {
     pub token_file: Option<String>,
     token: Arc<Mutex<Option<Token>>>,
     cache: Option<Box<dyn Cacheable + Send + Sync>>,
+    outgoing_request_count: AtomicU64,
 }
 impl Client {
     pub fn new_from_env() -> Result<Self, VarError> {
@@ -65,6 +66,7 @@ impl Client {
             token_file: None,
             token: Arc::new(Mutex::new(None)),
             cache: None,
+            outgoing_request_count: AtomicU64::new(0),
         }
     }
 
@@ -100,6 +102,11 @@ impl Client {
         let token = token::load_token_file(&token_file).await?;
         self.token_file = Some(token_file);
         Ok(self.with_token(token))
+    }
+
+    pub fn request_count(&self) -> u64 {
+        self.outgoing_request_count
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn get_request_auth_url(&self) -> Result<String, Error> {
@@ -185,6 +192,8 @@ impl Client {
                 )));
             }
         };
+        self.outgoing_request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let resp = match self.client.execute(req).await {
             Ok(response) => response,
             Err(err) => {
@@ -249,6 +258,8 @@ impl Client {
                 )));
             }
         };
+        self.outgoing_request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let resp = match self.client.execute(req).await {
             Ok(response) => response,
             Err(err) => {
@@ -304,7 +315,7 @@ impl Client {
                 return match quick_xml::de::from_str(&body_text) {
                     Ok(obj) => Ok(obj),
                     Err(err) => Err(Error::UnknownError(format!(
-                        "can't parse cached file: {:?}",
+                        "can't parse cached file({url}): {:?}",
                         err
                     ))),
                 };
@@ -334,6 +345,8 @@ impl Client {
                 )));
             }
         };
+        self.outgoing_request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let resp = match self.client.execute(req).await {
             Ok(resp) => resp,
             Err(err) => {
@@ -1148,6 +1161,17 @@ mod tests {
             .expect("request failed");
         assert_eq!(204, draft_results.len());
         assert_eq!(1, draft_results[0].pick);
+    }
+
+    #[tokio::test]
+    async fn test_get_transactions_for_league() {
+        let league_key = LeagueKey::new(GameKey::Id(359), 564503);
+        let (fixture, _mock_server) = setup_with_200("/league/359.l.564503/transactions").await;
+        let transactions = fixture
+            .get_league_transactions(&league_key)
+            .await
+            .expect("request failed");
+        assert_eq!(323, transactions.len());
     }
 }
 

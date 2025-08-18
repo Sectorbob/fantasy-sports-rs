@@ -22,7 +22,7 @@ pub use crate::data::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,
         TeamStandings,
     },
-    transaction::Transaction,
+    transaction::{Pick, Transaction},
     user::User,
 };
 

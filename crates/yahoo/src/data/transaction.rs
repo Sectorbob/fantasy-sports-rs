@@ -1,11 +1,15 @@
 use core::fmt;
+use std::collections::HashSet;
 
 use serde::{
     Deserialize, Deserializer,
     de::{self, MapAccess, Visitor},
 };
 
-use crate::data::player::{Player, Players};
+use crate::{
+    PlayerKey, TeamKey,
+    data::player::{Player, Players},
+};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, Clone)]
@@ -49,6 +53,7 @@ pub enum Transaction {
         status: String,
         timestamp: i64,
         players: Option<Vec<Player>>,
+        picks: Vec<Pick>,
     },
     Other {
         type_name: String,
@@ -93,6 +98,33 @@ impl Transaction {
             Transaction::Trade { timestamp, .. } => timestamp,
         }
     }
+
+    pub fn players(&self) -> HashSet<PlayerKey> {
+        match self {
+            Transaction::Commish { .. } => HashSet::new(),
+            Transaction::Add { players, .. } => players
+                .iter()
+                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .collect(),
+            Transaction::Drop { players, .. } => players
+                .iter()
+                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .collect(),
+            Transaction::AddDrop { players, .. } => players
+                .iter()
+                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .collect(),
+            Transaction::Trade { players, .. } => players
+                .iter()
+                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .collect(),
+            Transaction::Other { players, .. } => players
+                .iter()
+                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .collect(),
+        }
+    }
+
     pub(crate) fn deserialize_transactions<'de, D>(
         deserializer: D,
     ) -> Result<Vec<Transaction>, D::Error>
@@ -127,6 +159,7 @@ impl<'de> Deserialize<'de> for Transaction {
                 let mut timestamp = None;
                 let mut players = None;
                 let mut rest = Vec::new();
+                let mut picks = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -136,6 +169,7 @@ impl<'de> Deserialize<'de> for Transaction {
                         "status" => status = Some(map.next_value::<String>()?),
                         "timestamp" => timestamp = Some(map.next_value::<i64>()?),
                         "players" => players = Some(map.next_value::<Players>()?),
+                        "picks" => picks = Some(map.next_value::<Picks>()?),
                         // Collect all other fields for the "Other" variant
                         _ => {
                             let value = map.next_value::<String>()?;
@@ -194,6 +228,7 @@ impl<'de> Deserialize<'de> for Transaction {
                         timestamp: timestamp
                             .ok_or_else(|| de::Error::missing_field("timestamp"))?,
                         players: players.map(|players| players.players),
+                        picks: picks.map_or(vec![], |p| p.picks),
                     }),
                     other => Ok(Transaction::Other {
                         type_name: other.to_string(),
@@ -213,4 +248,21 @@ impl<'de> Deserialize<'de> for Transaction {
 
         deserializer.deserialize_map(TransactionVisitor)
     }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Picks {
+    #[serde(rename = "pick")]
+    pub picks: Vec<Pick>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Pick {
+    pub source_team_key: TeamKey,
+    pub source_team_name: String,
+    pub destination_team_key: TeamKey,
+    pub destination_team_name: String,
+    pub original_team_key: TeamKey,
+    pub original_team_name: String,
+    pub round: usize,
 }

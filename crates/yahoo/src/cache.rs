@@ -59,3 +59,21 @@ impl Cacheable for FileSystemCacher {
         self.cache_dir.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use crate::cache::{Cacheable, FileSystemCacher};
+
+    #[test]
+    fn test_hash_url() {
+        let url = "https://fantasysports.yahooapis.com/fantasy/v2/league/359.l.564503/transactions";
+        let expected =
+            "cache/yahoo/85eb03b7afd37daecfbdfb16ba8e6751b180ab2d736d246d4184cf53d1ee9385";
+        // Setup Fixture
+        let fixture = FileSystemCacher::new(Path::new("cache/yahoo"));
+
+        assert_eq!(Some(expected), fixture.cache_file_path(url).to_str());
+    }
+}
