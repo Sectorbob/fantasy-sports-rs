@@ -2,7 +2,7 @@ use core::fmt;
 
 use serde::{Deserialize, Deserializer};
 
-use crate::{GameCode, GameType, data::team::Teams};
+use crate::{GameCode, GameType, Team};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename = "games")]
@@ -24,7 +24,8 @@ pub struct Game {
     pub is_registration_over: Option<bool>,
     pub is_game_over: Option<bool>,
     pub is_offseason: Option<bool>,
-    pub teams: Option<Teams>,
+    #[serde(default, deserialize_with = "Team::deserialize_teams")]
+    pub teams: Vec<Team>,
 }
 impl Game {
     // This method is called when the deserializer encounters a newtype struct

@@ -9,7 +9,7 @@ use crate::{TransactionData, data::game::GameKey};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-pub(crate)struct Players {
+pub(crate) struct Players {
     #[serde(rename = "player", default)]
     pub players: Vec<Player>,
 }
@@ -44,9 +44,7 @@ pub struct Player {
 }
 impl Player {
     // This method is called when the deserializer encounters a newtype struct
-    pub(crate) fn deserialize_players<'de, D>(
-        deserializer: D,
-    ) -> Result<Vec<Player>, D::Error>
+    pub(crate) fn deserialize_players<'de, D>(deserializer: D) -> Result<Vec<Player>, D::Error>
     where
         D: Deserializer<'de>,
     {

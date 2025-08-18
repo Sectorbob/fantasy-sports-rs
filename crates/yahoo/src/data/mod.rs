@@ -12,18 +12,16 @@ use std::fmt;
 pub use crate::data::{
     draft::{DraftResult, DraftStatus},
     game::{Game, GameKey},
-    league::{
-        Division, Divisions, League, LeagueKey, Leagues, Matchup, Scoreboard, Settings, Standings,
-    },
+    league::{Division, League, LeagueKey, Matchup, Scoreboard, Settings, Standings},
     player::{
         Headshot, KeeperSummary, Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions,
         PositionType, Weeks,
     },
     team::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,
-        TeamStandings, Teams,
+        TeamStandings,
     },
-    transaction::{Transaction, Transactions},
+    transaction::Transaction,
 };
 
 #[derive(Deserialize, Debug)]
@@ -71,8 +69,8 @@ pub enum FantasyContent {
     Users(Users),
     #[serde(rename = "games", deserialize_with = "Game::deserialize_games")]
     Games(Vec<Game>),
-    #[serde(rename = "leagues")]
-    Leagues(Leagues),
+    #[serde(rename = "leagues", deserialize_with = "League::deserialize_leagues")]
+    Leagues(Vec<League>),
     #[serde(rename = "team")]
     Team(Team),
 }

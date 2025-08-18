@@ -9,7 +9,7 @@ use crate::data::player::{Player, Players};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, Clone)]
-pub struct Transactions {
+struct Transactions {
     #[serde(rename = "transaction")]
     pub transactions: Vec<Transaction>,
 }
@@ -92,6 +92,14 @@ impl Transaction {
             Transaction::AddDrop { timestamp, .. } => timestamp,
             Transaction::Trade { timestamp, .. } => timestamp,
         }
+    }
+    pub(crate) fn deserialize_transactions<'de, D>(
+        deserializer: D,
+    ) -> Result<Vec<Transaction>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Transactions::deserialize(deserializer).map(|r| r.transactions)
     }
 }
 impl<'de> Deserialize<'de> for Transaction {

@@ -2,11 +2,14 @@ use super::helpers::empty_string_as_none;
 use core::fmt;
 use serde::{Deserialize, Deserializer, de};
 
-use crate::{data::{game::GameKey, league::LeagueKey}, Player};
+use crate::{
+    Player,
+    data::{game::GameKey, league::LeagueKey},
+};
 
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct Teams {
+struct Teams {
     #[serde(rename = "team", default)]
     pub teams: Vec<Team>,
 }
@@ -44,6 +47,12 @@ impl Team {
     }
     pub fn team_logos(&self) -> &Vec<TeamLogo> {
         &self._team_logos.team_logos
+    }
+    pub(crate) fn deserialize_teams<'de, D>(deserializer: D) -> Result<Vec<Team>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Teams::deserialize(deserializer).map(|r| r.teams)
     }
 }
 
@@ -195,13 +204,37 @@ pub struct Roster {
     pub week: Option<String>,
     pub is_prescoring: Option<bool>,
     pub is_editable: Option<bool>,
-    #[serde(deserialize_with = "Player::deserialize_players")]
+    #[serde(default, deserialize_with = "Player::deserialize_players")]
     pub players: Vec<Player>,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Streak {
-    #[serde(rename = "type")]
-    _type: String,
-    value: String,
+    pub r#type: String,
+    pub value: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs::File, io::BufReader};
+
+    use crate::{FantasyContent, data::FantasyContentWrapper};
+
+    #[test]
+    fn test_deserialize_games() {
+        let reader = BufReader::new(
+            File::open("tests/data/fantasy/v2/league/380.l.129397/teams/roster.xml")
+                .expect("failed to open test data file"),
+        );
+        let w: FantasyContentWrapper = quick_xml::de::from_reader(reader)
+            .expect("failed to deserialize league with roster xml");
+        let teams = if let FantasyContent::League(league) = w.content {
+            league.teams
+        } else {
+            debug_assert!(false, "fuck me");
+            return;
+        };
+
+        debug_assert_eq!(12, teams.len());
+    }
 }

@@ -534,10 +534,7 @@ impl Client {
 
         return match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => match league.transactions {
-                    Some(transactions) => Ok(transactions.transactions),
-                    None => Ok(vec![]),
-                },
+                FantasyContent::League(league) => Ok(league.transactions),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::League, got: {:?}",
                     other
@@ -651,10 +648,8 @@ impl Client {
         if let FantasyContent::Users(users) = content.content {
             for user in users.users {
                 for game in user.games {
-                    if let Some(teams) = game.teams {
-                        for team in teams.teams {
-                            return_me.push(team);
-                        }
+                    for team in game.teams {
+                        return_me.push(team);
                     }
                 }
             }
@@ -673,10 +668,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => match league.teams {
-                    Some(teams) => Ok(teams.teams),
-                    None => Ok(vec![]),
-                },
+                FantasyContent::League(league) => Ok(league.teams),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::League, got: {:?}",
                     other
@@ -733,7 +725,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::Leagues(leagues) => Ok(leagues.leagues),
+                FantasyContent::Leagues(leagues) => Ok(leagues),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Leagues, got: {:?}",
                     other
@@ -773,10 +765,7 @@ impl Client {
 
         match self.get(url.as_str()).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => match league.teams {
-                    Some(teams) => Ok(teams.teams),
-                    None => Ok(vec![]),
-                },
+                FantasyContent::League(league) => Ok(league.teams),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Team, got: {:?}",
                     other
@@ -956,7 +945,7 @@ mod tests {
         assert_eq!(390, games[0].game_key);
         assert_eq!("Football", games[0].name);
         assert_eq!("2019", games[0].season);
-        assert_eq!(None, games[0].teams);
+        assert_eq!(0, games[0].teams.len());
     }
 
     #[tokio::test]
@@ -1109,7 +1098,7 @@ mod tests {
             )
             .await
             .expect("should return ok");
-        assert_eq!(1, standings.teams().len())
+        assert_eq!(1, standings.teams.len())
     }
 
     #[tokio::test]

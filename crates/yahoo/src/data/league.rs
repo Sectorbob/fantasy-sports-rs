@@ -4,13 +4,12 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
 
-use crate::data::Transactions;
 use crate::data::helpers::{ParseError, deserialize_naive_date, empty_string_as_none};
-use crate::{DraftResult, GameCode, GameKey, Player, Team, Teams};
-use crate::{DraftStatus};
+use crate::{DraftResult, GameCode, GameKey, Player, Team};
+use crate::{DraftStatus, Transaction};
 
 #[derive(Deserialize, Debug)]
-pub struct Leagues {
+struct Leagues {
     #[serde(rename = "league")]
     pub leagues: Vec<League>,
 }
@@ -36,8 +35,10 @@ pub struct League {
     pub scoreboard: Option<Scoreboard>,
     pub settings: Option<Settings>,
     pub standings: Option<Standings>,
-    pub teams: Option<Teams>,
-    pub transactions: Option<Transactions>,
+    #[serde(default, deserialize_with = "Team::deserialize_teams")]
+    pub teams: Vec<Team>,
+    #[serde(default, deserialize_with = "Transaction::deserialize_transactions")]
+    pub transactions: Vec<Transaction>,
     pub league_type: String, // TODO: make this into am enum
     #[serde(deserialize_with = "deserialize_naive_date")]
     pub start_date: NaiveDate,
@@ -53,6 +54,15 @@ pub struct League {
     pub renewed: Option<Value>,
     pub renew: Option<String>, // I think this is a reference to the previous year league (if exists)
     pub weekly_deadline: Option<Value>,
+}
+impl League {
+    // This method is called when the deserializer encounters a newtype struct
+    pub(crate) fn deserialize_leagues<'de, D>(deserializer: D) -> Result<Vec<League>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Leagues::deserialize(deserializer).map(|r| r.leagues)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -146,13 +156,8 @@ pub struct Settings {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Standings {
-    #[serde(rename = "teams")]
-    _teams: Teams,
-}
-impl Standings {
-    pub fn teams(&self) -> &Vec<Team> {
-        &self._teams.teams
-    }
+    #[serde(deserialize_with = "Team::deserialize_teams")]
+    pub teams: Vec<Team>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -167,7 +172,8 @@ pub struct Matchup {
     pub status: String, // known values: postevent
     pub is_tied: bool,
     pub winner_team_key: String,
-    pub teams: Teams,
+    #[serde(deserialize_with = "Team::deserialize_teams")]
+    pub teams: Vec<Team>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -180,4 +186,47 @@ pub struct Divisions {
 pub struct Division {
     pub division_id: u32,
     pub name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs::File, io::BufReader};
+
+    use crate::{FantasyContent, data::FantasyContentWrapper};
+
+    #[test]
+    fn test_deserialize_leagues() {
+        let xml_file_reader = BufReader::new(
+            File::open("tests/data/players.xml").expect("failed to open test data file"),
+        );
+        let wrapper: FantasyContentWrapper =
+            quick_xml::de::from_reader(xml_file_reader).expect("failed to parse test xml file");
+
+        let players = if let FantasyContent::League(league) = wrapper.content {
+            league.players
+        } else {
+            debug_assert!(false, "wrong type");
+            return;
+        };
+
+        assert_eq!(25, players.len());
+    }
+
+    #[test]
+    fn test_deserialize_divisions() {
+        let xml_file_reader = BufReader::new(
+            File::open("tests/data/players.xml").expect("failed to open test data file"),
+        );
+        let wrapper: FantasyContentWrapper =
+            quick_xml::de::from_reader(xml_file_reader).expect("failed to parse test xml file");
+
+        let players = if let FantasyContent::League(league) = wrapper.content {
+            league.players
+        } else {
+            debug_assert!(false, "wrong type");
+            return;
+        };
+
+        assert_eq!(25, players.len());
+    }
 }
