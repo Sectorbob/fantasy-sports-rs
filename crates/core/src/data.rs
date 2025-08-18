@@ -131,7 +131,7 @@ impl League {
                 settings: _,
                 standings: _,
                 team: _,
-            } => league.league_id.clone(),
+            } => league.league_key.to_string(),
         }
     }
     pub fn name(&self) -> String {
