@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, path::PathBuf, sync::atomic::AtomicU64};
 
 use log::{debug, error, info};
 use reqwest::{Request, StatusCode};
@@ -22,6 +22,7 @@ pub struct Client {
     base_url: String,
     client: reqwest::Client,
     cache: Option<Box<dyn Cacheable + Send + Sync>>,
+    outgoing_request_count: AtomicU64,
 }
 impl Client {
     pub fn new_with_cache<T: Into<PathBuf>>(base_url: Option<String>, cache_dir: T) -> Self {
@@ -33,6 +34,7 @@ impl Client {
                 .build()
                 .expect("dev error while building http client"),
             cache: Some(Box::new(FileSystemCacher::new(cache_dir))),
+            outgoing_request_count: AtomicU64::new(0),
         }
     }
 
@@ -45,6 +47,7 @@ impl Client {
                 .build()
                 .expect("dev error while building http client"),
             cache: None,
+            outgoing_request_count: AtomicU64::new(0),
         }
     }
 
@@ -94,6 +97,9 @@ impl Client {
                 info!("GET {} cache miss", url);
             }
         }
+
+        self.outgoing_request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         match self.client.execute(req).await {
             Ok(resp) => match resp.status() {
@@ -146,6 +152,11 @@ impl Client {
                 error
             ))),
         }
+    }
+
+    pub fn request_count(&self) -> u64 {
+        self.outgoing_request_count
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
