@@ -162,7 +162,7 @@ pub struct Standings {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Matchups {
-    #[serde(rename = "matchup")]
+    #[serde(default, rename = "matchup")]
     pub matchups: Vec<Matchup>,
 }
 
@@ -171,7 +171,7 @@ pub struct Matchup {
     pub week: Option<u32>,
     pub status: String, // known values: postevent
     pub is_tied: bool,
-    pub winner_team_key: String,
+    pub winner_team_key: Option<String>,
     #[serde(deserialize_with = "Team::deserialize_teams")]
     pub teams: Vec<Team>,
 }
