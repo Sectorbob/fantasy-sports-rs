@@ -1,18 +1,19 @@
 use crate::{
     constants::SEASONS_TO_SCAN, data_fetch, league_matchups_all::LeagueMatchupsTilesPage,
-    league_summary_page, leagues_page,
+    league_summary_page, leagues_page, transactions_table::TransactionsPage,
 };
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use fantasy_core_rs::League;
+use fantasy_core_rs::{League, LeagueAccessor};
 use league_summary_page::LeagueSummaryPage;
 use leagues_page::LeaguesPage;
 use log::*;
 use std::{
     io::{self, Stdout},
+    sync::Arc,
     time::Duration,
 };
 use tokio::time::sleep;
@@ -24,14 +25,16 @@ use tui::{
     widgets::{Block, Borders},
 };
 
-pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn exec(
+    fantasy_league_accessor: LeagueAccessor,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal in raw mode
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
 
-    let handle = tokio::spawn(async {
-        let _ = do_it(stdout).await;
+    let handle = tokio::spawn(async move {
+        let _ = do_it(stdout, &Arc::new(fantasy_league_accessor)).await;
     });
 
     match handle.await {
@@ -52,10 +55,15 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn do_it(stdout: Stdout) -> Result<(), Box<dyn std::error::Error>> {
+async fn do_it(
+    stdout: Stdout,
+    fantasy_league_accessor: &Arc<LeagueAccessor>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<League>>(100);
 
     // let mut errors: Vec<String> = vec![];
+
+    let league_accessor_clone = Arc::clone(&fantasy_league_accessor);
 
     let _handle = tokio::spawn(async move {
         info!("Fetching leagues...");
@@ -65,6 +73,7 @@ async fn do_it(stdout: Stdout) -> Result<(), Box<dyn std::error::Error>> {
                 .into_iter()
                 .map(String::from)
                 .collect::<Vec<String>>(),
+            &league_accessor_clone,
         )
         .await
         {
@@ -96,6 +105,8 @@ async fn render_loop(
     let mut page = NaviItem::WelcomePage;
     let mut leagues_page = LeaguesPage::new();
     let league_matchups_page = LeagueMatchupsTilesPage {};
+    // let mut league_transactions_page = TransactionsPage::new();
+    let mut league_transactions_page;
     let mut navi_stack: Vec<NaviItem> = vec![];
 
     loop {
@@ -146,7 +157,28 @@ async fn render_loop(
                     page = NaviItem::LeaguesPage;
                     // navi_stack.push(NaviItem::LeaguesPage);
                 }
-            } // _ => {}
+            }
+            NaviItem::TransactionsPage(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
+                if let Some(selected_league) = leagues_page.selected() {
+                    league_transactions_page = TransactionsPage::from_league(selected_league);
+                    terminal
+                        .draw(|f| {
+                            let size = f.size();
+                            league_transactions_page.draw(f, &size);
+                        })
+                        .unwrap();
+                } else {
+                    page = NaviItem::LeaguesPage;
+                    // navi_stack.push(NaviItem::LeaguesPage);
+                }
+            }
         }
 
         // Exit on 'q'
@@ -180,6 +212,10 @@ async fn render_loop(
                             navi_stack.push(page);
                             page = NaviItem::LeagueMatchups(league_id.to_string());
                             true
+                        } else if key.code == KeyCode::Char('t') {
+                            navi_stack.push(page);
+                            page = NaviItem::TransactionsPage(league_id.to_string());
+                            true
                         } else {
                             false
                         }
@@ -194,6 +230,7 @@ async fn render_loop(
                             navi_stack.push(page);
                             page = NaviItem::LeaguesPage;
                         }
+
                         KeyCode::Char('w') => {
                             navi_stack.push(page);
                             page = NaviItem::WelcomePage;
@@ -232,4 +269,5 @@ enum NaviItem {
     LeaguesPage,
     LeagueSummary(String),
     LeagueMatchups(String),
+    TransactionsPage(String),
 }

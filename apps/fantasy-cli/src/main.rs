@@ -1,6 +1,6 @@
 use std::env;
 
-use fantasy_core_rs::{sleeper_utils};
+use fantasy_core_rs::{LeagueAccessor, sleeper_utils};
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 
@@ -14,6 +14,7 @@ mod leagues_page;
 mod matchups_list_widget;
 mod roster_widget;
 mod settings_list_widget;
+mod transactions_table;
 mod tui;
 mod yahoo_utils;
 
@@ -41,10 +42,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         error!("No arguments provided. Please specify a mode: 'yahoo', 'sleeper', or 'tui'.");
         panic!("BOOM!")
     }
+
+    // Setup Core LeagueAccessor
+    let mut fantasy_league_accessor = LeagueAccessor::new().with_cache_dir(config::cache_dir());
+    fantasy_league_accessor
+        .init()
+        .await
+        .expect("failed to initialized");
+    debug_assert!(
+        fantasy_league_accessor.sleeper_enabled(),
+        "sleeper not enabled"
+    );
+    debug_assert!(fantasy_league_accessor.yahoo_enabled(), "yahoo not enabled");
+
     match args[1].to_lowercase().as_str() {
-        "yahoo" => yahoo_utils::exec().await,
+        "yahoo" => yahoo_utils::exec(fantasy_league_accessor).await,
         "sleeper" => sleeper_utils::exec().await,
-        "tui" => tui::exec().await,
+        "tui" => tui::exec(fantasy_league_accessor).await,
         _ => panic!("BOOM!"),
     }
 }

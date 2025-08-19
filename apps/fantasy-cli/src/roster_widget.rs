@@ -32,16 +32,7 @@ impl RosterWidget {
                 .iter()
                 .find(|r| &r.owner_id == user_id)
                 .map(|roster| RosterWidget::from_sleeper(roster, &owners, &players)),
-            League::Yahoo {
-                draft_results: _,
-                league: _,
-                matchups: _,
-                players: _,
-                rosters,
-                settings: _,
-                standings: _,
-                team,
-            } => team
+            League::Yahoo { rosters, team, .. } => team
                 .as_ref()
                 .map(|t| {
                     rosters
@@ -99,7 +90,6 @@ impl RosterWidget {
             roster_id: team.team_key.to_string(),
             team_name: team.name.clone(),
             players: roster
-                .players
                 .players
                 .iter()
                 .map(|p| Player {

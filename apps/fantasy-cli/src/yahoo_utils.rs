@@ -1,4 +1,4 @@
-use crate::config;
+use fantasy_core_rs::LeagueAccessor;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -11,24 +11,7 @@ use yahoo_fantasy_rs::{
     Team, TeamStandings, Token, Transaction,
 };
 
-pub async fn build_client() -> Result<Client, YahooError> {
-    let cache_dir = config::config_dir().join("yahoo");
-    let client = Client::new_from_env()
-        .map_err(|err| YahooError::UnknownError(err.to_string()))?
-        .with_token_file::<String>(None)
-        .await
-        .map_err(|err| YahooError::UnknownError(err.to_string()))?
-        .with_cache_dir(cache_dir);
-    info!(
-        "yahoo token file: {}",
-        client.token_file.as_ref().unwrap_or(&"None".to_string())
-    );
-    info!("refreshing token");
-    let _new_token = client.refresh_token().await?;
-    Ok(client)
-}
-
-pub async fn exec() -> Result<(), Box<dyn StdError>> {
+pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdError>> {
     let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
@@ -42,7 +25,7 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     let enable_check_team_in_seasons = true;
 
     debug!("Building Yahoo Fantasy Client...");
-    let client = build_client().await?;
+    let client = league_accessor.yahoo_cli.unwrap();
     debug!("Yahoo Fantasy Client built");
 
     let public_league_key = LeagueKey::new(GameKey::Id(223), 431);
@@ -104,7 +87,7 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
 
         let standings = client.get_league_standings(&ecr_2017).await.unwrap();
 
-        for team in standings.teams() {
+        for team in &standings.teams {
             if let Some(standings) = &team.team_standings {
                 team_standings.insert(team.team_key.to_string(), standings);
             }

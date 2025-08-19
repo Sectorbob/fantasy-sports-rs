@@ -245,4 +245,3 @@ impl MatchupSide {
         format!("{:.2}", self.score)
     }
 }
-
