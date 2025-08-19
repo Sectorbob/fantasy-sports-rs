@@ -17,7 +17,7 @@ pub struct FantasyMatchup {
 impl FantasyMatchup {
     pub fn from_stuff(
         week: usize,
-        matchups: Vec<Matchup>,
+        matchups: &Vec<Matchup>,
         rosters: &Vec<Roster>,
         owners: &Vec<User>,
     ) -> Result<Vec<FantasyMatchup>, Box<dyn std::error::Error + Send + Sync>> {
@@ -30,11 +30,11 @@ impl FantasyMatchup {
                 .position(|wip_entry| matchup.matchup_id == wip_entry.matchup_id)
             {
                 let tmp = wip.remove(index);
-                games.push((tmp, matchup));
+                games.push((tmp, matchup.clone()));
             } else if let None = matchup.matchup_id {
-                orphaned.push(matchup);
+                orphaned.push(matchup.clone());
             } else {
-                wip.push(matchup);
+                wip.push(matchup.clone());
             }
         }
         if !wip.is_empty() {

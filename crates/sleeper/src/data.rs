@@ -621,7 +621,7 @@ pub struct LastMessageDetails {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Roster {
     pub roster_id: u8,
-    
+
     /// The unique identifier of the owner, if available. Is None when a roster
     /// is unassigned.
     pub owner_id: Option<String>,
@@ -854,7 +854,7 @@ pub struct Transaction {
     pub transaction_id: String,
     #[serde(default, deserialize_with = "null_to_empty_map")]
     pub adds: HashMap<String, u8>,
-    pub consenter_ids: Vec<u8>,
+    pub consenter_ids: Option<Vec<u8>>,
     #[serde(default, deserialize_with = "null_to_empty_map")]
     pub drops: HashMap<String, u8>,
     pub roster_ids: Vec<u8>,
