@@ -186,7 +186,7 @@ async fn check_all_ecr_leagues(client: &Client) {
 
 async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport: &Sport) {
     let leagues = client
-        .get_leagues_for_user(&user.user_id, sport.clone(), &String::from(season))
+        .get_leagues_for_user(&user.user_id, sport, &String::from(season))
         .await
         .unwrap();
     for league in leagues {

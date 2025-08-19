@@ -287,8 +287,10 @@ pub(crate) async fn fetch_sleeper_league_context(
 
     if !unmatched_players.is_empty() {
         log::warn!(
-            "unable to match all players for sleeper league. unmatched: {}",
-            unmatched_players.len()
+            "unable to match all players for sleeper league ({season}: {league_id}). unmatched: {count}",
+            count = unmatched_players.len(),
+            season = &sleeper_league.season,
+            league_id = &sleeper_league.league_id
         );
     }
 
@@ -298,7 +300,7 @@ pub(crate) async fn fetch_sleeper_league_context(
         league: sleeper_league.clone(),
         owners,
         players: players_in_league,
-        rosters,
+        rosters: rosters.into_iter().map(|r| (r.roster_id, r)).collect(),
         transactions,
         matchups,
         user_id: None,
@@ -316,6 +318,7 @@ pub(crate) async fn fetch_yahoo_league_context(
     let rosters_future = cli.get_rosters_in_league(&league_key);
     let settings_future = cli.get_league_settings(&league_key);
     let transactions_future = cli.get_league_transactions(&league_key);
+    let teams_future = cli.get_teams_in_league(&league_key);
 
     // Wait for the league settings to come back
     let settings = settings_future.await?;
@@ -386,7 +389,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         player_cache_misses.extend(player_key_set);
     }
 
-    log::error!(
+    log::debug!(
         "{} player keys must be looked up for {league_key}",
         player_cache_misses.len()
     );
@@ -439,6 +442,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         rosters,
         settings,
         standings: standings_future.await?,
+        teams: teams_future.await?,
         team: None,
         transactions,
     })
@@ -452,7 +456,7 @@ pub(crate) async fn fetch_sleeper_league_ids_for_user(
 ) -> Result<Vec<ExternalId>, Error> {
     let mut sleeper_leagues_for_season_tasks: FuturesUnordered<_> = seasons
         .iter()
-        .map(|season| sleeper_client.get_leagues_for_user(sleeper_user_id, sport.clone(), season))
+        .map(|season| sleeper_client.get_leagues_for_user(sleeper_user_id, sport, season))
         .collect();
 
     let mut sleeper_leagues: Vec<sleeper::League> = vec![];
@@ -542,6 +546,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_league_context() {
+        let sleeper_user_id = ExternalId::try_from("sleeper:727598467304811923").unwrap();
+        let yahoo_user_id = ExternalId::try_from("yahoo:GGQ52IUUT34FUMAXVLVIZ6V2QP").unwrap();
+
         let cases = [
             (
                 "yahoo:359.l.564503",
@@ -551,6 +558,8 @@ mod tests {
                 180, /* draft pick count */
                 323, /* transactions count */
                 15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                yahoo_user_id.clone(),
+                "All I Do Is Lose",
             ),
             (
                 "yahoo:371.l.20028",
@@ -559,7 +568,9 @@ mod tests {
                 300, /* players */
                 180, /* draft pick count */
                 331, /* transactions count */
-                13,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                yahoo_user_id.clone(),
+                "All I Do Is Wynn",
             ),
             (
                 "yahoo:380.l.129397",
@@ -569,33 +580,41 @@ mod tests {
                 204, /* draft pick count */
                 298, /* transactions count */
                 15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                yahoo_user_id.clone(),
+                "Stormy Badgers 01",
             ),
             (
                 "sleeper:164974877262287888",
                 "2019",
                 "Sleeper",
-                335, /* players (was 278 before adding all player_ids from draft and transactions) */
+                359, /* players (was 278 before adding all player_ids from draft and transactions) */
                 204, /* draft pick count */
-                379, /* transactions count */
+                500, /* transactions count */
                 16,  /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "Stormy Badgers 01",
             ),
             (
                 "sleeper:121226934266994911",
                 "2020",
                 "Sleeper",
-                345, /* players */
+                369, /* players */
                 204, /* draft pick count */
-                497, /* transactions count */
+                673, /* transactions count */
                 16,  /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "All Rise",
             ),
             (
                 "sleeper:652490366221046118",
                 "2021",
                 "Sleeper",
-                353, /* players */
+                357, /* players */
                 204, /* draft pick count */
-                474, /* transactions count */
+                538, /* transactions count */
                 17,  /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "All Rise",
             ),
             (
                 "sleeper:323299806782982483",
@@ -605,6 +624,8 @@ mod tests {
                 204, /* draft pick count */
                 415, /* transactions count */
                 17,  /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "There's Always Next Year",
             ),
             (
                 "sleeper:383786432088067320",
@@ -613,7 +634,10 @@ mod tests {
                 298, /* players */
                 192, /* draft pick count */
                 379, /* transactions count */
-                17,  /* weeks of matchups */
+                // TODO: uh oh, 500 might be the max
+                17, /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "Kicked in the Dabolls",
             ),
             (
                 "sleeper:4581480575134427121",
@@ -623,6 +647,8 @@ mod tests {
                 192, /* draft pick count */
                 294, /* transactions count */
                 17,  /* weeks of matchups */
+                sleeper_user_id.clone(),
+                "Golden Comets 25",
             ),
         ];
 
@@ -641,13 +667,16 @@ mod tests {
             number_of_draft_picks,
             num_of_txns,
             weeks_of_matchups,
+            user_id,
+            expected_team_name,
         ) in cases
         {
             let external_id = ExternalId::try_from(league_id).expect("invalid league_id");
             let league = fixture
                 .fetch_league_context(&external_id)
                 .await
-                .expect("failed to get sleeper league");
+                .expect("failed to get sleeper league")
+                .with_team(user_id.clone());
             debug_assert_eq!(
                 season,
                 league.season(),
@@ -657,6 +686,11 @@ mod tests {
                 platform,
                 league.platform(),
                 "platform is incorrect for {league_id}"
+            );
+            debug_assert_eq!(
+                expected_team_name,
+                league.team_name(),
+                "team_name is incorrect for {league_id}"
             );
             debug_assert_eq!(
                 num_of_players,

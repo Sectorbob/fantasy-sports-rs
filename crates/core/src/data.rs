@@ -99,7 +99,7 @@ pub enum League {
         matchups: HashMap<usize, Vec<sleeper::Matchup>>,
         owners: HashMap<String, sleeper::User>,
         players: HashMap<String, sleeper::Player>,
-        rosters: Vec<sleeper::Roster>,
+        rosters: HashMap<u8, sleeper::Roster>,
         transactions: Vec<sleeper::Transaction>,
         user_id: Option<String>,
     },
@@ -112,10 +112,63 @@ pub enum League {
         settings: yahoo::Settings,
         standings: yahoo::Standings,
         team: Option<yahoo::Team>,
+        teams: Vec<yahoo::Team>,
         transactions: Vec<yahoo::Transaction>,
     },
 }
 impl League {
+    pub fn with_team(self, id: ExternalId) -> Self {
+        match self {
+            League::Sleeper {
+                draft,
+                draft_picks,
+                league,
+                matchups,
+                owners,
+                players,
+                rosters,
+                transactions,
+                user_id: _,
+            } => League::Sleeper {
+                draft,
+                draft_picks,
+                league,
+                matchups,
+                owners,
+                players,
+                rosters,
+                transactions,
+                user_id: Some(id.id),
+            },
+            League::Yahoo {
+                draft_results,
+                league,
+                scoreboards,
+                players,
+                rosters,
+                settings,
+                standings,
+                team: _,
+                teams,
+                transactions,
+            } => League::Yahoo {
+                draft_results,
+                league,
+                scoreboards,
+                players,
+                rosters,
+                settings,
+                standings,
+                team: teams
+                    .iter()
+                    .find(|t| t.managers().iter().find(|m| m.guid == id.id).is_some())
+                    .map(yahoo::Team::clone),
+                teams,
+                transactions,
+            },
+        }
+    }
+
     pub fn id(&self) -> String {
         match self {
             League::Sleeper { league, .. } => league.league_id.clone(),
@@ -146,9 +199,9 @@ impl League {
                 rosters, user_id, ..
             } => match rosters
                 .iter()
-                .find(|r| r.owner_id.is_some() && &r.owner_id == user_id)
+                .find(|(_, r)| r.owner_id.is_some() && &r.owner_id == user_id)
             {
-                Some(roster) => format!(
+                Some((_, roster)) => format!(
                     "{}-{}-{}",
                     match roster.settings.get("wins") {
                         Some(n) => n.to_string(),
@@ -205,9 +258,9 @@ impl League {
                 rosters, user_id, ..
             } => match rosters
                 .iter()
-                .find(|r| r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id)
+                .find(|(_, r)| r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id)
             {
-                Some(roster) => roster
+                Some((_, roster)) => roster
                     .settings
                     .get("points")
                     .and_then(|p| p.as_f64())
@@ -244,10 +297,15 @@ impl League {
     }
     pub fn scoreboards(&self) -> Vec<Scoreboard> {
         match self {
-            League::Sleeper { matchups, .. } => matchups
+            League::Sleeper {
+                matchups,
+                owners,
+                rosters,
+                ..
+            } => matchups
                 .iter()
                 .map(|(week, matchups)| {
-                    Scoreboard::from_sleeper(week.clone() as u32, matchups.clone())
+                    Scoreboard::from_sleeper(week.clone() as u32, matchups.clone(), rosters, owners)
                 })
                 .collect(),
             League::Yahoo { scoreboards, .. } => scoreboards.iter().map(Scoreboard::from).collect(), // Yahoo leagues do not have matchups in the same way
@@ -331,7 +389,9 @@ impl League {
     }
     pub fn rosters(&self) -> Vec<Roster> {
         match self {
-            League::Sleeper { rosters, .. } => rosters.iter().map(Roster::from).collect(),
+            League::Sleeper { rosters, .. } => {
+                rosters.iter().map(|r| r.1).map(Roster::from).collect()
+            }
             League::Yahoo { rosters, .. } => rosters.iter().map(Roster::from).collect(),
         }
     }
@@ -995,7 +1055,12 @@ pub struct Scoreboard {
     pub matchups: Vec<Matchup>,
 }
 impl Scoreboard {
-    pub fn from_sleeper(week: u32, sleeper_matchups: Vec<sleeper::Matchup>) -> Self {
+    pub fn from_sleeper(
+        week: u32,
+        sleeper_matchups: Vec<sleeper::Matchup>,
+        rosters: &HashMap<u8, sleeper::Roster>,
+        owners: &HashMap<String, sleeper::User>,
+    ) -> Self {
         let mut matchups: Vec<(sleeper::Matchup, sleeper::Matchup)> =
             Vec::with_capacity(sleeper_matchups.len() / 2);
         let mut wip: Vec<sleeper::Matchup> = vec![];
@@ -1018,7 +1083,7 @@ impl Scoreboard {
         Scoreboard {
             matchups: matchups
                 .into_iter()
-                .map(|m| Matchup::from_sleeper(week, m))
+                .map(|m| Matchup::from_sleeper(week, m, rosters, owners))
                 .collect(),
         }
     }
@@ -1050,7 +1115,12 @@ pub struct Matchup {
     pub right: Option<MatchupSide>,
 }
 impl Matchup {
-    pub fn from_sleeper(week: u32, matchup: (sleeper::Matchup, sleeper::Matchup)) -> Self {
+    pub fn from_sleeper(
+        week: u32,
+        matchup: (sleeper::Matchup, sleeper::Matchup),
+        rosters: &HashMap<u8, sleeper::Roster>,
+        owners: &HashMap<String, sleeper::User>,
+    ) -> Self {
         // yahoo scoreboard doesn't include the player info
         Matchup {
             id: matchup
@@ -1059,8 +1129,8 @@ impl Matchup {
                 .map_or(MatchupId::None, |id| MatchupId::Id(id.to_string())),
             week,
             status: None,
-            left: MatchupSide::from_sleeper(matchup.0),
-            right: Some(MatchupSide::from_sleeper(matchup.1)),
+            left: MatchupSide::from_sleeper(matchup.0, rosters, owners),
+            right: Some(MatchupSide::from_sleeper(matchup.1, rosters, owners)),
         }
     }
     pub fn from_yahoo(week: u32, mut matchup: yahoo::Matchup) -> Self {
@@ -1089,14 +1159,32 @@ impl Matchup {
 #[derive(Debug, Clone)]
 pub struct MatchupSide {
     pub roster_id: String,
+    pub team_name: String,
+    pub owner_name: String,
     pub score: f32,
     pub players: Vec<MatchupPlayer>,
 }
 impl MatchupSide {
-    pub fn from_sleeper(matchup: sleeper::Matchup) -> Self {
+    pub fn from_sleeper(
+        matchup: sleeper::Matchup,
+        rosters: &HashMap<u8, sleeper::Roster>,
+        owners: &HashMap<String, sleeper::User>,
+    ) -> Self {
         // yahoo scoreboard doesn't include the player info
+
+        let owner = rosters
+            .get(&matchup.roster_id)
+            .map(|r| r.owner_id.clone())
+            .flatten()
+            .map(|id| owners.get(&id))
+            .flatten();
+        let team_name = owner.map_or(String::from(""), |o| o.team_name());
+        let owner_name = owner.map_or(String::from(""), |o| o.display_name.clone());
+
         MatchupSide {
             roster_id: matchup.roster_id.to_string(),
+            team_name,
+            owner_name,
             score: matchup.points,
             players: MatchupPlayer::from_sleeper_vec(
                 matchup.players,
@@ -1106,9 +1194,17 @@ impl MatchupSide {
         }
     }
     pub fn from_yahoo(team: yahoo::Team) -> Self {
+        let owner_name = team
+            .managers()
+            .iter()
+            .map(|m| m.nickname.clone())
+            .collect::<Vec<_>>()
+            .join(" & ");
         // yahoo scoreboard doesn't include the player info
         MatchupSide {
             roster_id: team.team_id.to_string(),
+            team_name: team.name,
+            owner_name,
             score: team
                 .team_points
                 .map(|p| p.total)
