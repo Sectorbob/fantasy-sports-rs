@@ -28,14 +28,14 @@ impl LeagueMatchupsTilesPage {
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);
-        let rows_needed_in_each_tile = league
-            .matchups()
+        let scoreboards = league.scoreboards();
+        let rows_needed_in_each_tile = scoreboards
             .iter()
-            .map(|(_, m)| m.len())
+            .map(|s| s.matchups.len())
             .max()
             .unwrap_or(6);
         let min_tile_height = rows_needed_in_each_tile + 2;
-        let weeks = league.matchups().len();
+        let weeks = scoreboards.len();
         let rows = area.height as usize / min_tile_height;
         let cols = weeks / rows + (if weeks % rows > 0 { 1 } else { 0 });
 
@@ -63,10 +63,13 @@ impl LeagueMatchupsTilesPage {
 
             for (i, row) in rows.iter().enumerate() {
                 let week: usize = i * cols + j + 1;
-                match league.matchups().get(&week) {
-                    Some(matchups) => {
+                match scoreboards
+                    .iter()
+                    .find(|s| s.matchups[0].week as usize == week)
+                {
+                    Some(scoreboard) => {
                         let matchup_widget =
-                            MatchupsList::from_sleeper(None, matchups, &league.players());
+                            MatchupsList::from(None, &scoreboard.matchups, &league.players());
                         matchup_widget.draw(f, row, None);
                     }
                     None => {

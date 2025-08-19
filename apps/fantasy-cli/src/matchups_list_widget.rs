@@ -3,7 +3,7 @@ use std::{
     io::Stdout,
 };
 
-use fantasy_core_rs::Player;
+use fantasy_core_rs as core;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
@@ -16,10 +16,10 @@ pub struct MatchupsList {
     matchups: Vec<Matchup>,
 }
 impl MatchupsList {
-    pub fn from_sleeper(
+    pub fn from(
         title_override: Option<String>,
-        matchups: &Vec<sleeper_fantasy_rs::custom::FantasyMatchup>,
-        players: &HashMap<String, Player>,
+        matchups: &Vec<core::Matchup>,
+        players: &HashMap<String, core::Player>,
     ) -> Self {
         MatchupsList {
             title_override,
@@ -29,33 +29,38 @@ impl MatchupsList {
                     // team_name: format!("Roster {}", m.roster_id),
                     week: m.week.to_string(),
                     side_1: MatchupSide {
-                        team_name: m.left.owner.team_name().clone(),
-                        team_id: m.left.owner.user_id.clone(),
-                        score: m.left.matchup.points,
+                        team_name: m.left.team_name.clone(),
+                        team_id: m.left.roster_id.clone(),
+                        score: m.left.score,
                         starters: m
                             .left
-                            .starters
+                            .players
                             .iter()
-                            .map(|pid| match players.get(pid) {
-                                Some(player) => player.clone(),
-                                None => Player::missing(pid),
+                            .filter_map(|player| {
+                                players.get(&player.player_id.id).map(core::Player::clone)
                             })
                             .collect(),
                     },
-                    side_2: MatchupSide {
-                        team_name: m.right.owner.team_name().clone(),
-                        team_id: m.right.owner.user_id.clone(),
-                        score: m.right.matchup.points,
-                        starters: m
-                            .left
-                            .starters
-                            .iter()
-                            .map(|pid| match players.get(pid) {
-                                Some(player) => player.clone(),
-                                None => Player::missing(pid),
-                            })
-                            .collect(),
-                    },
+                    side_2: m.right.as_ref().map_or(
+                        MatchupSide {
+                            team_name: String::from(""),
+                            team_id: String::from(""),
+                            score: 0.0,
+                            starters: vec![],
+                        },
+                        |right| MatchupSide {
+                            team_name: right.team_name.clone(),
+                            team_id: right.roster_id.clone(),
+                            score: right.score,
+                            starters: right
+                                .players
+                                .iter()
+                                .filter_map(|player| {
+                                    players.get(&player.player_id.id).map(core::Player::clone)
+                                })
+                                .collect(),
+                        },
+                    ),
                 })
                 .collect(),
         }
@@ -238,7 +243,7 @@ pub struct MatchupSide {
     pub team_name: String,
     pub team_id: String,
     pub score: f32,
-    pub starters: Vec<Player>,
+    pub starters: Vec<core::Player>,
 }
 impl MatchupSide {
     pub fn score_str(&self) -> String {

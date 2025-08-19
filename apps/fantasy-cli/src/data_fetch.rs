@@ -1,4 +1,6 @@
-use fantasy_core_rs as core;
+use std::collections::HashSet;
+
+use fantasy_core_rs::{self as core, ExternalId};
 use futures::{TryStreamExt, stream::FuturesUnordered};
 use sleeper_fantasy_rs::{self as sleeper};
 use yahoo_fantasy_rs::{self as yahoo};
@@ -95,7 +97,10 @@ async fn get_sleeper_leagues(
             })
             .await?;
 
-        leagues.push(league_context);
+        leagues.push(league_context.with_team(ExternalId::new(
+            fantasy_core_rs::Platform::Sleeper,
+            sleeper_user_id.clone(),
+        )));
     }
 
     Ok(leagues)
@@ -118,6 +123,7 @@ async fn get_yahoo_leagues(
         .unwrap();
 
     let mut yahoo_teams: Vec<yahoo::Team> = vec![];
+    let mut user_ids = HashSet::new();
     for game in games {
         let game_key: yahoo::GameKey = yahoo::GameKey::Id(game.game_id);
         let teams_in_season = league_accessor
@@ -127,9 +133,19 @@ async fn get_yahoo_leagues(
             .get_teams_for_user(game_key)
             .await?;
         for team in teams_in_season {
+            user_ids.extend(team.managers().iter().filter_map(|m| {
+                if m.is_current_login.unwrap_or(false) {
+                    Some(m.guid.clone())
+                } else {
+                    None
+                }
+            }));
             yahoo_teams.push(team);
         }
     }
+
+    log::info!("Yahoo User id Guids: {user_ids:?}");
+    let yahoo_user_guid = user_ids.into_iter().next();
 
     let mut leagues: Vec<core::League> = vec![];
 
@@ -148,7 +164,14 @@ async fn get_yahoo_leagues(
         });
     }
     while let Some(yahoo_league) = yahoo_teams_tasks.try_next().await? {
-        leagues.push(yahoo_league);
+        if let Some(user_guid) = &yahoo_user_guid {
+            leagues.push(yahoo_league.with_team(ExternalId {
+                platform: fantasy_core_rs::Platform::Yahoo,
+                id: user_guid.clone(),
+            }));
+        } else {
+            leagues.push(yahoo_league);
+        }
     }
 
     Ok(leagues)
