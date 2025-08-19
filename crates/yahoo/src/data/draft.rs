@@ -13,7 +13,7 @@ pub struct DraftResult {
     pub pick: u32,
     pub round: u32,
     pub team_key: TeamKey,
-    pub player_key: PlayerKey, // e.g. nfl.p.7241
+    pub player_key: Option<PlayerKey>, // e.g. nfl.p.7241
 }
 impl DraftResult {
     // This method is called when the deserializer encounters a newtype struct
