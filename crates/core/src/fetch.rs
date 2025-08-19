@@ -9,9 +9,9 @@ use std::{
 use yahoo_fantasy_rs::{self as yahoo};
 
 pub struct LeagueAccessor {
-    sleeper_cli: Option<sleeper::Client>,
+    pub sleeper_cli: Option<sleeper::Client>,
     players_cache: Option<PlayerCache>,
-    yahoo_cli: Option<yahoo::Client>,
+    pub yahoo_cli: Option<yahoo::Client>,
     cache_dir: Option<PathBuf>,
 }
 impl LeagueAccessor {
@@ -305,7 +305,9 @@ pub(crate) async fn fetch_yahoo_league_context(
     // Gather set of all player keys in the league
     let mut player_key_set: HashSet<yahoo::PlayerKey> = HashSet::new();
     draft_results.iter().for_each(|p| {
-        player_key_set.insert(p.player_key.clone());
+        if let Some(player_key) = &p.player_key {
+            player_key_set.insert(player_key.clone());
+        }
     });
     rosters.iter().for_each(|(_, roster)| {
         roster.players.iter().for_each(|player| {

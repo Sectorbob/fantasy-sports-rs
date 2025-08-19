@@ -279,22 +279,38 @@ impl League {
                     picks: draft_results
                         .iter()
                         .map(|p| {
-                            if let Some(player) = players.get(&p.player_key) {
-                                DraftPick {
-                                    round: p.round,
-                                    pick: p.pick,
-                                    overall_pick: p.pick,
-                                    player: player.clone(),
-                                    roster_id: p.team_key.to_string(),
+                            if let Some(player_key) = &p.player_key {
+                                if let Some(player) = players.get(player_key) {
+                                    DraftPick {
+                                        round: p.round,
+                                        pick: p.pick,
+                                        overall_pick: p.pick,
+                                        player: player.clone(),
+                                        roster_id: p.team_key.to_string(),
+                                    }
+                                } else {
+                                    DraftPick {
+                                        round: p.round,
+                                        pick: p.pick,
+                                        overall_pick: p.pick,
+                                        player: Player {
+                                            _id: player_key.to_string(),
+                                            name: player_key.to_string(),
+                                            positions: vec![],
+                                            irl_team: None,
+                                        },
+                                        roster_id: p.team_key.to_string(),
+                                    }
                                 }
                             } else {
+                                // No player_key onm the draft pick
                                 DraftPick {
                                     round: p.round,
                                     pick: p.pick,
                                     overall_pick: p.pick,
                                     player: Player {
-                                        _id: p.player_key.to_string(),
-                                        name: p.player_key.to_string(),
+                                        _id: String::from("N/A"),
+                                        name: String::from("N/A"),
                                         positions: vec![],
                                         irl_team: None,
                                     },
