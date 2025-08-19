@@ -14,7 +14,7 @@ use crate::{
 // TODO: I want to do away with the wrapper struct (at least publicly)
 #[derive(Deserialize, Debug, Clone)]
 struct Transactions {
-    #[serde(rename = "transaction")]
+    #[serde(default, rename = "transaction")]
     pub transactions: Vec<Transaction>,
 }
 
