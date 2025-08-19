@@ -1,6 +1,9 @@
 use crate::{ExternalId, Platform, data as core, player_cache::PlayerCache, sleeper_utils};
-use futures::{TryStreamExt, stream::FuturesUnordered};
-use sleeper_fantasy_rs::{self as sleeper};
+use futures::{
+    StreamExt, TryStreamExt,
+    stream::{FuturesOrdered, FuturesUnordered},
+};
+use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -289,6 +292,26 @@ pub(crate) async fn fetch_yahoo_league_context(
     let settings_future = cli.get_league_settings(&league_key);
     let transactions_future = cli.get_league_transactions(&league_key);
 
+    // Wait for the league settings to come back
+    let settings = settings_future.await?;
+    let mut scoreboard_settings_futures = FuturesOrdered::new();
+    let mut weeks = vec![];
+    let playoff_start_week: i32 = settings.playoff_start_week.try_into().map_err(|err| {
+        Error::new(format!(
+            "unable to use playoff_start_week ({}): {err}",
+            settings.playoff_start_week
+        ))
+    })?;
+    let last_week: i32 = playoff_start_week + 2;
+    for week in 1..last_week {
+        scoreboard_settings_futures.push_back(cli.get_league_scoreboard(
+            &league_key,
+            Some(week),
+            None,
+        ));
+        weeks.push(week);
+    }
+
     // Build out draft results
     let draft_results = cli.get_draft_results(&league_key).await?;
 
@@ -361,6 +384,22 @@ pub(crate) async fn fetch_yahoo_league_context(
         }
     }
 
+    // Build out Weekly Scoreboards
+    let mut scoreboards = vec![];
+    let mut i = 0;
+    while let Some(result) = scoreboard_settings_futures.next().await {
+        let week = weeks[i];
+        i = i + 1;
+        match result {
+            Ok(scoreboard) => {
+                scoreboards.push(scoreboard);
+            }
+            Err(err) => {
+                log::warn!("failed to get scoreboard for week {week}: {err}")
+            }
+        }
+    }
+
     log::debug!(
         "got {} yahoo players in {league_key}",
         players_in_league.len()
@@ -370,14 +409,25 @@ pub(crate) async fn fetch_yahoo_league_context(
         league: yahoo_league_future
             .await?
             .ok_or(Error::new("yahoo league not found"))?,
-        matchups: HashMap::new(), // TODO: Yahoo does not provide matchups in the same way as Sleeper
+        matchups: scoreboards_into_matchups(scoreboards), // TODO: Yahoo does not provide matchups in the same way as Sleeper
         players: players_in_league,
         rosters,
-        settings: settings_future.await?,
+        settings,
         standings: standings_future.await?,
         team: None,
         transactions,
     })
+}
+
+fn scoreboards_into_matchups(
+    weekly_scoreboards: Vec<yahoo::Scoreboard>,
+) -> HashMap<usize, Vec<FantasyMatchup>> {
+    HashMap::new()
+    // weekly_scoreboards.into_iter().map(|scoreboard| {
+    //     (scoreboard.week, scoreboard.matchups.matchups.into_iter().map(|matchup| {
+    //         FantasyMatchup::from_stuff(week, matchups, rosters, owners)
+    //     }).collect())
+    // }).collect()
 }
 
 async fn get_sleeper_leagues(
@@ -501,6 +551,7 @@ mod tests {
                 291, /* players */
                 180, /* draft pick count */
                 323, /* transactions count */
+                0,   /* weeks of matchups */
             ),
             (
                 "yahoo:371.l.20028",
@@ -509,6 +560,7 @@ mod tests {
                 300, /* players */
                 180, /* draft pick count */
                 331, /* transactions count */
+                0,   /* weeks of matchups */
             ),
             (
                 "yahoo:380.l.129397",
@@ -517,6 +569,7 @@ mod tests {
                 317, /* players */
                 204, /* draft pick count */
                 298, /* transactions count */
+                0,   /* weeks of matchups */
             ),
             (
                 "sleeper:164974877262287888",
@@ -525,6 +578,7 @@ mod tests {
                 334, /* players (was 278 before adding all player_ids from draft and transactions) */
                 204, /* draft pick count */
                 379, /* transactions count */
+                16,  /* weeks of matchups */
             ),
             (
                 "sleeper:121226934266994911",
@@ -533,6 +587,7 @@ mod tests {
                 345, /* players */
                 204, /* draft pick count */
                 497, /* transactions count */
+                16,  /* weeks of matchups */
             ),
             (
                 "sleeper:652490366221046118",
@@ -541,6 +596,7 @@ mod tests {
                 353, /* players */
                 204, /* draft pick count */
                 474, /* transactions count */
+                17,  /* weeks of matchups */
             ),
             (
                 "sleeper:323299806782982483",
@@ -549,6 +605,7 @@ mod tests {
                 342, /* players */
                 204, /* draft pick count */
                 415, /* transactions count */
+                17,  /* weeks of matchups */
             ),
             (
                 "sleeper:383786432088067320",
@@ -557,6 +614,7 @@ mod tests {
                 298, /* players */
                 192, /* draft pick count */
                 379, /* transactions count */
+                17,  /* weeks of matchups */
             ),
             (
                 "sleeper:4581480575134427121",
@@ -565,6 +623,7 @@ mod tests {
                 302, /* players */
                 192, /* draft pick count */
                 294, /* transactions count */
+                17,  /* weeks of matchups */
             ),
         ];
 
@@ -575,8 +634,15 @@ mod tests {
         debug_assert!(fixture.yahoo_enabled(), "yahoo not enabled");
 
         // Execute and Assert
-        for (league_id, season, platform, num_of_players, number_of_draft_picks, num_of_txns) in
-            cases
+        for (
+            league_id,
+            season,
+            platform,
+            num_of_players,
+            number_of_draft_picks,
+            num_of_txns,
+            weeks_of_matchups,
+        ) in cases
         {
             let external_id = ExternalId::try_from(league_id).expect("invalid league_id");
             let league = fixture
@@ -609,6 +675,21 @@ mod tests {
                 league.transactions().len(),
                 "num of transactions is incorrect in {league_id}",
             );
+            let m = league.matchups();
+            debug_assert_eq!(
+                weeks_of_matchups,
+                m.len(),
+                "num of weeks of matchups is incorrect in {league_id}",
+            );
+            for (week, matchups) in m {
+                if *week < 14 {
+                    debug_assert_eq!(
+                        6,
+                        matchups.len(),
+                        "week {week} matchup count is incorrect in {league_id}",
+                    );
+                }
+            }
         }
 
         // assert that only cache is hit
