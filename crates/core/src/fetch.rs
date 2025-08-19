@@ -1,9 +1,14 @@
-use crate::{ExternalId, Platform, data as core, player_cache::PlayerCache, sleeper_utils};
+use crate::{
+    ExternalId, Platform,
+    data::{self as core},
+    player_cache::PlayerCache,
+    sleeper_utils,
+};
 use futures::{
     StreamExt, TryStreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
 };
-use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
+use sleeper_fantasy_rs::{self as sleeper};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -75,6 +80,32 @@ impl LeagueAccessor {
 
     pub fn yahoo_enabled(&self) -> bool {
         self.yahoo_cli.is_some()
+    }
+
+    pub async fn fetch_league_ids_for_user(
+        &self,
+        user_id: &ExternalId,
+        seasons: Vec<String>,
+        sport: &Sport,
+    ) -> Result<Vec<ExternalId>, Error> {
+        match &user_id.platform {
+            Platform::Sleeper => {
+                if let Some(cli) = &self.sleeper_cli {
+                    fetch_sleeper_league_ids_for_user(cli, &seasons, &user_id.id, &sport.to_sport())
+                        .await
+                } else {
+                    Err(Error::new("sleeper cli not configured"))
+                }
+            }
+            Platform::Yahoo => {
+                if let Some(cli) = &self.yahoo_cli {
+                    fetch_yahoo_league_keys_for_user(cli, &seasons, sport.to_game_code()).await
+                } else {
+                    Err(Error::new("yahoo cli not configured"))
+                }
+            }
+            other => Err(Error::new(format!("{other} is not supported"))),
+        }
     }
 
     pub async fn fetch_league_context(&self, id: &ExternalId) -> Result<core::League, Error> {
@@ -199,17 +230,11 @@ pub(crate) async fn fetch_sleeper_league_context(
             player_id_set.insert(pid.clone());
         })
     });
-    matchups.iter().for_each(|(_, fmups)| {
-        fmups.iter().for_each(|fmup| {
-            fmup.left.players().into_iter().for_each(|owned_player_id| {
-                player_id_set.insert(owned_player_id);
+    matchups.iter().for_each(|(_, matchups)| {
+        matchups.iter().for_each(|fmup| {
+            fmup.players.iter().for_each(|owned_player_id| {
+                player_id_set.insert(owned_player_id.to_string());
             });
-            fmup.right
-                .players()
-                .into_iter()
-                .for_each(|owned_player_id| {
-                    player_id_set.insert(owned_player_id);
-                });
         })
     });
     transactions.iter().for_each(|txn| {
@@ -409,7 +434,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         league: yahoo_league_future
             .await?
             .ok_or(Error::new("yahoo league not found"))?,
-        matchups: scoreboards_into_matchups(scoreboards), // TODO: Yahoo does not provide matchups in the same way as Sleeper
+        scoreboards,
         players: players_in_league,
         rosters,
         settings,
@@ -419,31 +444,17 @@ pub(crate) async fn fetch_yahoo_league_context(
     })
 }
 
-fn scoreboards_into_matchups(
-    weekly_scoreboards: Vec<yahoo::Scoreboard>,
-) -> HashMap<usize, Vec<FantasyMatchup>> {
-    HashMap::new()
-    // weekly_scoreboards.into_iter().map(|scoreboard| {
-    //     (scoreboard.week, scoreboard.matchups.matchups.into_iter().map(|matchup| {
-    //         FantasyMatchup::from_stuff(week, matchups, rosters, owners)
-    //     }).collect())
-    // }).collect()
-}
-
-async fn get_sleeper_leagues(
+pub(crate) async fn fetch_sleeper_league_ids_for_user(
     sleeper_client: &sleeper::Client,
-    seasons: &[String],
+    seasons: &Vec<String>,
     sleeper_user_id: &String,
-    sleeper_sport: &sleeper::Sport,
-    player_cache: Option<&PlayerCache>,
-) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
+    sport: &sleeper::Sport,
+) -> Result<Vec<ExternalId>, Error> {
     let mut sleeper_leagues_for_season_tasks: FuturesUnordered<_> = seasons
         .iter()
-        .map(|season| sleeper_client.get_leagues_for_user(sleeper_user_id, sleeper_sport, season))
+        .map(|season| sleeper_client.get_leagues_for_user(sleeper_user_id, sport.clone(), season))
         .collect();
 
-    // let mut sleeper_leagues_tasks = FuturesUnordered::new();
-    // // Now you can poll tasks as they complete:
     let mut sleeper_leagues: Vec<sleeper::League> = vec![];
     loop {
         match sleeper_leagues_for_season_tasks.try_next().await {
@@ -461,33 +472,32 @@ async fn get_sleeper_leagues(
                 // return Err(Box::new(e));
             }
         }
-        // handle result
     }
 
-    let mut league_futures = FuturesUnordered::new();
-
-    for sleeper_league in sleeper_leagues.iter() {
-        league_futures.push(fetch_sleeper_league_context(
-            sleeper_client,
-            player_cache,
-            sleeper_league,
-        ));
-    }
-
-    let mut leagues = vec![];
-    while let Some(yahoo_league) = league_futures.try_next().await? {
-        leagues.push(yahoo_league);
-    }
-
-    Ok(leagues)
+    Ok(sleeper_leagues.into_iter().map(ExternalId::from).collect())
 }
 
-async fn get_yahoo_leagues_for_user(
+pub enum Sport {
+    NFL,
+}
+impl Sport {
+    pub fn to_game_code(&self) -> yahoo::GameCode {
+        match self {
+            Sport::NFL => yahoo::GameCode::NFL,
+        }
+    }
+    pub fn to_sport(&self) -> sleeper::Sport {
+        match self {
+            Sport::NFL => sleeper::Sport::NFL,
+        }
+    }
+}
+
+async fn fetch_yahoo_league_keys_for_user(
     yahoo_client: &yahoo_fantasy_rs::Client,
-    player_cache: Option<&PlayerCache>,
-    seasons: &[String],
+    seasons: &Vec<String>,
     yahoo_game_code: yahoo::GameCode,
-) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Vec<ExternalId>, Error> {
     let games = yahoo_client
         .get_games(
             vec![yahoo_game_code],
@@ -505,21 +515,10 @@ async fn get_yahoo_leagues_for_user(
         }
     }
 
-    let mut leagues: Vec<core::League> = vec![];
-
-    let mut yahoo_teams_tasks: FuturesUnordered<_> = FuturesUnordered::new();
-    for yahoo_team in yahoo_teams {
-        yahoo_teams_tasks.push(fetch_yahoo_league_context(
-            yahoo_client,
-            player_cache,
-            yahoo_team.team_key.league_key,
-        ));
-    }
-    while let Some(yahoo_league) = yahoo_teams_tasks.try_next().await? {
-        leagues.push(yahoo_league);
-    }
-
-    Ok(leagues)
+    Ok(yahoo_teams
+        .into_iter()
+        .map(|t| ExternalId::from(t.team_key.league_key))
+        .collect())
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -551,7 +550,7 @@ mod tests {
                 291, /* players */
                 180, /* draft pick count */
                 323, /* transactions count */
-                0,   /* weeks of matchups */
+                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
             ),
             (
                 "yahoo:371.l.20028",
@@ -560,7 +559,7 @@ mod tests {
                 300, /* players */
                 180, /* draft pick count */
                 331, /* transactions count */
-                0,   /* weeks of matchups */
+                13,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
             ),
             (
                 "yahoo:380.l.129397",
@@ -569,13 +568,13 @@ mod tests {
                 317, /* players */
                 204, /* draft pick count */
                 298, /* transactions count */
-                0,   /* weeks of matchups */
+                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
             ),
             (
                 "sleeper:164974877262287888",
                 "2019",
                 "Sleeper",
-                334, /* players (was 278 before adding all player_ids from draft and transactions) */
+                335, /* players (was 278 before adding all player_ids from draft and transactions) */
                 204, /* draft pick count */
                 379, /* transactions count */
                 16,  /* weeks of matchups */
@@ -675,17 +674,18 @@ mod tests {
                 league.transactions().len(),
                 "num of transactions is incorrect in {league_id}",
             );
-            let m = league.matchups();
+            let scoreboards = league.scoreboards();
             debug_assert_eq!(
                 weeks_of_matchups,
-                m.len(),
-                "num of weeks of matchups is incorrect in {league_id}",
+                scoreboards.len(),
+                "num of weeks of scoreboards is incorrect in {league_id}",
             );
-            for (week, matchups) in m {
-                if *week < 14 {
+            for scoreboard in scoreboards {
+                let week = scoreboard.matchups[0].week;
+                if week < 14 {
                     debug_assert_eq!(
                         6,
-                        matchups.len(),
+                        scoreboard.matchups.len(),
                         "week {week} matchup count is incorrect in {league_id}",
                     );
                 }

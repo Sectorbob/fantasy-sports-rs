@@ -5,6 +5,7 @@ use serde::{
     de::{Error, Visitor},
 };
 use sleeper_fantasy_rs as sleeper;
+use yahoo_fantasy_rs as yahoo;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExternalId {
@@ -99,7 +100,7 @@ impl From<sleeper::League> for ExternalId {
     fn from(value: sleeper::League) -> Self {
         ExternalId {
             platform: Platform::Sleeper,
-            id: value.league_id.clone(),
+            id: value.league_id,
         }
     }
 }
@@ -108,6 +109,22 @@ impl From<&sleeper::League> for ExternalId {
         ExternalId {
             platform: Platform::Sleeper,
             id: value.league_id.clone(),
+        }
+    }
+}
+impl From<sleeper::Player> for ExternalId {
+    fn from(value: sleeper::Player) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.player_id,
+        }
+    }
+}
+impl From<&sleeper::Player> for ExternalId {
+    fn from(value: &sleeper::Player) -> Self {
+        ExternalId {
+            platform: Platform::Sleeper,
+            id: value.player_id.clone(),
         }
     }
 }
@@ -127,7 +144,38 @@ impl From<&sleeper::User> for ExternalId {
         }
     }
 }
-
+impl From<yahoo::LeagueKey> for ExternalId {
+    fn from(value: yahoo::LeagueKey) -> Self {
+        ExternalId {
+            platform: Platform::Yahoo,
+            id: value.to_string(),
+        }
+    }
+}
+impl From<&yahoo::LeagueKey> for ExternalId {
+    fn from(value: &yahoo::LeagueKey) -> Self {
+        ExternalId {
+            platform: Platform::Yahoo,
+            id: value.to_string(),
+        }
+    }
+}
+impl From<yahoo::PlayerKey> for ExternalId {
+    fn from(value: yahoo::PlayerKey) -> Self {
+        ExternalId {
+            platform: Platform::Yahoo,
+            id: value.to_string(),
+        }
+    }
+}
+impl From<&yahoo::PlayerKey> for ExternalId {
+    fn from(value: &yahoo::PlayerKey) -> Self {
+        ExternalId {
+            platform: Platform::Yahoo,
+            id: value.to_string(),
+        }
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub struct ParseExternalIdError {

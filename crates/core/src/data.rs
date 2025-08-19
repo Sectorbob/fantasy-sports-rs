@@ -1,7 +1,8 @@
+use crate::ExternalId;
 use chrono::{DateTime, Utc};
 use core::fmt;
 use serde::{Deserialize, Serialize};
-use sleeper_fantasy_rs::{self as sleeper, custom::FantasyMatchup};
+use sleeper_fantasy_rs::{self as sleeper};
 use std::collections::HashMap;
 use yahoo_fantasy_rs as yahoo;
 
@@ -95,7 +96,7 @@ pub enum League {
         draft: Option<sleeper::Draft>,
         draft_picks: Vec<sleeper::DraftPick>,
         league: sleeper::League,
-        matchups: HashMap<usize, Vec<FantasyMatchup>>,
+        matchups: HashMap<usize, Vec<sleeper::Matchup>>,
         owners: HashMap<String, sleeper::User>,
         players: HashMap<String, sleeper::Player>,
         rosters: Vec<sleeper::Roster>,
@@ -105,7 +106,7 @@ pub enum League {
     Yahoo {
         draft_results: Vec<yahoo::DraftResult>,
         league: yahoo::League,
-        matchups: HashMap<usize, Vec<FantasyMatchup>>,
+        scoreboards: Vec<yahoo::Scoreboard>,
         players: HashMap<yahoo::PlayerKey, crate::Player>,
         rosters: HashMap<u32, yahoo::Roster>,
         settings: yahoo::Settings,
@@ -241,10 +242,15 @@ impl League {
             League::Yahoo { settings, .. } => format!("Raw: {:#?}", settings),
         }
     }
-    pub fn matchups(&self) -> &HashMap<usize, Vec<FantasyMatchup>> {
+    pub fn scoreboards(&self) -> Vec<Scoreboard> {
         match self {
-            League::Sleeper { matchups, .. } => matchups,
-            League::Yahoo { matchups, .. } => matchups, // Yahoo leagues do not have matchups in the same way
+            League::Sleeper { matchups, .. } => matchups
+                .iter()
+                .map(|(week, matchups)| {
+                    Scoreboard::from_sleeper(week.clone() as u32, matchups.clone())
+                })
+                .collect(),
+            League::Yahoo { scoreboards, .. } => scoreboards.iter().map(Scoreboard::from).collect(), // Yahoo leagues do not have matchups in the same way
         }
     }
     pub fn players(&self) -> HashMap<String, Player> {
@@ -983,3 +989,192 @@ impl fmt::Display for Transaction {
         )
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Scoreboard {
+    pub matchups: Vec<Matchup>,
+}
+impl Scoreboard {
+    pub fn from_sleeper(week: u32, sleeper_matchups: Vec<sleeper::Matchup>) -> Self {
+        let mut matchups: Vec<(sleeper::Matchup, sleeper::Matchup)> =
+            Vec::with_capacity(sleeper_matchups.len() / 2);
+        let mut wip: Vec<sleeper::Matchup> = vec![];
+        let mut orphaned: Vec<sleeper::Matchup> = vec![];
+
+        for matchup in sleeper_matchups {
+            if let Some(index) = wip
+                .iter()
+                .position(|wip_entry| matchup.matchup_id == wip_entry.matchup_id)
+            {
+                let tmp = wip.remove(index);
+                matchups.push((tmp, matchup));
+            } else if let None = matchup.matchup_id {
+                orphaned.push(matchup);
+            } else {
+                wip.push(matchup);
+            }
+        }
+
+        Scoreboard {
+            matchups: matchups
+                .into_iter()
+                .map(|m| Matchup::from_sleeper(week, m))
+                .collect(),
+        }
+    }
+}
+impl From<yahoo::Scoreboard> for Scoreboard {
+    fn from(value: yahoo::Scoreboard) -> Self {
+        Scoreboard {
+            matchups: value
+                .matchups
+                .matchups
+                .into_iter()
+                .map(|m| Matchup::from_yahoo(value.week, m))
+                .collect(),
+        }
+    }
+}
+impl From<&yahoo::Scoreboard> for Scoreboard {
+    fn from(value: &yahoo::Scoreboard) -> Self {
+        value.clone().into()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Matchup {
+    pub id: MatchupId,
+    pub week: u32,
+    pub status: Option<String>,
+    pub left: MatchupSide,
+    pub right: Option<MatchupSide>,
+}
+impl Matchup {
+    pub fn from_sleeper(week: u32, matchup: (sleeper::Matchup, sleeper::Matchup)) -> Self {
+        // yahoo scoreboard doesn't include the player info
+        Matchup {
+            id: matchup
+                .0
+                .matchup_id
+                .map_or(MatchupId::None, |id| MatchupId::Id(id.to_string())),
+            week,
+            status: None,
+            left: MatchupSide::from_sleeper(matchup.0),
+            right: Some(MatchupSide::from_sleeper(matchup.1)),
+        }
+    }
+    pub fn from_yahoo(week: u32, mut matchup: yahoo::Matchup) -> Self {
+        let team_1 = matchup.teams.remove(0);
+        let team_2 = if matchup.teams.is_empty() {
+            None
+        } else {
+            Some(matchup.teams.remove(0))
+        };
+        let mut id = team_1.team_id.to_string();
+        if let Some(team_2) = &team_2 {
+            id.push('.');
+            id.push_str(&team_2.team_id.to_string());
+        }
+
+        Matchup {
+            id: MatchupId::Id(id),
+            week,
+            status: Some(matchup.status),
+            left: MatchupSide::from_yahoo(team_1),
+            right: team_2.map(MatchupSide::from_yahoo),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchupSide {
+    pub roster_id: String,
+    pub score: f32,
+    pub players: Vec<MatchupPlayer>,
+}
+impl MatchupSide {
+    pub fn from_sleeper(matchup: sleeper::Matchup) -> Self {
+        // yahoo scoreboard doesn't include the player info
+        MatchupSide {
+            roster_id: matchup.roster_id.to_string(),
+            score: matchup.points,
+            players: MatchupPlayer::from_sleeper_vec(
+                matchup.players,
+                matchup.players_points,
+                matchup.starters,
+            ),
+        }
+    }
+    pub fn from_yahoo(team: yahoo::Team) -> Self {
+        // yahoo scoreboard doesn't include the player info
+        MatchupSide {
+            roster_id: team.team_id.to_string(),
+            score: team
+                .team_points
+                .map(|p| p.total)
+                .flatten()
+                .unwrap_or_default(),
+            players: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum MatchupId {
+    None,
+    Id(String),
+}
+impl fmt::Display for MatchupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MatchupId::None => write!(f, "None"),
+            MatchupId::Id(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchupPlayer {
+    pub player_id: ExternalId,
+    pub player_score: f32,
+    pub is_starter: bool,
+}
+impl MatchupPlayer {
+    pub fn new<P: Into<ExternalId>>(player_id: P, score: f32, is_starter: bool) -> Self {
+        MatchupPlayer {
+            player_id: player_id.into(),
+            player_score: score,
+            is_starter,
+        }
+    }
+    pub fn from_sleeper_vec(
+        player_ids: Vec<String>,
+        mut players_pts: HashMap<String, f32>,
+        starters: Vec<String>,
+    ) -> Vec<Self> {
+        player_ids
+            .into_iter()
+            .map(|id| {
+                let player_pts = players_pts.remove(&id).unwrap_or_default();
+                let is_starter = starters.contains(&id);
+                MatchupPlayer::new(
+                    ExternalId::new(crate::Platform::Sleeper, id),
+                    player_pts,
+                    is_starter,
+                )
+            })
+            .collect()
+    }
+    pub fn from_yahoo(player: &yahoo::Player) -> Self {
+        // yahoo scoreboard doesn't include the player info
+        MatchupPlayer::new(&player.player_key, 0.0, false)
+    }
+}
+
+// #[cfg(test)]
+// mod tests {
+//     use yahoo::*;
+//     use yahoo_fantasy_rs as yahoo;
+
+//     fn get_test_scorebaord() -> yahoo::Scoreboard {}
+// }

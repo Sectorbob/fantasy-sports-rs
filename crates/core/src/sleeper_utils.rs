@@ -22,14 +22,39 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         .get_league(&String::from("4581480575134427121"))
         .await
         .unwrap();
+    let owners_future = client.get_users_for_league(&league.league_id);
+    let rosters_future = client.get_rosters_for_league(&league.league_id);
+
+    let mut owners = match owners_future.await {
+        Ok(owners) => owners,
+        Err(err) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to fetch owners: {:?}", err),
+            )));
+        }
+    };
+    owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
+    let mut rosters = match rosters_future.await {
+        Ok(rosters) => rosters,
+        Err(err) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to fetch rosters: {:?}", err),
+            )));
+        }
+    };
+    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
     match get_league_matchups(&league, &client).await {
         Ok(fantasy_matchups_for_week) => {
             let num_of_weeks = 17; //league.settings.weeks;
             println!("League matchups checked successfully.");
             for week in 1..=num_of_weeks {
                 println!("Week: {}", week);
-                if let Some(fantasy_matchups) = fantasy_matchups_for_week.get(&week) {
-                    for matchup in fantasy_matchups.iter() {
+                if let Some(matchups) = fantasy_matchups_for_week.get(&week) {
+                    for matchup in FantasyMatchup::from_stuff(week, matchups, &rosters, &owners)
+                        .expect("failed to build out fantasy fantasy matchup for sleeper")
+                    {
                         matchup.printy(50, &players);
                         println!();
                     }
@@ -161,7 +186,7 @@ async fn check_all_ecr_leagues(client: &Client) {
 
 async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport: &Sport) {
     let leagues = client
-        .get_leagues_for_user(&user.user_id, sport, &String::from(season))
+        .get_leagues_for_user(&user.user_id, sport.clone(), &String::from(season))
         .await
         .unwrap();
     for league in leagues {
@@ -202,31 +227,7 @@ fn determine_weeks_to_scan(league: &League) -> Range<usize> {
 pub async fn get_league_matchups(
     league: &League,
     client: &Client,
-) -> Result<HashMap<usize, Vec<FantasyMatchup>>, Box<dyn std::error::Error + Send + Sync>> {
-    let owners_future = client.get_users_for_league(&league.league_id);
-    let rosters_future = client.get_rosters_for_league(&league.league_id);
-
-    let mut owners = match owners_future.await {
-        Ok(owners) => owners,
-        Err(err) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to fetch owners: {:?}", err),
-            )));
-        }
-    };
-    owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
-    let mut rosters = match rosters_future.await {
-        Ok(rosters) => rosters,
-        Err(err) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to fetch rosters: {:?}", err),
-            )));
-        }
-    };
-    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
-
+) -> Result<HashMap<usize, Vec<Matchup>>, Box<dyn std::error::Error + Send + Sync>> {
     let weeks_to_scan = determine_weeks_to_scan(league);
 
     let matchups_for_week_futures = weeks_to_scan
@@ -249,24 +250,25 @@ pub async fn get_league_matchups(
         })
         .collect::<Vec<_>>();
 
-    let mut matchups_for_week: HashMap<usize, Vec<FantasyMatchup>> = HashMap::new();
+    let mut matchups_for_week: HashMap<usize, Vec<Matchup>> = HashMap::new();
     for thing in futures::future::join_all(matchups_for_week_futures)
         .await
         .into_iter()
     {
         match thing {
             Ok((week, matchups)) => {
-                let m = match FantasyMatchup::from_stuff(week, matchups, &rosters, &owners) {
-                    Ok(m) => m,
-                    Err(err) => {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Error creating FantasyMatchup: {:?}", err),
-                        )));
-                    }
-                };
+                matchups_for_week.insert(week, matchups);
+                // let m = match FantasyMatchup::from_stuff(week, matchups, &rosters, &owners) {
+                //     Ok(m) => m,
+                //     Err(err) => {
+                //         return Err(Box::new(std::io::Error::new(
+                //             std::io::ErrorKind::Other,
+                //             format!("Error creating FantasyMatchup: {:?}", err),
+                //         )));
+                //     }
+                // };
 
-                matchups_for_week.insert(week, m);
+                // matchups_for_week.insert(week, m);
             }
             Err(err) => {
                 return Err(Box::new(std::io::Error::new(
@@ -330,9 +332,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_league_matchups_runs_without_panic() {
-        let client = Client::new(None);
-        // let sport = Sport::NFL;
-        // let players = client.fetch_all_players(&sport).await.unwrap();
+        let client = Client::new_with_cache(None, "cache/sleeper");
         let league_ids = vec![
             "4581480575134427121", // 2024
             "383786432088067320",  // 2023
