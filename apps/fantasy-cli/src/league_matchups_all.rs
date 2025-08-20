@@ -20,7 +20,11 @@ impl LeagueMatchupsTilesPage {
         league: &League,
     ) {
         let block = Block::default()
-            .title("League Matchups")
+            .title(format!(
+                "{name} ({season}) - Matchups",
+                name = league.name(),
+                season = league.season()
+            ))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::White))
             .border_type(BorderType::Rounded)

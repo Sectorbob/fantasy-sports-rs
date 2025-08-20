@@ -50,7 +50,7 @@ impl<'a> LeagueSummaryPage<'a> {
         &'a mut self,
         terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
     ) -> io::Result<CompletedFrame<'a>> {
-        let num_of_columns = 5; // Number of columns to split the screen into
+        let num_of_columns = 3; // Number of columns to split the screen into
         let num_of_rows = 2;
 
         terminal.draw(|f| {
@@ -101,6 +101,9 @@ impl<'a> LeagueSummaryPage<'a> {
                                     .block(Block::default().borders(Borders::ALL));
                                 f.render_widget(paragraph, *row);
                             }
+                        } else if i == 2 && j == 0 {
+                            // Render league rosters in the third column
+                            render_league_teams(league, f, row);
                         } else if i == 1 && j == 1 {
                             if let Some(draft_picks_widget) = &self.draft_picks_widget {
                                 draft_picks_widget.draw(f, row);
@@ -141,6 +144,7 @@ fn render_league_details(
         format!("Team Name:    {}", league.team_name()),
         format!("Record:       {}", league.record()),
         format!("Total Points: {}", format!("{:.2}", league.total_points())),
+        format!("Divisions:    {:?}", league.settings().divisions),
         format!(
             "Total Txns:   {}",
             format!("{}", league.transactions().len())
@@ -163,5 +167,18 @@ fn render_league_details(
 
     // let para = Paragraph::new(format!("Paragraph {},{}", i + 1, j + 1))
     //     .block(Block::default().borders(Borders::ALL));
+    f.render_widget(paragraph, *row);
+}
+
+fn render_league_teams(
+    league: &League,
+    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
+    row: &tui::layout::Rect,
+) {
+    let rosters = league.rosters();
+    let title = format!("Teams ({})", rosters.len(),);
+    let lines = rosters.iter().map(|r| r.team_name.clone()).collect::<Vec<_>>();
+    let text = Text::from(lines.join("\n"));
+    let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
     f.render_widget(paragraph, *row);
 }
