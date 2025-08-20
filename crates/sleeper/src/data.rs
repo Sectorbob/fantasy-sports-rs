@@ -849,7 +849,7 @@ pub struct Transaction {
     #[serde(default, deserialize_with = "null_to_empty_map")]
     pub settings: HashMap<String, Option<Value>>,
     pub leg: u8,
-    pub draft_picks: Vec<Value>,
+    pub draft_picks: Vec<DraftPickMove>,
     pub creator: String,
     pub transaction_id: String,
     #[serde(default, deserialize_with = "null_to_empty_map")]
@@ -861,6 +861,26 @@ pub struct Transaction {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub status_updated: DateTime<Utc>,
     pub waiver_budget: Vec<Value>,
+}
+impl Transaction {
+    pub fn is_free_agent(&self) -> bool {
+        match self._type {
+            TransactionType::FreeAgent => true,
+            _ => false,
+        }
+    }
+    pub fn is_trade(&self) -> bool {
+        match self._type {
+            TransactionType::Trade => true,
+            _ => false,
+        }
+    }
+    pub fn is_waiver(&self) -> bool {
+        match self._type {
+            TransactionType::Waiver => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -993,6 +1013,16 @@ pub struct DraftPick {
     #[serde(default, deserialize_with = "null_to_false")]
     pub is_keeper: bool,
     pub draft_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DraftPickMove {
+    pub round: usize,
+    pub season: String,
+    pub league_id: Option<String>,
+    pub roster_id: u8,
+    pub owner_id: u8,
+    pub previous_owner_id: u8,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
