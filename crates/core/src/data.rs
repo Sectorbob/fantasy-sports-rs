@@ -3,8 +3,8 @@ use chrono::{DateTime, Utc};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use sleeper_fantasy_rs::{self as sleeper};
-use std::collections::HashMap;
-use yahoo_fantasy_rs as yahoo;
+use std::collections::{HashMap, HashSet};
+use yahoo_fantasy_rs::{self as yahoo};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -398,7 +398,7 @@ impl League {
     pub fn transactions(&self) -> Vec<Transaction> {
         match self {
             League::Sleeper { transactions, .. } => {
-                transactions.iter().map(Transaction::from_sleeper).collect()
+                transactions.iter().map(Transaction::from).collect()
             }
             League::Yahoo { transactions, .. } => {
                 transactions.iter().map(Transaction::from_yahoo).collect()
@@ -934,107 +934,162 @@ impl ScoringSettings {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
-pub struct Transaction {
-    pub id: String,
-    pub transaction_type: String,
-    pub created: DateTime<Utc>,
-    pub updated: DateTime<Utc>,
-    pub status: String,
+pub enum Transaction {
+    Waiver {
+        id: String,
+        created: DateTime<Utc>,
+        updated: DateTime<Utc>,
+        player_moves: Vec<PlayerMove>,
+    },
+    FreeAgent {
+        id: String,
+        created: DateTime<Utc>,
+        updated: DateTime<Utc>,
+        player_moves: Vec<PlayerMove>,
+    },
+    Trade {
+        id: String,
+        created: DateTime<Utc>,
+        updated: DateTime<Utc>,
+        player_moves: Vec<PlayerMove>,
+        draft_pick_moves: Vec<PickMove>,
+    },
+    CommissionerAction {
+        id: String,
+        description: String,
+        created: DateTime<Utc>,
+        updated: DateTime<Utc>,
+        player_moves: Vec<PlayerMove>,
+        draft_pick_moves: Vec<PickMove>,
+    },
 }
 impl Transaction {
-    pub fn from_sleeper(sleeper_transaction: &sleeper_fantasy_rs::Transaction) -> Self {
-        Transaction {
-            id: sleeper_transaction.transaction_id.clone(),
-            transaction_type: sleeper_transaction._type.to_string(),
-            created: sleeper_transaction.created.clone(),
-            updated: sleeper_transaction.status_updated.clone(),
-            status: sleeper_transaction.status.to_string(),
+    pub fn from_yahoo(value: &yahoo_fantasy_rs::Transaction) -> Self {
+        let id = value.key();
+        let created = DateTime::from_timestamp(*value.timestamp(), 0).unwrap();
+        let updated = DateTime::from_timestamp(*value.timestamp(), 0).unwrap();
+        let players = value.players();
+
+        let is_waiver_claim = players
+            .iter()
+            .find(|p| {
+                p.transaction_data
+                    .as_ref()
+                    .map_or(false, |data| match data.r#type {
+                        yahoo::TransactionDataType::Add => data.source_type.is_waivers(),
+                        yahoo::TransactionDataType::Drop => false,
+                        yahoo::TransactionDataType::Trade => false,
+                    })
+            })
+            .is_some();
+        let player_moves = players
+            .iter()
+            .filter_map(|p| PlayerMove::try_from(p).ok())
+            .collect::<Vec<_>>();
+
+        let draft_pick_moves = value
+            .draft_picks()
+            .into_iter()
+            .map(PickMove::from)
+            .collect();
+
+        match value {
+            yahoo_fantasy_rs::Transaction::Commish { .. } => Transaction::CommissionerAction {
+                id,
+                description: String::new(),
+                created,
+                updated,
+                player_moves,
+                draft_pick_moves,
+            },
+            yahoo_fantasy_rs::Transaction::Trade { .. } => Transaction::Trade {
+                id,
+                created,
+                updated,
+                player_moves,
+                draft_pick_moves,
+            },
+            yahoo_fantasy_rs::Transaction::Add { .. }
+            | yahoo_fantasy_rs::Transaction::Drop { .. }
+            | yahoo_fantasy_rs::Transaction::AddDrop { .. } => {
+                if is_waiver_claim {
+                    Transaction::Waiver {
+                        id,
+                        created,
+                        updated,
+                        player_moves,
+                    }
+                } else {
+                    Transaction::FreeAgent {
+                        id,
+                        created,
+                        updated,
+                        player_moves,
+                    }
+                }
+            }
         }
     }
-    pub fn from_yahoo(yahoo_transaction: &yahoo_fantasy_rs::Transaction) -> Self {
-        match yahoo_transaction {
-            yahoo_fantasy_rs::Transaction::Commish {
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "commish".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
-            yahoo_fantasy_rs::Transaction::Add {
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-                players: _,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "add".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
-            yahoo_fantasy_rs::Transaction::Drop {
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-                players: _,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "drop".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
-            yahoo_fantasy_rs::Transaction::AddDrop {
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-                players: _,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "add/drop".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
-            yahoo_fantasy_rs::Transaction::Trade {
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-                players: _,
-                picks: _,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "trade".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
-            yahoo_fantasy_rs::Transaction::Other {
-                type_name: _,
-                transaction_key,
-                transaction_id: _,
-                status,
-                timestamp,
-                players: _,
-                rest: _,
-            } => Transaction {
-                id: transaction_key.clone(),
-                transaction_type: "other".to_string(),
-                created: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                updated: DateTime::from_timestamp_millis(*timestamp).unwrap(),
-                status: status.to_string(),
-            },
+}
+impl Transaction {
+    pub fn description(&self) -> String {
+        match self {
+            Transaction::Waiver { .. } => format!("Waiver Claim"),
+            Transaction::FreeAgent { .. } => format!("Free Agent Pickup"),
+            Transaction::Trade { player_moves, .. } => {
+                let teams_involved = player_moves
+                    .iter()
+                    .flat_map(|m| {
+                        let mut roster_ids = HashSet::new();
+                        if let RosterSpot::Roster(roster_id) = m.src() {
+                            roster_ids.insert(roster_id);
+                        }
+                        if let RosterSpot::Roster(roster_id) = m.dest() {
+                            roster_ids.insert(roster_id);
+                        }
+                        roster_ids
+                    })
+                    .collect::<HashSet<_>>();
+                format!("{n}-way Trade", n = teams_involved.len())
+            }
+            Transaction::CommissionerAction { .. } => format!("Commissioner Action"),
+        }
+    }
+    pub fn draft_pick_moves(&self) -> Vec<PickMove> {
+        match self {
+            Transaction::Trade {
+                draft_pick_moves, ..
+            } => draft_pick_moves.clone(),
+            Transaction::CommissionerAction {
+                draft_pick_moves, ..
+            } => draft_pick_moves.clone(),
+            _ => vec![],
+        }
+    }
+    pub fn player_moves(&self) -> Vec<PlayerMove> {
+        match self {
+            Transaction::Trade { player_moves, .. } => player_moves.clone(),
+            Transaction::CommissionerAction { player_moves, .. } => player_moves.clone(),
+            Transaction::Waiver { player_moves, .. } => player_moves.clone(),
+            Transaction::FreeAgent { player_moves, .. } => player_moves.clone(),
+        }
+    }
+    pub fn r#type(&self) -> &'static str {
+        match self {
+            Transaction::Waiver { .. } => "Waiver",
+            Transaction::FreeAgent { .. } => "FreeAgent",
+            Transaction::Trade { .. } => "Trade",
+            Transaction::CommissionerAction { .. } => "CommissionerAction",
+        }
+    }
+    pub fn ts(&self) -> DateTime<Utc> {
+        match self {
+            Transaction::Waiver { updated, .. } => updated.clone(),
+            Transaction::FreeAgent { updated, .. } => updated.clone(),
+            Transaction::Trade { updated, .. } => updated.clone(),
+            Transaction::CommissionerAction { updated, .. } => updated.clone(),
         }
     }
 }
@@ -1042,11 +1097,258 @@ impl fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{updated}: {_type} [{status}]",
-            updated = self.updated,
-            _type = self.transaction_type,
-            status = self.status
+            "{updated}: {_type}",
+            updated = self.ts(),
+            _type = self.r#type(),
         )
+    }
+}
+impl From<sleeper::Transaction> for Transaction {
+    fn from(value: sleeper::Transaction) -> Self {
+        let id = value.transaction_id;
+        let created = value.created;
+        let updated = value.status_updated;
+
+        let adds = value
+            .adds
+            .iter()
+            .map(|(player_id, dest_roster_id)| PlayerMove::Add {
+                player_id: player_id.to_string(),
+                dest: RosterSpot::Roster(dest_roster_id.to_string()),
+                src: match value._type {
+                    sleeper::TransactionType::Trade => value
+                        .drops
+                        .iter()
+                        .find(|(pid, _)| player_id == *pid)
+                        .map(|(_, r)| RosterSpot::Roster(r.to_string()))
+                        .unwrap_or(RosterSpot::FreeAgentPool),
+                    sleeper::TransactionType::FreeAgent => RosterSpot::FreeAgentPool,
+                    sleeper::TransactionType::Waiver => RosterSpot::WaiverWire,
+                    _other => RosterSpot::FreeAgentPool,
+                },
+            })
+            .collect::<Vec<_>>();
+        let drops = value
+            .drops
+            .iter()
+            .map(|(player_id, src_roster_id)| PlayerMove::Drop {
+                player_id: player_id.to_string(),
+                src: RosterSpot::Roster(src_roster_id.to_string()),
+                dest: match value._type {
+                    sleeper::TransactionType::Trade => value
+                        .adds
+                        .iter()
+                        .find(|(pid, _)| player_id == *pid)
+                        .map(|(_, r)| RosterSpot::Roster(r.to_string()))
+                        .unwrap_or(RosterSpot::WaiverWire),
+                    sleeper::TransactionType::FreeAgent => RosterSpot::WaiverWire,
+                    sleeper::TransactionType::Waiver => RosterSpot::WaiverWire,
+                    _other => RosterSpot::WaiverWire,
+                },
+            })
+            .collect::<Vec<_>>();
+        let mut player_moves = adds;
+        player_moves.extend(drops);
+
+        let draft_pick_moves = value
+            .draft_picks
+            .into_iter()
+            .map(PickMove::from)
+            .collect::<Vec<_>>();
+
+        match value._type {
+            sleeper::TransactionType::Waiver => Transaction::Waiver {
+                id,
+                created,
+                updated,
+                player_moves,
+            },
+            sleeper::TransactionType::FreeAgent => Transaction::Waiver {
+                id,
+                created,
+                updated,
+                player_moves,
+            },
+            sleeper::TransactionType::Trade => Transaction::Trade {
+                id,
+                created,
+                updated,
+                player_moves,
+                draft_pick_moves,
+            },
+            sleeper::TransactionType::Commissioner => Transaction::CommissionerAction {
+                id,
+                created,
+                updated,
+                player_moves: player_moves,
+                description: "".to_string(),
+                draft_pick_moves,
+            },
+        }
+    }
+}
+impl From<&sleeper::Transaction> for Transaction {
+    fn from(value: &sleeper::Transaction) -> Self {
+        Transaction::from(value.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlayerMove {
+    Add {
+        player_id: String,
+        dest: RosterSpot,
+        src: RosterSpot,
+    },
+    Drop {
+        player_id: String,
+        dest: RosterSpot,
+        src: RosterSpot,
+    },
+    Trade {
+        player_id: String,
+        dest: RosterSpot,
+        src: RosterSpot,
+    },
+}
+impl PlayerMove {
+    pub fn add(&self) -> bool {
+        match self {
+            PlayerMove::Add { .. } => true,
+            _ => false,
+        }
+    }
+    pub fn drop(&self) -> bool {
+        match self {
+            PlayerMove::Drop { .. } => true,
+            _ => false,
+        }
+    }
+    pub fn dest(&self) -> RosterSpot {
+        match self {
+            PlayerMove::Add { dest, .. } => dest.clone(),
+            PlayerMove::Drop { dest, .. } => dest.clone(),
+            PlayerMove::Trade { dest, .. } => dest.clone(),
+        }
+    }
+    pub fn src(&self) -> RosterSpot {
+        match self {
+            PlayerMove::Add { src, .. } => src.clone(),
+            PlayerMove::Drop { src, .. } => src.clone(),
+            PlayerMove::Trade { dest, .. } => dest.clone(),
+        }
+    }
+}
+impl TryFrom<&yahoo::Player> for PlayerMove {
+    type Error = &'static str;
+
+    fn try_from(value: &yahoo::Player) -> Result<Self, Self::Error> {
+        value
+            .transaction_data
+            .as_ref()
+            .map_or(Err("player missing transaction_data"), |data| {
+                let player_id = value.player_key.to_string();
+                let dest = RosterSpot::from_dest(data).ok_or("unable to determine add source")?;
+                let src = RosterSpot::from_source(data).ok_or("unable to determine add source")?;
+                Ok(match data.r#type {
+                    yahoo::TransactionDataType::Add => PlayerMove::Add {
+                        player_id,
+                        dest,
+                        src,
+                    },
+                    yahoo::TransactionDataType::Drop => PlayerMove::Drop {
+                        player_id,
+                        dest,
+                        src,
+                    },
+                    yahoo::TransactionDataType::Trade => PlayerMove::Trade {
+                        player_id,
+                        dest,
+                        src,
+                    },
+                })
+            })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RosterSpot {
+    WaiverWire,
+    FreeAgentPool,
+    Roster(String),
+}
+impl RosterSpot {
+    pub fn from_source(data: &yahoo::TransactionData) -> Option<RosterSpot> {
+        RosterSpot::try_from((data, true)).ok()
+    }
+
+    pub fn from_dest(data: &yahoo::TransactionData) -> Option<RosterSpot> {
+        RosterSpot::try_from((data, false)).ok()
+    }
+}
+impl TryFrom<(&yahoo::TransactionData, bool)> for RosterSpot {
+    type Error = &'static str;
+
+    fn try_from((data, src): (&yahoo::TransactionData, bool)) -> Result<Self, Self::Error> {
+        match if src {
+            &data.source_type
+        } else {
+            &data.destination_type
+        } {
+            yahoo::TransactionSourceType::Team => {
+                if src {
+                    data.source_team_key
+                        .as_ref()
+                        .map(|team_key| RosterSpot::Roster(team_key.to_string()))
+                        .ok_or("unable to determine RosterSpot from yahoo TransactionData source")
+                } else {
+                    data.destination_team_key
+                        .as_ref()
+                        .map(|team_key| RosterSpot::Roster(team_key.to_string()))
+                        .ok_or("unable to determine RosterSpot from yahoo TransactionData source")
+                }
+            }
+            yahoo::TransactionSourceType::Waivers => Ok(RosterSpot::WaiverWire),
+            yahoo::TransactionSourceType::FreeAgents => Ok(RosterSpot::FreeAgentPool),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PickMove {
+    pub src_team_id: String,
+    pub dest_team_id: String,
+    pub orig_team_id: String,
+    pub round: usize,
+}
+impl From<&yahoo::Pick> for PickMove {
+    fn from(value: &yahoo::Pick) -> Self {
+        PickMove {
+            src_team_id: value.source_team_key.to_string(),
+            dest_team_id: value.destination_team_key.to_string(),
+            orig_team_id: value.original_team_key.to_string(),
+            round: value.round.clone(),
+        }
+    }
+}
+impl From<yahoo::Pick> for PickMove {
+    fn from(value: yahoo::Pick) -> Self {
+        PickMove::from(&value)
+    }
+}
+impl From<&sleeper::DraftPickMove> for PickMove {
+    fn from(value: &sleeper::DraftPickMove) -> Self {
+        PickMove {
+            src_team_id: value.previous_owner_id.to_string(),
+            dest_team_id: value.owner_id.to_string(),
+            orig_team_id: value.roster_id.to_string(),
+            round: value.round.clone(),
+        }
+    }
+}
+impl From<sleeper::DraftPickMove> for PickMove {
+    fn from(value: sleeper::DraftPickMove) -> Self {
+        PickMove::from(&value)
     }
 }
 
@@ -1267,10 +1569,167 @@ impl MatchupPlayer {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use yahoo::*;
-//     use yahoo_fantasy_rs as yahoo;
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
 
-//     fn get_test_scorebaord() -> yahoo::Scoreboard {}
-// }
+    use crate::{
+        self as core, Transaction,
+        data::{PlayerMove, RosterSpot},
+    };
+    use chrono::DateTime;
+    use sleeper_fantasy_rs as sleeper;
+    use yahoo_fantasy_rs::{self as yahoo, LeagueKey};
+
+    #[test]
+    fn test_convert_yahoo_transaction() {
+        let yahoo_txn = yahoo_txn_waiver_add();
+        let core_txn = core::Transaction::from_yahoo(&yahoo_txn);
+        debug_assert_eq!("Waiver", core_txn.r#type(), "expect correct type");
+        debug_assert_eq!(
+            DateTime::from_timestamp(1475048003, 0).unwrap(),
+            core_txn.ts(),
+            "expect correct timestamp"
+        );
+        debug_assert_eq!(
+            Transaction::Waiver {
+                id: String::from("359.l.564503.tr.130"),
+                created: DateTime::parse_from_rfc3339("2016-09-28T07:33:23Z")
+                    .unwrap()
+                    .to_utc(),
+                updated: DateTime::parse_from_rfc3339("2016-09-28T07:33:23Z")
+                    .unwrap()
+                    .to_utc(),
+                player_moves: vec![PlayerMove::Add {
+                    player_id: "359.p.28493".to_string(),
+                    dest: RosterSpot::Roster("123.l.564503.t.5".to_string()),
+                    src: RosterSpot::WaiverWire
+                }],
+            },
+            core_txn,
+            "expect correct add players"
+        );
+        // debug_assert_eq!(
+        //     HashMap::new(),
+        //     core_txn.drops,
+        //     "expect correct drop players"
+        // );
+    }
+
+    #[test]
+    fn test_convert_sleeper_transaction() {
+        let sleeper_txn = sleeper_txn_commish_drop();
+        let core_txn = core::Transaction::from(&sleeper_txn);
+        debug_assert_eq!(
+            "CommissionerAction",
+            core_txn.r#type(),
+            "expect correct type"
+        );
+        debug_assert_eq!(
+            DateTime::from_timestamp_millis(1552060656943).unwrap(),
+            core_txn.ts(),
+            "expect correct timestamp"
+        );
+        debug_assert_eq!(
+            Transaction::CommissionerAction {
+                id: String::from("848755191285740706"),
+                created: DateTime::parse_from_rfc3339("2019-03-08T15:57:36.943Z")
+                    .unwrap()
+                    .to_utc(),
+                updated: DateTime::parse_from_rfc3339("2019-03-08T15:57:36.943Z")
+                    .unwrap()
+                    .to_utc(),
+                player_moves: vec![PlayerMove::Drop {
+                    player_id: "1903".to_string(),
+                    src: RosterSpot::Roster("12".to_string()),
+                    dest: RosterSpot::WaiverWire
+                }],
+                draft_pick_moves: vec![],
+                description: String::from(""),
+            },
+            core_txn,
+            "expect correct add players"
+        );
+        // debug_assert_eq!(
+        //     HashMap::new(),
+        //     core_txn.drops,
+        //     "expect correct drop players"
+        // );
+    }
+
+    fn sleeper_txn_commish_drop() -> sleeper::Transaction {
+        sleeper::Transaction {
+            status: sleeper::TransactionStatus::Complete,
+            _type: sleeper::TransactionType::Commissioner,
+            metadata: HashMap::new(),
+            created: DateTime::from_timestamp_millis(1552060656943).unwrap(),
+            settings: HashMap::new(),
+            leg: 1,
+            draft_picks: vec![],
+            creator: "727598467304811923".to_string(),
+            transaction_id: "848755191285740706".to_string(),
+            adds: HashMap::new(),
+            drops: HashMap::from([("1903".to_string(), 12)]),
+            consenter_ids: None,
+            roster_ids: vec![12],
+            status_updated: DateTime::from_timestamp_millis(1552060656943).unwrap(),
+            waiver_budget: vec![],
+        }
+    }
+
+    fn yahoo_txn_waiver_add() -> yahoo::Transaction {
+        yahoo::Transaction::Add {
+            transaction_key: "359.l.564503.tr.130".to_string(),
+            transaction_id: 130,
+            status: "successful".to_string(),
+            timestamp: 1475048003,
+            players: Some(
+                [yahoo::Player {
+                    player_key: yahoo::PlayerKey {
+                        game_key: yahoo::GameKey::Id(359),
+                        player_id: 28493,
+                    },
+                    player_id: 28493,
+                    name: yahoo::PlayerName {
+                        full: "Jamison Crowder".to_string(),
+                        first: "Jamison".to_string(),
+                        last: "Crowder".to_string(),
+                        ascii_first: "Jamison".to_string(),
+                        ascii_last: "Crowder".to_string(),
+                    },
+                    url: None,
+                    status: None,
+                    status_full: None,
+                    editorial_player_key: None,
+                    editorial_team_key: None,
+                    editorial_team_full_name: None,
+                    editorial_team_abbr: "Was".to_string(),
+                    editorial_team_url: None,
+                    bye_weeks: None,
+                    is_keeper: None,
+                    uniform_number: None,
+                    display_position: yahoo::PlayerPositions::One(yahoo::PlayerPosition::WR),
+                    headshot: None,
+                    image_url: None,
+                    is_undroppable: None,
+                    position_type: yahoo::PositionType::O,
+                    has_player_notes: None,
+                    player_notes_last_timestamp: None,
+                    transaction_data: Some(yahoo::TransactionData {
+                        r#type: yahoo::TransactionDataType::Add,
+                        source_type: yahoo::TransactionSourceType::Waivers,
+                        source_team_key: None,
+                        source_team_name: None,
+                        destination_type: yahoo::TransactionSourceType::Team,
+                        destination_team_key: Some(yahoo::TeamKey {
+                            league_key: LeagueKey::new(yahoo_fantasy_rs::GameKey::Id(123), 564503),
+                            team_id: 5,
+                        }),
+                        destination_team_name: Some("SmeTeam".to_string()),
+                    }),
+                }]
+                .to_vec(),
+            ),
+        }
+    }
+}

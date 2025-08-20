@@ -366,7 +366,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         });
     });
     transactions.iter().for_each(|txn| {
-        txn.players().into_iter().for_each(|k| {
+        txn.player_keys().into_iter().for_each(|k| {
             player_key_set.insert(k);
         })
     });
