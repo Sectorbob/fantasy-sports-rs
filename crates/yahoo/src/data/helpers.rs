@@ -28,6 +28,14 @@ where
     NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(serde::de::Error::custom)
 }
 
+pub(crate) fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v = i64::deserialize(deserializer)?;
+    Ok(v != 0)
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("parse error: {msg}")]
 pub struct ParseError {

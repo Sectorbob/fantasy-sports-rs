@@ -3,6 +3,7 @@ mod game;
 mod helpers;
 mod league;
 mod player;
+mod settings;
 mod team;
 mod transaction;
 mod user;
@@ -13,11 +14,12 @@ use std::fmt;
 pub use crate::data::{
     draft::{DraftResult, DraftStatus},
     game::{Game, GameKey},
-    league::{Division, League, LeagueKey, Matchup, Scoreboard, Settings, Standings},
+    league::{League, LeagueKey, Matchup, Scoreboard, Standings},
     player::{
         Headshot, KeeperSummary, Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions,
         PositionType, Weeks,
     },
+    settings::{Division, Settings, Stat, StatModifier},
     team::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,
         TeamStandings,

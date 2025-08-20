@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
 
 use crate::data::helpers::{ParseError, deserialize_naive_date, empty_string_as_none};
-use crate::{DraftResult, GameCode, GameKey, Player, Team};
+use crate::{DraftResult, GameCode, GameKey, Player, Settings, Team};
 use crate::{DraftStatus, Transaction};
 
 #[derive(Deserialize, Debug)]
@@ -138,23 +138,6 @@ pub struct Scoreboard {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Settings {
-    pub draft_type: String,   // known values: live
-    pub scoring_type: String, // known values: head
-    pub uses_playoff: u8,     // 0 or 1
-    pub playoff_start_week: u32,
-    pub uses_playoff_reseeding: u8,     // 0 or 1
-    pub uses_lock_eliminated_teams: u8, // 0 or 1
-    pub uses_faab: u8,                  // 0 or 1
-    pub trade_end_date: String,         // format: 2009-11-27
-    pub trade_ratify_type: String,      // knwon values: commish
-    pub trade_reject_time: u32,
-    // roster_positions: RosterPositions,
-    // stat_categories: StatCategories,
-    pub divisions: Option<Divisions>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
 pub struct Standings {
     #[serde(deserialize_with = "Team::deserialize_teams")]
     pub teams: Vec<Team>,
@@ -174,18 +157,6 @@ pub struct Matchup {
     pub winner_team_key: Option<String>,
     #[serde(deserialize_with = "Team::deserialize_teams")]
     pub teams: Vec<Team>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Divisions {
-    #[serde(rename = "division")]
-    pub divisions: Vec<Division>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Division {
-    pub division_id: u32,
-    pub name: String,
 }
 
 #[cfg(test)]
