@@ -242,21 +242,10 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
 
     for transaction in transactions {
         match transaction {
-            Transaction::Commish {
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-            } => {
+            Transaction::Commish { .. } => {
                 //println!("Commish({}): {}", transaction_key, transaction_time)
             }
-            Transaction::Add {
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-                players,
-            } => {
+            Transaction::Add { players, .. } => {
                 if let Some(players) = players {
                     for player in players {
                         match &player.display_position {
@@ -337,15 +326,6 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                     }
                 }
             }
-            Transaction::Other {
-                type_name,
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-                players: _,
-                rest,
-            } => println!("Other({}): {:#?}", type_name, rest),
         }
         // if let Some(players) = transaction.players {
 
