@@ -10,5 +10,5 @@ pub use data::{
     GameType, Headshot, KeeperSummary, League, LeagueKey, Manager, Matchup, OutcomeTotals, Pick,
     Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions, PositionType, Roster,
     Scoreboard, Settings, Standings, Streak, Team, TeamKey, TeamLogo, TeamPoints, TeamStandings,
-    Token, Transaction, TransactionData, User, Weeks,
+    Token, Transaction, TransactionData, TransactionDataType, TransactionSourceType, User, Weeks,
 };

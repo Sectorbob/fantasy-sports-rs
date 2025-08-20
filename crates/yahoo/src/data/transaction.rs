@@ -25,6 +25,8 @@ pub enum Transaction {
         transaction_id: u32,
         status: String,
         timestamp: i64,
+        players: Option<Vec<Player>>,
+        picks: Vec<Pick>,
     },
     Add {
         transaction_key: String,
@@ -55,15 +57,6 @@ pub enum Transaction {
         players: Option<Vec<Player>>,
         picks: Vec<Pick>,
     },
-    Other {
-        type_name: String,
-        transaction_key: String,
-        transaction_id: u32,
-        status: String,
-        timestamp: i64,
-        players: Option<Vec<Player>>,
-        rest: Vec<(String, String)>,
-    },
 }
 impl Transaction {
     pub fn key(&self) -> String {
@@ -75,9 +68,6 @@ impl Transaction {
                 transaction_key, ..
             } => transaction_key.clone(),
             Transaction::Drop {
-                transaction_key, ..
-            } => transaction_key.clone(),
-            Transaction::Other {
                 transaction_key, ..
             } => transaction_key.clone(),
             Transaction::AddDrop {
@@ -93,35 +83,42 @@ impl Transaction {
             Transaction::Commish { timestamp, .. } => timestamp,
             Transaction::Add { timestamp, .. } => timestamp,
             Transaction::Drop { timestamp, .. } => timestamp,
-            Transaction::Other { timestamp, .. } => timestamp,
             Transaction::AddDrop { timestamp, .. } => timestamp,
             Transaction::Trade { timestamp, .. } => timestamp,
         }
     }
 
-    pub fn players(&self) -> HashSet<PlayerKey> {
+    pub fn player_keys(&self) -> HashSet<PlayerKey> {
+        self.players().into_iter().map(|p| p.player_key).collect()
+    }
+
+    pub fn players(&self) -> Vec<Player> {
         match self {
-            Transaction::Commish { .. } => HashSet::new(),
+            Transaction::Commish { .. } => vec![],
             Transaction::Add { players, .. } => players
                 .iter()
-                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .flat_map(|players| players.iter().map(Player::clone))
                 .collect(),
             Transaction::Drop { players, .. } => players
                 .iter()
-                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .flat_map(|players| players.iter().map(Player::clone))
                 .collect(),
             Transaction::AddDrop { players, .. } => players
                 .iter()
-                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .flat_map(|players| players.iter().map(Player::clone))
                 .collect(),
             Transaction::Trade { players, .. } => players
                 .iter()
-                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
+                .flat_map(|players| players.iter().map(Player::clone))
                 .collect(),
-            Transaction::Other { players, .. } => players
-                .iter()
-                .flat_map(|players| players.iter().map(|p| p.player_key.clone()))
-                .collect(),
+        }
+    }
+
+    pub fn draft_picks(&self) -> Vec<Pick> {
+        match self {
+            Transaction::Commish { picks, .. } => picks.iter().map(Pick::clone).collect(),
+            Transaction::Trade { picks, .. } => picks.iter().map(Pick::clone).collect(),
+            _ => vec![],
         }
     }
 
@@ -188,6 +185,8 @@ impl<'de> Deserialize<'de> for Transaction {
                         status: status.ok_or_else(|| de::Error::missing_field("status"))?,
                         timestamp: timestamp
                             .ok_or_else(|| de::Error::missing_field("timestamp"))?,
+                        players: players.map(|players| players.players),
+                        picks: picks.map_or(vec![], |p| p.picks),
                     }),
                     "add" => Ok(Transaction::Add {
                         transaction_key: transaction_key
@@ -230,18 +229,10 @@ impl<'de> Deserialize<'de> for Transaction {
                         players: players.map(|players| players.players),
                         picks: picks.map_or(vec![], |p| p.picks),
                     }),
-                    other => Ok(Transaction::Other {
-                        type_name: other.to_string(),
-                        transaction_key: transaction_key
-                            .ok_or_else(|| de::Error::missing_field("transaction_key"))?,
-                        transaction_id: transaction_id
-                            .ok_or_else(|| de::Error::missing_field("transaction_id"))?,
-                        status: status.ok_or_else(|| de::Error::missing_field("status"))?,
-                        timestamp: timestamp
-                            .ok_or_else(|| de::Error::missing_field("timestamp"))?,
-                        players: players.map(|players| players.players),
-                        rest,
-                    }),
+                    other => Err(de::Error::unknown_variant(
+                        other,
+                        &["commish", "add", "drop", "add/drop", "trade"],
+                    )),
                 }
             }
         }

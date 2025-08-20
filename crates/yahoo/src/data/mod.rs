@@ -167,9 +167,65 @@ impl fmt::Display for GameCode {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TransactionData {
     #[serde(rename = "type")]
-    pub _type: String,
-    pub source_type: String,             // known values: team, freeagents
-    pub source_team_key: Option<String>, // will be present for a trade or drop
+    pub r#type: TransactionDataType,
+    pub source_type: TransactionSourceType, // known values: team, freeagents
+    pub source_team_key: Option<TeamKey>,   // will be present for a trade or drop
     pub source_team_name: Option<String>,
-    pub destination_type: String,
+    pub destination_type: TransactionSourceType,
+    pub destination_team_key: Option<TeamKey>,
+    pub destination_team_name: Option<String>,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionDataType {
+    Add,
+    Drop,
+    Trade,
+}
+impl fmt::Display for TransactionDataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TransactionDataType::Add => write!(f, "add"),
+            TransactionDataType::Drop => write!(f, "drop"),
+            TransactionDataType::Trade => write!(f, "trade"),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionSourceType {
+    Team,
+    Waivers,
+    FreeAgents,
+}
+impl TransactionSourceType {
+    pub fn is_team(&self) -> bool {
+        match self {
+            TransactionSourceType::Team => true,
+            _ => false,
+        }
+    }
+    pub fn is_waivers(&self) -> bool {
+        match self {
+            TransactionSourceType::Waivers => true,
+            _ => false,
+        }
+    }
+    pub fn is_free_agents(&self) -> bool {
+        match self {
+            TransactionSourceType::FreeAgents => true,
+            _ => false,
+        }
+    }
+}
+impl fmt::Display for TransactionSourceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TransactionSourceType::Team => write!(f, "team"),
+            TransactionSourceType::Waivers => write!(f, "waivers"),
+            TransactionSourceType::FreeAgents => write!(f, "freeagents"),
+        }
+    }
 }
