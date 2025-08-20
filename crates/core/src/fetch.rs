@@ -331,7 +331,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         ))
     })?;
     let last_week: i32 = playoff_start_week + 2;
-    for week in 1..last_week {
+    for week in 1..last_week + 1 {
         scoreboard_settings_futures.push_back(cli.get_league_scoreboard(
             &league_key,
             Some(week),
@@ -557,7 +557,7 @@ mod tests {
                 291, /* players */
                 180, /* draft pick count */
                 323, /* transactions count */
-                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                16,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
                 yahoo_user_id.clone(),
                 "All I Do Is Lose",
             ),
@@ -568,7 +568,7 @@ mod tests {
                 300, /* players */
                 180, /* draft pick count */
                 331, /* transactions count */
-                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                16,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
                 yahoo_user_id.clone(),
                 "All I Do Is Wynn",
             ),
@@ -579,7 +579,7 @@ mod tests {
                 317, /* players */
                 204, /* draft pick count */
                 298, /* transactions count */
-                15,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
+                16,  //TODO: FUCK shoudl be 16  /* weeks of matchups */
                 yahoo_user_id.clone(),
                 "Stormy Badgers 01",
             ),
