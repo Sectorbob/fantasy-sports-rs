@@ -487,6 +487,7 @@ pub struct League {
     pub avatar: Option<String>,
     pub last_pinned_message_id: Option<String>,
     pub last_transaction_id: Option<i64>,
+    pub metadata: Option<HashMap<String, String>>,
     #[serde(flatten)]
     pub last_message_details: Option<LastMessageDetails>,
     #[serde(flatten)]
@@ -542,6 +543,8 @@ pub struct LeagueSettings {
         default
     )]
     pub disable_trades: bool,
+    #[serde(default)]
+    pub divisions: usize,
     pub playoff_teams: usize,
     /// TODO: Can be 11-17, also there is a disable option
     pub playoff_week_start: usize,
