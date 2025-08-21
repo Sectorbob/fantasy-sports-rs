@@ -307,6 +307,19 @@ impl Service {
         )
     }
 
+    pub fn save_league_mapping<T: Into<String>>(
+        &self,
+        guild_id: T,
+        season: i32,
+        external_id: ExternalId,
+    ) -> Result<(), DataStoreError> {
+        self.store.set_league_season_mapping(
+            guild_id.into(),
+            season,
+            external_id,
+        )
+    }
+
     pub async fn synchronize_manager_role(
         &self,
         guild_id: GuildId,
@@ -569,12 +582,14 @@ mod tests {
     use std::sync::Arc;
     use tokio::fs::{self};
 
+    use crate::config;
     use crate::ecr::keepers::Keepable;
     use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
     use crate::store::DataStore;
 
     #[tokio::test]
     async fn test_get_keepables_report() {
+        let _config = config::load_config().expect("config couldn't load");
         let store = Arc::new(DataStore::new());
         let svc = Service::new(&store).await.expect("failed to create service");
         // FIXME: this fucked up, need to find a way to not blow up if I am not using yahoo

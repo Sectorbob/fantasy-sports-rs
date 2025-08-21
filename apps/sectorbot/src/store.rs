@@ -67,6 +67,7 @@ impl DataStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn delete_feed(&self, id: i64) -> Result<(), DataStoreError> {
         let _old_entry = self.feeds.remove(id.to_string())?;
         self.feeds.flush()?;
@@ -143,6 +144,20 @@ impl DataStore {
             }
         }
         Ok(items)
+    }
+
+    #[allow(dead_code)]
+    pub fn set_league_season_mapping<G: Into<String>>(
+        &self,
+        guild_id: G,
+        season: i32,
+        external_league_id: ExternalId,
+    ) -> Result<(), DataStoreError> {
+        let guild_id = guild_id.into();
+        let mut league = self.get_league(guild_id)?;
+        league.league_id_map.insert(season, external_league_id);
+        self.save_league(&league)?;
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -280,6 +295,13 @@ impl ExternalId {
 
     fn get_platform(self) -> Option<Platform> {
         self.platform.clone()
+    }
+    pub fn is_fantasy_platform(&self) -> bool {
+        self.platform.as_ref().map_or(false, |p| match p {
+            Platform::Sleeper => true,
+            Platform::Yahoo => true,
+            _ => false,
+        })
     }
 }
 impl<'de> Deserialize<'de> for ExternalId {

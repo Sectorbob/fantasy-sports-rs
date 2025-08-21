@@ -249,6 +249,41 @@ impl Handler {
         Ok(())
     }
 
+    async fn process_set_league_command(
+        &self,
+        ctx: &Context,
+        msg: &Message,
+    ) -> Result<(), ECRError> {
+        log::error!("{:#?}", msg);
+
+        let command_parts = msg.content.split_ascii_whitespace().collect::<Vec<_>>();
+        if command_parts.len() != 3 {
+            send_as_code(&ctx, &msg, "invalid command syntax").await;
+            return Ok(());
+        }
+        let season: i32 = command_parts[1]
+            .parse()
+            .map_err(|_| ECRError::Unknown("season (arg 1) must be an int value".to_string()))?;
+        let external_id = ExternalId::try_from(command_parts[2])
+            .map_err(|_| ECRError::Unknown("invalid external id format".to_string()))?;
+        if !external_id.is_fantasy_platform() {
+            return Err(ECRError::Unknown(
+                "external league id platform is not value".to_string(),
+            ));
+        }
+
+        if let Some(guild_id) = msg.guild_id {
+            self.ecr_service
+                .save_league_mapping(guild_id.to_string(), season, external_id)?;
+        }
+
+        let mut response = String::new();
+        response.push_str(format!("Content: {}", msg.content).as_str());
+
+        send_as_code(&ctx, &msg, response).await;
+        Ok(())
+    }
+
     async fn match_to_external_league_user(
         &self,
         league_id: &ExternalId,
@@ -334,6 +369,12 @@ impl EventHandler for Handler {
 
         if msg.content.starts_with("!set-manager ") {
             if let Err(err) = self.process_set_manager_command(&ctx, &msg).await {
+                let_em_know(&ctx.http, &msg, err).await;
+            }
+            return;
+        }
+        if msg.content.starts_with("!set-league ") {
+            if let Err(err) = self.process_set_league_command(&ctx, &msg).await {
                 let_em_know(&ctx.http, &msg, err).await;
             }
             return;
