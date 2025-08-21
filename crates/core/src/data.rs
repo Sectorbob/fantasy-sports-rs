@@ -1,4 +1,4 @@
-use crate::{ExternalId, ScoringSettings};
+use crate::{ExternalId, LeagueSettings};
 use chrono::{DateTime, Utc};
 use core::fmt;
 use serde::{Deserialize, Serialize};
@@ -363,7 +363,7 @@ impl League {
     }
     pub fn settings(&self) -> LeagueSettings {
         match self {
-            League::Sleeper { league, .. } => LeagueSettings::from_sleeper(&league),
+            League::Sleeper { league, draft, .. } => LeagueSettings::from_sleeper(&league, draft),
             League::Yahoo { settings, .. } => LeagueSettings::from_yahoo(settings),
         }
     }
@@ -416,7 +416,7 @@ impl League {
             } => match draft_results.len() {
                 0 => None,
                 _ => Some(Draft {
-                    draft_type: settings.draft_type.clone(),
+                    draft_type: settings.draft_type.to_string(),
                     draft_id: "N/A".to_string(),
                     league_id: league.league_id.clone(),
                     picks: draft_results
@@ -520,58 +520,6 @@ impl std::fmt::Display for League {
                 self.record(),
             ),
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct LeagueSettings {
-    /// The week number in the season when the playoffs begin.
-    pub has_playoffs: bool,
-    pub playoff_start_week: u32,
-    pub divisions: Vec<String>,
-    pub scoring: Option<ScoringSettings>,
-}
-impl LeagueSettings {
-    pub fn from_yahoo(yahoo_settings: &yahoo_fantasy_rs::Settings) -> Self {
-        LeagueSettings {
-            has_playoffs: yahoo_settings.uses_playoff == 1,
-            playoff_start_week: yahoo_settings.playoff_start_week,
-            divisions: yahoo_settings
-                .divisions
-                .iter()
-                .map(|d| d.name.clone())
-                .collect(),
-            scoring: Some(ScoringSettings::from(yahoo_settings)),
-        }
-    }
-    pub fn from_sleeper(sleeper_league: &sleeper_fantasy_rs::League) -> Self {
-        let playoff_start_week = sleeper_league.settings.playoff_week_start as u32;
-
-        LeagueSettings {
-            has_playoffs: playoff_start_week > 0, //TODO: make sure this is correct logic
-            playoff_start_week,
-            divisions: (1..sleeper_league.settings.divisions + 1)
-                .into_iter()
-                .map(|id| {
-                    let id = format!("division_{id}");
-                    sleeper_league
-                        .metadata
-                        .as_ref()
-                        .map_or(id.clone(), |m| m.get(id.as_str()).unwrap_or(&id).clone())
-                })
-                .collect(), // TODO: sleeper_league.settings.
-            scoring: Some(ScoringSettings::from(&sleeper_league.scoring_settings)),
-        }
-    }
-    pub fn formatted_settings(&self) -> Vec<(String, String)> {
-        vec![
-            (String::from("has_playoffs"), self.has_playoffs.to_string()),
-            (
-                String::from("playoff_start_week"),
-                self.playoff_start_week.to_string(),
-            ),
-            // (String::from(""), ),
-        ]
     }
 }
 

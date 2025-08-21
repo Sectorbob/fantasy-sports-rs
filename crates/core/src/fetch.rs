@@ -324,12 +324,16 @@ pub(crate) async fn fetch_yahoo_league_context(
     let settings = settings_future.await?;
     let mut scoreboard_settings_futures = FuturesOrdered::new();
     let mut weeks = vec![];
-    let playoff_start_week: i32 = settings.playoff_start_week.try_into().map_err(|err| {
-        Error::new(format!(
-            "unable to use playoff_start_week ({}): {err}",
-            settings.playoff_start_week
-        ))
-    })?;
+    let playoff_start_week: i32 = settings
+        .playoff_start_week
+        .map_or(0, |v| v)
+        .try_into()
+        .map_err(|err| {
+            Error::new(format!(
+                "unable to use playoff_start_week ({:?}): {err}",
+                settings.playoff_start_week
+            ))
+        })?;
     let last_week: i32 = playoff_start_week + 2;
     for week in 1..last_week + 1 {
         scoreboard_settings_futures.push_back(cli.get_league_scoreboard(
