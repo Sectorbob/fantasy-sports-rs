@@ -141,71 +141,111 @@ impl ScoringSettings {
                 bonus_rec_td_40p,
                 bonus_rush_40p,
                 bonus_rec_40p,
-            } => vec![
-                (String::from("pass_2pt"), pass_2pt),
-                (String::from("pass_int"), pass_int),
-                (String::from("pass_yd"), pass_yd),
-                (String::from("pass_td"), pass_td),
-                (String::from("receptions"), receptions),
-                (String::from("rec_2pt"), rec_2pt),
-                (String::from("rec_td"), rec_td),
-                (String::from("rec_yd"), rec_yd),
-                (String::from("rush_2pt"), rush_2pt),
-                (String::from("rush_td"), rush_td),
-                (String::from("rush_yd"), rush_yd),
-                (String::from("kick_fgmiss"), kick_fgmiss),
-                (String::from("kick_fgm_0_19"), kick_fgm_0_19),
-                (String::from("kick_fgm_20_29"), kick_fgm_20_29),
-                (String::from("kick_fgm_30_39"), kick_fgm_30_39),
-                (String::from("kick_fgm_40_49"), kick_fgm_40_49),
-                (String::from("kick_fgm_50p"), kick_fgm_50p),
-                (String::from("kick_xpm"), kick_xpm),
-                (String::from("kick_xpmiss"), kick_xpmiss),
-                (String::from("fum"), fum),
-                (String::from("fum_lost"), fum_lost),
-                (String::from("pts_allow_0"), pts_allow_0),
-                (String::from("pts_allow_1_6"), pts_allow_1_6),
-                (String::from("pts_allow_7_13"), pts_allow_7_13),
-                (String::from("pts_allow_14_20"), pts_allow_14_20),
-                (String::from("pts_allow_21_27"), pts_allow_21_27),
-                (String::from("pts_allow_28_34"), pts_allow_28_34),
-                (String::from("pts_allow_35p"), pts_allow_35p),
-                (String::from("int"), int),
-                (String::from("sack"), sack),
-                (String::from("safe"), safe),
-                (String::from("def_td"), def_td),
-                (String::from("def_kr_td"), def_kr_td),
-                (String::from("fum_rec"), fum_rec),
-                (String::from("fum_rec_td"), fum_rec_td),
-                (String::from("fum_forced"), fum_forced),
-                (String::from("pass_int_td"), pass_int_td),
-                (String::from("def_st_td"), def_st_td),
-                (String::from("def_st_fum_rec"), def_st_fum_rec),
-                (String::from("def_st_ff"), def_st_ff),
-                (String::from("st_fum_rec"), st_fum_rec),
-                (String::from("st_ff"), st_ff),
-                (String::from("st_td"), st_td),
-                (String::from("blk_kick"), blk_kick),
-                (String::from("kr_td"), kr_td),
-                (String::from("def_pr_td"), def_pr_td),
-                (String::from("pr_td"), pr_td),
-                (String::from("bonus_rec_yd_200"), bonus_rec_yd_200),
-                (String::from("bonus_rush_yd_200"), bonus_rush_yd_200),
-                (String::from("bonus_pass_yd_400"), bonus_pass_yd_400),
-                (String::from("bonus_rec_te"), bonus_rec_te),
-                (String::from("bonus_pass_td_40p"), bonus_pass_td_40p),
-                (String::from("bonus_rush_td_40p"), bonus_rush_td_40p),
-                (String::from("bonus_pass_cmp_40p"), bonus_pass_cmp_40p),
-                (String::from("bonus_rec_td_40p"), bonus_rec_td_40p),
-                (String::from("bonus_rush_40p"), bonus_rush_40p),
-                (String::from("bonus_rec_40p"), bonus_rec_40p),
-            ]
-            .into_iter()
-            .filter_map(|(k, v)| match *v != (0.0 as f32) {
-                true => Some((k, format!("{:.2}", v))),
-                false => None,
-            })
-            .collect(),
+            } => {
+                let mut f = vec![];
+                if *pass_2pt != 0.0 {
+                    f.push((String::from("pass_2pt"), pass_2pt));
+                }
+                if *pass_int != 0.0 {
+                    f.push((String::from("pass_int"), pass_int));
+                }
+                if *pass_yd != 0.0 {
+                    f.push((String::from("pass_yd"), pass_yd));
+                }
+                if *pass_td != 0.0 {
+                    f.push((String::from("pass_td"), pass_td));
+                }
+                if *receptions != 0.0 {
+                    f.push((String::from("receptions"), receptions));
+                }
+                if *rec_2pt != 0.0 {
+                    f.push((String::from("rec_2pt"), rec_2pt));
+                }
+                if *rec_td != 0.0 {
+                    f.push((String::from("rec_td"), rec_td));
+                }
+                if *rec_yd != 0.0 {
+                    f.push((String::from("rec_yd"), rec_yd));
+                }
+                if *rush_2pt != 0.0 {
+                    f.push((String::from("rush_2pt"), rec_2pt));
+                }
+                if *rush_td != 0.0 {
+                    f.push((String::from("rush_td"), rush_td));
+                }
+                if *rush_yd != 0.0 {
+                    f.push((String::from("rush_yd"), rush_yd));
+                }
+                if *kick_fgmiss != 0.0 {
+                    f.push((String::from("kick_fgmiss"), kick_fgmiss));
+                }
+                if *kick_fgm_0_19 != 0.0 {
+                    f.push((String::from("kick_fgm_0_19"), kick_fgm_0_19));
+                }
+                if *kick_fgm_20_29 != 0.0 {
+                    f.push((String::from("kick_fgm_20_29"), kick_fgm_20_29));
+                }
+                if *kick_fgm_30_39 != 0.0 {
+                    f.push((String::from("kick_fgm_30_39"), kick_fgm_30_39));
+                }
+                if *kick_fgm_40_49 != 0.0 {
+                    f.push((String::from("kick_fgm_40_49"), kick_fgm_40_49));
+                }
+                if *kick_fgm_50p != 0.0 {
+                    f.push((String::from("kick_fgm_50p"), kick_fgm_50p));
+                }
+                if *kick_xpm != 0.0 {
+                    f.push((String::from("kick_xpm"), kick_xpm));
+                }
+                if *kick_xpmiss != 0.0 {
+                    f.push((String::from("kick_xpmiss"), kick_xpmiss));
+                }
+                // (String::from("fum"), fum),
+                // (String::from("fum_lost"), fum_lost),
+                // (String::from("pts_allow_0"), pts_allow_0),
+                // (String::from("pts_allow_1_6"), pts_allow_1_6),
+                // (String::from("pts_allow_7_13"), pts_allow_7_13),
+                // (String::from("pts_allow_14_20"), pts_allow_14_20),
+                // (String::from("pts_allow_21_27"), pts_allow_21_27),
+                // (String::from("pts_allow_28_34"), pts_allow_28_34),
+                // (String::from("pts_allow_35p"), pts_allow_35p),
+                // (String::from("int"), int),
+                // (String::from("sack"), sack),
+                // (String::from("safe"), safe),
+                // (String::from("def_td"), def_td),
+                // (String::from("def_kr_td"), def_kr_td),
+                // (String::from("fum_rec"), fum_rec),
+                // (String::from("fum_rec_td"), fum_rec_td),
+                // (String::from("fum_forced"), fum_forced),
+                // (String::from("pass_int_td"), pass_int_td),
+                // (String::from("def_st_td"), def_st_td),
+                // (String::from("def_st_fum_rec"), def_st_fum_rec),
+                // (String::from("def_st_ff"), def_st_ff),
+                // (String::from("st_fum_rec"), st_fum_rec),
+                // (String::from("st_ff"), st_ff),
+                // (String::from("st_td"), st_td),
+                // (String::from("blk_kick"), blk_kick),
+                // (String::from("kr_td"), kr_td),
+                // (String::from("def_pr_td"), def_pr_td),
+                // (String::from("pr_td"), pr_td),
+                // (String::from("bonus_rec_yd_200"), bonus_rec_yd_200),
+                // (String::from("bonus_rush_yd_200"), bonus_rush_yd_200),
+                // (String::from("bonus_pass_yd_400"), bonus_pass_yd_400),
+                // (String::from("bonus_rec_te"), bonus_rec_te),
+                // (String::from("bonus_pass_td_40p"), bonus_pass_td_40p),
+                // (String::from("bonus_rush_td_40p"), bonus_rush_td_40p),
+                // (String::from("bonus_pass_cmp_40p"), bonus_pass_cmp_40p),
+                // (String::from("bonus_rec_td_40p"), bonus_rec_td_40p),
+                // (String::from("bonus_rush_40p"), bonus_rush_40p),
+                // (String::from("bonus_rec_40p"), bonus_rec_40p),
+
+                f.into_iter()
+                    .filter_map(|(k, v)| match *v != (0.0 as f32) {
+                        true => Some((k, format!("{:.2}", v))),
+                        false => None,
+                    })
+                    .collect()
+            }
             ScoringSettings::Unknown => vec![],
         }
     }

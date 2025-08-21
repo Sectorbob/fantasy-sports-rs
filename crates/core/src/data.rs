@@ -2,6 +2,7 @@ use crate::{ExternalId, ScoringSettings};
 use chrono::{DateTime, Utc};
 use core::fmt;
 use serde::{Deserialize, Serialize};
+use serde_json::Number;
 use sleeper_fantasy_rs::{self as sleeper};
 use std::collections::{HashMap, HashSet};
 use yahoo_fantasy_rs::{self as yahoo};
@@ -193,6 +194,86 @@ impl League {
             League::Yahoo { league, .. } => league.season.clone(),
         }
     }
+    pub fn standings(&self) -> Standings {
+        match self {
+            League::Sleeper {
+                rosters, owners, ..
+            } => Standings {
+                entries: rosters
+                    .iter()
+                    .map(|(id, roster)| {
+                        let wins = roster
+                            .settings
+                            .get("wins")
+                            .map(Number::as_u64)
+                            .flatten()
+                            .unwrap_or_default();
+                        let losses = roster
+                            .settings
+                            .get("losses")
+                            .map(Number::as_u64)
+                            .flatten()
+                            .unwrap_or_default();
+                        let ties = roster
+                            .settings
+                            .get("ties")
+                            .map(Number::as_u64)
+                            .flatten()
+                            .unwrap_or_default();
+                        let owner_id = &roster.owner_id;
+                        let owner = owner_id.as_ref().map(|id| owners.get(id)).flatten();
+                        StandingsEntry {
+                            roster_id: roster.roster_id.to_string(),
+                            team_name: owner.map_or(format!("Team {id}"), sleeper::User::team_name),
+                            owner_name: owner
+                                .as_ref()
+                                .map_or(format!("Owner {owner_id:?}"), |o| o.display_name.clone()),
+                            owner_id: owner_id.as_ref().map_or(String::new(), |o| o.clone()),
+                            wins,
+                            losses,
+                            ties,
+                        }
+                    })
+                    .collect(),
+            },
+            League::Yahoo {
+                standings, ..
+            } => Standings {
+                entries: standings
+                    .teams
+                    .iter()
+                    .map(|team| {
+                        let wins = team
+                            .team_standings
+                            .as_ref()
+                            .map(|s| s.outcome_totals.wins as u64)
+                            .unwrap_or_default();
+                        let losses = team
+                            .team_standings
+                            .as_ref()
+                            .map(|s| s.outcome_totals.losses as u64)
+                            .unwrap_or_default();
+                        let ties = team
+                            .team_standings
+                            .as_ref()
+                            .map(|s| s.outcome_totals.ties as u64)
+                            .unwrap_or_default();
+                        let manager = team.managers().first().clone().unwrap();
+                        StandingsEntry {
+                            roster_id: team.team_key.to_string(),
+                            team_name: team.name.clone(),
+                            owner_name: manager.nickname.clone(),
+                            owner_id: manager.guid.clone(),
+                            wins,
+                            losses,
+                            ties,
+                        }
+                    })
+                    .collect(),
+            },
+        }
+    }
+
     pub fn record(&self) -> String {
         match self {
             League::Sleeper {
@@ -389,10 +470,14 @@ impl League {
     }
     pub fn rosters(&self) -> Vec<Roster> {
         match self {
-            League::Sleeper { rosters, .. } => {
-                rosters.iter().map(|r| r.1).map(Roster::from).collect()
-            }
-            League::Yahoo { rosters, .. } => rosters.iter().map(Roster::from).collect(),
+            League::Sleeper {
+                rosters, owners, ..
+            } => rosters
+                .iter()
+                .map(|r| r.1)
+                .map(|r| Roster::from((r, owners)))
+                .collect(),
+            League::Yahoo { rosters, teams, .. } => rosters.iter().map(Roster::from).collect(),
         }
     }
     pub fn transactions(&self) -> Vec<Transaction> {
@@ -473,9 +558,8 @@ impl LeagueSettings {
                     let id = format!("division_{id}");
                     sleeper_league
                         .metadata
-                        .get(id.as_str())
-                        .unwrap_or(&id)
-                        .clone()
+                        .as_ref()
+                        .map_or(id.clone(), |m| m.get(id.as_str()).unwrap_or(&id).clone())
                 })
                 .collect(), // TODO: sleeper_league.settings.
             scoring: Some(ScoringSettings::from(&sleeper_league.scoring_settings)),
@@ -569,13 +653,21 @@ impl fmt::Display for Player {
 #[derive(Debug, Clone)]
 pub struct Roster {
     pub id: String,
+    pub team_name: String,
+    pub owner_name: String,
     pub player_ids: Vec<String>,
 }
-impl From<&sleeper_fantasy_rs::Roster> for Roster {
-    fn from(value: &sleeper_fantasy_rs::Roster) -> Self {
+impl From<(&sleeper_fantasy_rs::Roster, &HashMap<String, sleeper::User>)> for Roster {
+    fn from(
+        (roster, owners): (&sleeper_fantasy_rs::Roster, &HashMap<String, sleeper::User>),
+    ) -> Self {
+        let roster_id = &roster.roster_id;
+        let owner = roster.owner_id.as_ref().map(|id| owners.get(id)).flatten();
         Roster {
-            id: value.roster_id.to_string(),
-            player_ids: value.players.clone(),
+            id: roster_id.to_string(),
+            team_name: owner.map_or(format!("Team {roster_id}"), sleeper::User::team_name),
+            owner_name: owner.map_or(format!("Team {roster_id}"), |o| o.display_name.clone()),
+            player_ids: roster.players.clone(),
         }
     }
 }
@@ -583,6 +675,8 @@ impl From<(&u32, &yahoo_fantasy_rs::Roster)> for Roster {
     fn from(value: (&u32, &yahoo_fantasy_rs::Roster)) -> Self {
         Roster {
             id: value.0.to_string(),
+            team_name: String::new(),
+            owner_name: String::new(),
             player_ids: value
                 .1
                 .players
@@ -1226,6 +1320,22 @@ impl MatchupPlayer {
         // yahoo scoreboard doesn't include the player info
         MatchupPlayer::new(&player.player_key, 0.0, false)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Standings {
+    pub entries: Vec<StandingsEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StandingsEntry {
+    pub roster_id: String,
+    pub team_name: String,
+    pub owner_name: String,
+    pub owner_id: String,
+    pub wins: u64,
+    pub losses: u64,
+    pub ties: u64,
 }
 
 #[cfg(test)]
