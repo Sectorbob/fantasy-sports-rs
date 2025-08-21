@@ -35,6 +35,13 @@ where
     let v = i64::deserialize(deserializer)?;
     Ok(v != 0)
 }
+pub(crate) fn bool_from_optional_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v: Option<i64> = Option::deserialize(deserializer)?;
+    Ok(v.map_or(false, |v| v != 0))
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error("parse error: {msg}")]

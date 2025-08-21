@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
 
 use crate::data::helpers::{ParseError, deserialize_naive_date, empty_string_as_none};
+use crate::data::settings::ScoringType;
 use crate::{DraftResult, GameCode, GameKey, Player, Settings, Team};
 use crate::{DraftStatus, Transaction};
 
@@ -25,7 +26,7 @@ pub struct League {
     pub edit_key: u32,
     #[serde(deserialize_with = "empty_string_as_none")]
     pub league_update_timestamp: Option<u64>,
-    pub scoring_type: String,
+    pub scoring_type: ScoringType,
     pub current_week: String,
     pub start_week: u32,
     pub end_week: u32,

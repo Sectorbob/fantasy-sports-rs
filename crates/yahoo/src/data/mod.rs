@@ -19,7 +19,9 @@ pub use crate::data::{
         Headshot, KeeperSummary, Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions,
         PositionType, Weeks,
     },
-    settings::{Division, Settings, Stat, StatModifier},
+    settings::{
+        Division, DraftType, ScoringType, Settings, Stat, StatModifier, TradeRatifyType, WaiverType,
+    },
     team::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,
         TeamStandings,
