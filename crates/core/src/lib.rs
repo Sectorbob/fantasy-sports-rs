@@ -1,6 +1,7 @@
 mod data;
 mod external_id;
 mod fetch;
+pub mod history;
 mod model;
 pub mod player_cache;
 pub mod sleeper_utils; //FIXME: don't make this public?
