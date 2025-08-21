@@ -20,7 +20,8 @@ pub use crate::data::{
         PositionType, Weeks,
     },
     settings::{
-        Division, DraftType, ScoringType, Settings, Stat, StatModifier, TradeRatifyType, WaiverType,
+        Division, DraftType, PlayerPool, ScoringType, Settings, Stat, StatModifier,
+        TradeRatifyType, WaiverType,
     },
     team::{
         FeloTier, Manager, OutcomeTotals, Roster, Streak, Team, TeamKey, TeamLogo, TeamPoints,

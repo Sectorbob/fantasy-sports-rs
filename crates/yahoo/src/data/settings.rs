@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, usize};
 
 use crate::PositionType;
 use crate::data::helpers::{bool_from_int, bool_from_optional_int, deserialize_naive_date};
@@ -20,6 +20,7 @@ pub struct Settings {
     pub is_publicly_viewable: bool,
     #[serde(default)]
     pub num_playoff_teams: u8,
+    pub player_pool: PlayerPool,
     pub playoff_start_week: Option<u32>,
     pub scoring_type: ScoringType,
     pub uses_median_score: String,
@@ -38,6 +39,8 @@ pub struct Settings {
     pub uses_playoff_reseeding: bool,
     #[serde(default, deserialize_with = "bool_from_int")]
     pub uses_roster_import: bool,
+    #[serde(default = "week_start_default")]
+    pub start_week: usize,
     #[serde(deserialize_with = "deserialize_naive_date")]
     pub trade_end_date: NaiveDate,
     pub trade_ratify_type: TradeRatifyType,
@@ -69,6 +72,11 @@ impl fmt::Display for DraftType {
             DraftType::Offline => write!(f, "self"),
         }
     }
+}
+
+const DEFAULT_WEEK_START: usize = 1;
+fn week_start_default() -> usize {
+    DEFAULT_WEEK_START
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -223,6 +231,19 @@ impl Division {
         D: Deserializer<'de>,
     {
         Divisions::deserialize(deserializer).map(|r| r.divisions)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum PlayerPool {
+    All,
+}
+impl fmt::Display for PlayerPool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlayerPool::All => write!(f, "ALL"),
+        }
     }
 }
 

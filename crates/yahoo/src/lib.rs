@@ -8,8 +8,8 @@ pub use client::{Client, Error};
 pub use data::{
     Division, DraftResult, DraftStatus, DraftType, FantasyContent, FeloTier, Game, GameCode,
     GameKey, GameType, Headshot, KeeperSummary, League, LeagueKey, Manager, Matchup, OutcomeTotals,
-    Pick, Player, PlayerKey, PlayerName, PlayerPosition, PlayerPositions, PositionType, Roster,
-    Scoreboard, ScoringType, Settings, Standings, Stat, StatModifier, Streak, Team, TeamKey,
-    TeamLogo, TeamPoints, TeamStandings, Token, TradeRatifyType, Transaction, TransactionData,
-    TransactionDataType, TransactionSourceType, User, WaiverType, Weeks,
+    Pick, Player, PlayerKey, PlayerName, PlayerPool, PlayerPosition, PlayerPositions, PositionType,
+    Roster, Scoreboard, ScoringType, Settings, Standings, Stat, StatModifier, Streak, Team,
+    TeamKey, TeamLogo, TeamPoints, TeamStandings, Token, TradeRatifyType, Transaction,
+    TransactionData, TransactionDataType, TransactionSourceType, User, WaiverType, Weeks,
 };
