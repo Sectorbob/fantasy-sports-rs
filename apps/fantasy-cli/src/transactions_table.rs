@@ -75,7 +75,16 @@ impl TransactionsPage {
                 //     .collect::<Vec<_>>();
                 let roster_name = match roster_ids.len() {
                     0 => String::from("N/A"),
-                    1 => roster_ids.iter().next().map(String::clone).unwrap(),
+                    1 => roster_ids
+                        .iter()
+                        .next()
+                        .map(|id| {
+                            self.rosters
+                                .iter()
+                                .find(|r| &r.id == id)
+                                .map_or(id.clone(), |r| r.team_name.clone())
+                        })
+                        .unwrap(),
                     _ => roster_ids
                         .iter()
                         .map(String::clone)

@@ -11,7 +11,7 @@ use tui::{
 };
 
 pub struct LeaguesPage {
-    leagues: Vec<League>,
+    pub leagues: Vec<League>,
     selected: usize,
     // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
 }
@@ -87,6 +87,7 @@ impl<'a> LeaguesPage {
 
     pub fn handle_key(&mut self, key_code: &KeyCode) -> KeyHandleResult {
         match key_code {
+            KeyCode::Char('r') => KeyHandleResult::GoToLeagueHistoryOwnerRecords,
             KeyCode::Down => {
                 if self.selected < self.leagues.len() - 1 {
                     self.selected += 1;
@@ -113,4 +114,5 @@ pub enum KeyHandleResult {
     Unhandled,
     NOOP,
     GoToLeagueSummary,
+    GoToLeagueHistoryOwnerRecords,
 }

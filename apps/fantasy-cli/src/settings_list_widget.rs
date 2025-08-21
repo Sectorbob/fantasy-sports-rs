@@ -10,14 +10,12 @@ use tui::{
 
 pub struct SettingsListWidget {
     title_override: Option<String>,
-    league_id: String,
     settings: Vec<(String, String)>,
 }
 impl SettingsListWidget {
     pub fn from_league(title_override: Option<String>, league: &League) -> Self {
         SettingsListWidget {
             title_override: title_override,
-            league_id: league.id(),
             settings: match &league.settings().scoring {
                 Some(scoring_settings) => scoring_settings.formatted_settings(),
                 None => vec![],

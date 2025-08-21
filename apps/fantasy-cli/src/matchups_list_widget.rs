@@ -65,16 +65,6 @@ impl MatchupsList {
                 .collect(),
         }
     }
-    pub fn from_yahoo(
-        title_override: Option<String>,
-        _team: &yahoo_fantasy_rs::Team,
-        _roster: &yahoo_fantasy_rs::Roster,
-    ) -> Self {
-        MatchupsList {
-            title_override,
-            matchups: vec![],
-        }
-    }
     pub fn draw<'a>(
         &self,
         f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>,

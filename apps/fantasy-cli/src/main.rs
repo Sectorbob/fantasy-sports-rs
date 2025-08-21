@@ -8,6 +8,7 @@ mod config;
 mod constants;
 mod data_fetch;
 mod draft_picks_widget;
+mod league_history_owner_records;
 mod league_matchups_all;
 mod league_summary_page;
 mod leagues_page;

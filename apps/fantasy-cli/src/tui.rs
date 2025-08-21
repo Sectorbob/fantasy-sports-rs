@@ -1,6 +1,8 @@
 use crate::{
-    constants::SEASONS_TO_SCAN, data_fetch, league_matchups_all::LeagueMatchupsTilesPage,
-    league_summary_page, leagues_page, transactions_table::TransactionsPage,
+    constants::SEASONS_TO_SCAN, data_fetch,
+    league_history_owner_records::LeagueHistoryOwnerRecordsPage,
+    league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
+    transactions_table::TransactionsPage,
 };
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -104,6 +106,7 @@ async fn render_loop(
     let mut terminal = Terminal::new(backend).unwrap();
     let mut page = NaviItem::WelcomePage;
     let mut leagues_page = LeaguesPage::new();
+    let mut league_history_owner_records_page = LeagueHistoryOwnerRecordsPage::new();
     let league_matchups_page = LeagueMatchupsTilesPage {};
     // let mut league_transactions_page = TransactionsPage::new();
     let mut league_transactions_page;
@@ -116,6 +119,8 @@ async fn render_loop(
         {
             for league in new_leagues_state {
                 leagues_page.add_league(league);
+                league_history_owner_records_page =
+                    LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues)
             }
         }
 
@@ -179,6 +184,11 @@ async fn render_loop(
                     // navi_stack.push(NaviItem::LeaguesPage);
                 }
             }
+            NaviItem::LeagueHistoryOwnerRecords => {
+                league_history_owner_records_page
+                    .draw(&mut terminal)
+                    .unwrap();
+            }
         }
 
         // Exit on 'q'
@@ -203,6 +213,12 @@ async fn render_loop(
                                 error!("No league selected.");
                             }
                             // Example: go to a summary page
+                            true
+                        }
+
+                        leagues_page::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
+                            navi_stack.push(page);
+                            page = NaviItem::LeagueHistoryOwnerRecords;
                             true
                         }
                         leagues_page::KeyHandleResult::Unhandled => false,
@@ -269,5 +285,6 @@ enum NaviItem {
     LeaguesPage,
     LeagueSummary(String),
     LeagueMatchups(String),
+    LeagueHistoryOwnerRecords,
     TransactionsPage(String),
 }
