@@ -559,6 +559,9 @@ pub struct LeagueSettings {
         default
     )]
     pub pick_trading: bool,
+    /// The final week to allow trading for your fantasy season. Trades must
+    /// be accepted prior to the end of the final game of the week.
+    pub trade_deadline: usize,
     #[serde(flatten)]
     pub other_data: HashMap<String, Number>,
 }
