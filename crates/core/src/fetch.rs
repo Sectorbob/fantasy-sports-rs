@@ -108,7 +108,10 @@ impl LeagueAccessor {
         }
     }
 
-    pub async fn fetch_league_context(&self, id: &ExternalId) -> Result<core::League, Error> {
+    pub async fn fetch_league_context(
+        &self,
+        id: &ExternalId,
+    ) -> Result<crate::model::League, Error> {
         match &id.platform {
             Platform::Sleeper => {
                 if let Some(cli) = &self.sleeper_cli {
@@ -145,7 +148,7 @@ pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
     cli: &sleeper::Client,
     player_cache: Option<&PlayerCache>,
     league_id: T,
-) -> Result<core::League, Error> {
+) -> Result<crate::League, Error> {
     let sleeper_league = cli.get_league(league_id.into()).await?;
     fetch_sleeper_league_context(cli, player_cache, &sleeper_league).await
 }
@@ -154,7 +157,7 @@ pub(crate) async fn fetch_sleeper_league_context(
     cli: &sleeper::Client,
     optional_player_cache: Option<&PlayerCache>,
     sleeper_league: &sleeper::League,
-) -> Result<core::League, Error> {
+) -> Result<crate::League, Error> {
     let mut optional_players_future = if optional_player_cache.is_none() {
         Some(cli.fetch_all_players(&sleeper_league.sport))
     } else {
@@ -294,7 +297,7 @@ pub(crate) async fn fetch_sleeper_league_context(
         );
     }
 
-    Ok(core::League::Sleeper {
+    Ok(crate::League::Sleeper {
         draft,
         draft_picks,
         league: sleeper_league.clone(),
@@ -311,7 +314,7 @@ pub(crate) async fn fetch_yahoo_league_context(
     cli: &yahoo::Client,
     optional_player_cache: Option<&PlayerCache>,
     league_key: yahoo::LeagueKey,
-) -> Result<core::League, Error> {
+) -> Result<crate::League, Error> {
     // Fire out http requests
     let yahoo_league_future = cli.get_league(&league_key);
     let standings_future = cli.get_league_standings(&league_key);
@@ -436,7 +439,7 @@ pub(crate) async fn fetch_yahoo_league_context(
         "got {} yahoo players in {league_key}",
         players_in_league.len()
     );
-    Ok(core::League::Yahoo {
+    Ok(crate::League::Yahoo {
         draft_results,
         league: yahoo_league_future
             .await?
