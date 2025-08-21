@@ -81,7 +81,7 @@ pub enum ScoringSettings {
     Unknown,
 }
 impl ScoringSettings {
-    pub fn formatted_settings(&self) -> Vec<(String, String)> {
+    pub fn formatted_settings(&self) -> Vec<(&'static str, String)> {
         match self {
             ScoringSettings::Football {
                 pass_2pt,
@@ -141,111 +141,71 @@ impl ScoringSettings {
                 bonus_rec_td_40p,
                 bonus_rush_40p,
                 bonus_rec_40p,
-            } => {
-                let mut f = vec![];
-                if *pass_2pt != 0.0 {
-                    f.push((String::from("pass_2pt"), pass_2pt));
-                }
-                if *pass_int != 0.0 {
-                    f.push((String::from("pass_int"), pass_int));
-                }
-                if *pass_yd != 0.0 {
-                    f.push((String::from("pass_yd"), pass_yd));
-                }
-                if *pass_td != 0.0 {
-                    f.push((String::from("pass_td"), pass_td));
-                }
-                if *receptions != 0.0 {
-                    f.push((String::from("receptions"), receptions));
-                }
-                if *rec_2pt != 0.0 {
-                    f.push((String::from("rec_2pt"), rec_2pt));
-                }
-                if *rec_td != 0.0 {
-                    f.push((String::from("rec_td"), rec_td));
-                }
-                if *rec_yd != 0.0 {
-                    f.push((String::from("rec_yd"), rec_yd));
-                }
-                if *rush_2pt != 0.0 {
-                    f.push((String::from("rush_2pt"), rec_2pt));
-                }
-                if *rush_td != 0.0 {
-                    f.push((String::from("rush_td"), rush_td));
-                }
-                if *rush_yd != 0.0 {
-                    f.push((String::from("rush_yd"), rush_yd));
-                }
-                if *kick_fgmiss != 0.0 {
-                    f.push((String::from("kick_fgmiss"), kick_fgmiss));
-                }
-                if *kick_fgm_0_19 != 0.0 {
-                    f.push((String::from("kick_fgm_0_19"), kick_fgm_0_19));
-                }
-                if *kick_fgm_20_29 != 0.0 {
-                    f.push((String::from("kick_fgm_20_29"), kick_fgm_20_29));
-                }
-                if *kick_fgm_30_39 != 0.0 {
-                    f.push((String::from("kick_fgm_30_39"), kick_fgm_30_39));
-                }
-                if *kick_fgm_40_49 != 0.0 {
-                    f.push((String::from("kick_fgm_40_49"), kick_fgm_40_49));
-                }
-                if *kick_fgm_50p != 0.0 {
-                    f.push((String::from("kick_fgm_50p"), kick_fgm_50p));
-                }
-                if *kick_xpm != 0.0 {
-                    f.push((String::from("kick_xpm"), kick_xpm));
-                }
-                if *kick_xpmiss != 0.0 {
-                    f.push((String::from("kick_xpmiss"), kick_xpmiss));
-                }
-                // (String::from("fum"), fum),
-                // (String::from("fum_lost"), fum_lost),
-                // (String::from("pts_allow_0"), pts_allow_0),
-                // (String::from("pts_allow_1_6"), pts_allow_1_6),
-                // (String::from("pts_allow_7_13"), pts_allow_7_13),
-                // (String::from("pts_allow_14_20"), pts_allow_14_20),
-                // (String::from("pts_allow_21_27"), pts_allow_21_27),
-                // (String::from("pts_allow_28_34"), pts_allow_28_34),
-                // (String::from("pts_allow_35p"), pts_allow_35p),
-                // (String::from("int"), int),
-                // (String::from("sack"), sack),
-                // (String::from("safe"), safe),
-                // (String::from("def_td"), def_td),
-                // (String::from("def_kr_td"), def_kr_td),
-                // (String::from("fum_rec"), fum_rec),
-                // (String::from("fum_rec_td"), fum_rec_td),
-                // (String::from("fum_forced"), fum_forced),
-                // (String::from("pass_int_td"), pass_int_td),
-                // (String::from("def_st_td"), def_st_td),
-                // (String::from("def_st_fum_rec"), def_st_fum_rec),
-                // (String::from("def_st_ff"), def_st_ff),
-                // (String::from("st_fum_rec"), st_fum_rec),
-                // (String::from("st_ff"), st_ff),
-                // (String::from("st_td"), st_td),
-                // (String::from("blk_kick"), blk_kick),
-                // (String::from("kr_td"), kr_td),
-                // (String::from("def_pr_td"), def_pr_td),
-                // (String::from("pr_td"), pr_td),
-                // (String::from("bonus_rec_yd_200"), bonus_rec_yd_200),
-                // (String::from("bonus_rush_yd_200"), bonus_rush_yd_200),
-                // (String::from("bonus_pass_yd_400"), bonus_pass_yd_400),
-                // (String::from("bonus_rec_te"), bonus_rec_te),
-                // (String::from("bonus_pass_td_40p"), bonus_pass_td_40p),
-                // (String::from("bonus_rush_td_40p"), bonus_rush_td_40p),
-                // (String::from("bonus_pass_cmp_40p"), bonus_pass_cmp_40p),
-                // (String::from("bonus_rec_td_40p"), bonus_rec_td_40p),
-                // (String::from("bonus_rush_40p"), bonus_rush_40p),
-                // (String::from("bonus_rec_40p"), bonus_rec_40p),
-
-                f.into_iter()
-                    .filter_map(|(k, v)| match *v != (0.0 as f32) {
-                        true => Some((k, format!("{:.2}", v))),
-                        false => None,
-                    })
-                    .collect()
-            }
+            } => [
+                ("pass_2pt", pass_2pt),
+                ("pass_int", pass_int),
+                ("pass_yd", pass_yd),
+                ("pass_td", pass_td),
+                ("receptions", receptions),
+                ("rec_2pt", rec_2pt),
+                ("rec_td", rec_td),
+                ("rec_yd", rec_yd),
+                ("rush_2pt", rush_2pt),
+                ("rush_td", rush_td),
+                ("rush_yd", rush_yd),
+                ("kick_fgmiss", kick_fgmiss),
+                ("kick_fgm_0_19", kick_fgm_0_19),
+                ("kick_fgm_20_29", kick_fgm_20_29),
+                ("kick_fgm_30_39", kick_fgm_30_39),
+                ("kick_fgm_40_49", kick_fgm_40_49),
+                ("kick_fgm_50p", kick_fgm_50p),
+                ("kick_xpm", kick_xpm),
+                ("kick_xpmiss", kick_xpmiss),
+                ("fum", fum),
+                ("fum_lost", fum_lost),
+                ("pts_allow_0", pts_allow_0),
+                ("pts_allow_1_6", pts_allow_1_6),
+                ("pts_allow_7_13", pts_allow_7_13),
+                ("pts_allow_14_20", pts_allow_14_20),
+                ("pts_allow_21_27", pts_allow_21_27),
+                ("pts_allow_28_34", pts_allow_28_34),
+                ("pts_allow_35p", pts_allow_35p),
+                ("int", int),
+                ("sack", sack),
+                ("safe", safe),
+                ("def_td", def_td),
+                ("def_kr_td", def_kr_td),
+                ("fum_rec", fum_rec),
+                ("fum_rec_td", fum_rec_td),
+                ("fum_forced", fum_forced),
+                ("pass_int_td", pass_int_td),
+                ("def_st_td", def_st_td),
+                ("def_st_fum_rec", def_st_fum_rec),
+                ("def_st_ff", def_st_ff),
+                ("st_fum_rec", st_fum_rec),
+                ("st_ff", st_ff),
+                ("st_td", st_td),
+                ("blk_kick", blk_kick),
+                ("kr_td", kr_td),
+                ("def_pr_td", def_pr_td),
+                ("pr_td", pr_td),
+                ("bonus_rec_yd_200", bonus_rec_yd_200),
+                ("bonus_rush_yd_200", bonus_rush_yd_200),
+                ("bonus_pass_yd_400", bonus_pass_yd_400),
+                ("bonus_rec_te", bonus_rec_te),
+                ("bonus_pass_td_40p", bonus_pass_td_40p),
+                ("bonus_rush_td_40p", bonus_rush_td_40p),
+                ("bonus_pass_cmp_40p", bonus_pass_cmp_40p),
+                ("bonus_rec_td_40p", bonus_rec_td_40p),
+                ("bonus_rush_40p", bonus_rush_40p),
+                ("bonus_rec_40p", bonus_rec_40p),
+            ]
+            .into_iter()
+            .filter_map(|(k, v)| match *v != (0.0 as f32) {
+                true => Some((k, format!("{:.2}", v))),
+                false => None,
+            })
+            .collect(),
             ScoringSettings::Unknown => vec![],
         }
     }
@@ -766,13 +726,30 @@ mod tests {
             debug_assert_eq!(pass_int_td, 0.0, "expected 6 pts/pick-6");
             debug_assert_eq!(
                 def_st_td, 0.0,
-                "expected 0 pts for unsupported defesne and special teams td"
+                "expected 0 pts for unsupported defense and special teams td"
             );
             debug_assert_eq!(
                 def_st_fum_rec, 0.0,
                 "expected 2 pts for a DST fumble recovery"
             );
-            // debug_assert_eq!(pass_2pt, 2.0, "expected ");
+            debug_assert_eq!(def_st_ff, 0.0, "expected 0.0 def_st_ff");
+            debug_assert_eq!(st_fum_rec, 0.0, "expected 0.0 st_fum_rec");
+            debug_assert_eq!(st_ff, 0.0, "expected 0.0 st_ff");
+            debug_assert_eq!(st_td, 6.0, "expected 6.0 st_td");
+            debug_assert_eq!(blk_kick, 2.0, "expected 2.0 blk_kick");
+            debug_assert_eq!(kr_td, 6.0, "expected 6.0 kr_td");
+            debug_assert_eq!(def_pr_td, 0.0, "expected 0.0 def_pr_td");
+            debug_assert_eq!(pr_td, 6.0, "expected 6.0 pr_td");
+            debug_assert_eq!(bonus_rec_yd_200, 0.0, "expected 0.0 bonus_rec_yd_200");
+            debug_assert_eq!(bonus_rush_yd_200, 0.0, "expected 0.0 bonus_rush_yd_200");
+            debug_assert_eq!(bonus_pass_yd_400, 0.0, "expected 0.0 bonus_pass_yd_400");
+            debug_assert_eq!(bonus_rec_te, 0.0, "expected 0.0 bonus_rec_te");
+            debug_assert_eq!(bonus_pass_td_40p, 0.0, "expected 0.0 bonus_pass_td_40p");
+            debug_assert_eq!(bonus_rush_td_40p, 0.0, "expected 0.0 bonus_rush_td_40p");
+            debug_assert_eq!(bonus_pass_cmp_40p, 0.0, "expected 0.0 bonus_pass_cmp_40p");
+            debug_assert_eq!(bonus_rec_td_40p, 0.0, "expected 0.0 bonus_rec_td_40p");
+            debug_assert_eq!(bonus_rush_40p, 0.0, "expected 0.0 bonus_rush_40p");
+            debug_assert_eq!(bonus_rec_40p, 0.0, "expected 0.0 bonus_rec_40p");
         } else {
             debug_assert!(false, "expected football scoring settings");
         }

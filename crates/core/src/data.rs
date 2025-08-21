@@ -236,9 +236,7 @@ impl League {
                     })
                     .collect(),
             },
-            League::Yahoo {
-                standings, ..
-            } => Standings {
+            League::Yahoo { standings, .. } => Standings {
                 entries: standings
                     .teams
                     .iter()
@@ -477,7 +475,7 @@ impl League {
                 .map(|r| r.1)
                 .map(|r| Roster::from((r, owners)))
                 .collect(),
-            League::Yahoo { rosters, teams, .. } => rosters.iter().map(Roster::from).collect(),
+            League::Yahoo { rosters, .. } => rosters.iter().map(Roster::from).collect(),
         }
     }
     pub fn transactions(&self) -> Vec<Transaction> {
