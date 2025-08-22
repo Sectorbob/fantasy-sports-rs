@@ -49,7 +49,11 @@ pub struct Settings {
     /// The number of days that a dropped player is on waivers before going to
     /// being a free agent
     pub waiver_time: u32,
-    // roster_positions: RosterPositions,
+    #[serde(
+        default,
+        deserialize_with = "RosterPosition::deserialize_roster_positions"
+    )]
+    pub roster_positions: Vec<RosterPosition>,
     #[serde(default, deserialize_with = "Stat::deserialize_stat_categories")]
     pub stat_categories: Vec<Stat>,
     #[serde(default, deserialize_with = "StatModifier::deserialize_stat_modifiers")]
@@ -231,6 +235,65 @@ impl Division {
         D: Deserializer<'de>,
     {
         Divisions::deserialize(deserializer).map(|r| r.divisions)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct RosterPositions {
+    #[serde(rename = "roster_position")]
+    pub roster_positions: Vec<RosterPosition>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct RosterPosition {
+    pub position: Position,
+    pub position_type: Option<PositionType>,
+    pub count: usize,
+    #[serde(deserialize_with = "bool_from_int")]
+    pub is_starting_position: bool,
+}
+impl RosterPosition {
+    // This method is called when the deserializer encounters a newtype struct
+    pub(crate) fn deserialize_roster_positions<'de, D>(
+        deserializer: D,
+    ) -> Result<Vec<RosterPosition>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        RosterPositions::deserialize(deserializer).map(|r| r.roster_positions)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub enum Position {
+    QB,
+    WR,
+    RB,
+    TE,
+    #[serde(rename = "W/R/T")]
+    Flex, // W/R/T
+    K,
+    DEF, // Team Defense
+    CB,  // Cornerback
+    S,   // Safety
+    BN,  // Bench
+    IR,  // Injured Reserve
+}
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Position::QB => write!(f, "QB"),
+            Position::WR => write!(f, "WR"),
+            Position::RB => write!(f, "RB"),
+            Position::TE => write!(f, "TE"),
+            Position::Flex => write!(f, "W/R/T"),
+            Position::K => write!(f, "K"),
+            Position::DEF => write!(f, "DEF"),
+            Position::CB => write!(f, "CB"),
+            Position::S => write!(f, "S"),
+            Position::BN => write!(f, "BN"),
+            Position::IR => write!(f, "IR"),
+        }
     }
 }
 

@@ -176,9 +176,10 @@ impl std::fmt::Display for PlayerPositions {
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum PositionType {
-    K,
-    DT,
-    O,
+    K,  // Kicker
+    DT, // Defense Team
+    DP, // Defense player
+    O,  // Offense
     OTHER(String),
 }
 impl<'de> Deserialize<'de> for PositionType {
@@ -191,6 +192,7 @@ impl<'de> Deserialize<'de> for PositionType {
             "K" => Ok(PositionType::K),
             "DT" => Ok(PositionType::DT),
             "O" => Ok(PositionType::O),
+            "DP" => Ok(PositionType::DP),
             other => Ok(PositionType::OTHER(other.to_string())),
         }
     }
@@ -201,7 +203,8 @@ impl std::fmt::Display for PositionType {
             PositionType::K => write!(f, "K"),
             PositionType::DT => write!(f, "DT"),
             PositionType::O => write!(f, "O"),
-            PositionType::OTHER(s) => write!(f, "{}", s),
+            PositionType::DP => write!(f, "DP"),
+            PositionType::OTHER(s) => write!(f, "{s}"),
         }
     }
 }
