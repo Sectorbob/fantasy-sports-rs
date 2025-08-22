@@ -1346,6 +1346,12 @@ mod tests {
             waiver_time: 2,
             player_pool: yahoo::PlayerPool::All,
             start_week: 1,
+            roster_positions: vec![yahoo::RosterPosition {
+                position: yahoo::Position::QB,
+                position_type: Some(yahoo::PositionType::O),
+                count: 1,
+                is_starting_position: true,
+            }],
         }
     }
 }

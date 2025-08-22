@@ -10,10 +10,12 @@ pub struct LeagueSettings {
     /// The week number in the season when the playoffs begin.
     pub has_playoffs: bool,
     pub playoff_start_week: u32,
+    // pub num_of_teams: usize,
     pub num_playoff_teams: usize,
     pub divisions: Vec<String>,
     pub league_type: LeagueType,
     pub draft_type: DraftType,
+    pub draft_rounds: usize,
     pub scoring: Option<ScoringSettings>,
     pub has_pick_trading: bool,
     pub waiver_type: WaiverType,
@@ -21,9 +23,20 @@ pub struct LeagueSettings {
     pub trade_deadline: TradeDeadline,
     pub start_week: usize,
     pub trade_ratify_type: TradeRatifyType,
+    pub roster_spots: Vec<RosterSpot>,
 }
 impl LeagueSettings {
     pub fn from_yahoo(yahoo_settings: &yahoo::Settings) -> Self {
+        let roster_spots = yahoo_settings
+            .roster_positions
+            .iter()
+            .flat_map(|v| vec![RosterSpot::from(v); v.count])
+            .collect::<Vec<_>>();
+        let draft_rounds = roster_spots
+            .iter()
+            .filter(RosterSpot::is_active_spot)
+            .count();
+
         LeagueSettings {
             has_playoffs: yahoo_settings.uses_playoff,
             playoff_start_week: yahoo_settings.playoff_start_week.map_or(0, |v| v),
@@ -34,6 +47,7 @@ impl LeagueSettings {
                 .map(|d| d.name.clone())
                 .collect(),
             draft_type: DraftType::from(yahoo_settings),
+            draft_rounds,
             league_type: if !yahoo_settings.uses_roster_import {
                 LeagueType::Redraft
             } else {
@@ -47,10 +61,19 @@ impl LeagueSettings {
             trade_deadline: TradeDeadline::from(yahoo_settings),
             start_week: yahoo_settings.start_week,
             trade_ratify_type: TradeRatifyType::from(yahoo_settings),
+            roster_spots,
         }
     }
     pub fn from_sleeper(sleeper_league: &sleeper::League, draft: &Option<sleeper::Draft>) -> Self {
         let playoff_start_week = sleeper_league.settings.playoff_week_start as u32;
+
+        let mut roster_spots = sleeper_league
+            .roster_positions
+            .iter()
+            .map(RosterSpot::from)
+            .collect::<Vec<_>>();
+        let draft_rounds = roster_spots.len();
+        roster_spots.extend(vec![RosterSpot::IR; sleeper_league.settings.reserve_slots]);
         LeagueSettings {
             has_playoffs: playoff_start_week > 0, //TODO: make sure this is correct logic
             playoff_start_week,
@@ -68,6 +91,7 @@ impl LeagueSettings {
             draft_type: draft
                 .as_ref()
                 .map_or(DraftType::Snake, |d| DraftType::from(&d._type)),
+            draft_rounds,
             league_type: sleeper_league.settings.r#type.into(),
             scoring: Some(ScoringSettings::from(&sleeper_league.scoring_settings)),
             has_pick_trading: sleeper_league.settings.pick_trading,
@@ -76,6 +100,7 @@ impl LeagueSettings {
             trade_deadline: TradeDeadline::from(&sleeper_league.settings),
             start_week: sleeper_league.settings.start_week,
             trade_ratify_type: TradeRatifyType::from(&sleeper_league.settings),
+            roster_spots,
         }
     }
     pub fn formatted_settings(&self) -> Vec<(&'static str, String)> {
@@ -83,6 +108,7 @@ impl LeagueSettings {
             ("Type", self.league_type.to_string()),
             ("Max Keepers", self.max_keepers.to_string()),
             ("Draft Type", self.draft_type.to_string()),
+            ("Draft Rounds", self.draft_rounds.to_string()),
             ("Start Week", self.start_week.to_string()),
             ("Playoffs?", self.has_playoffs.to_string()),
             ("Waiver Type", self.waiver_type.to_string()),
@@ -91,6 +117,14 @@ impl LeagueSettings {
             ("Pick Trading?", self.has_pick_trading.to_string()),
             ("Trade Approval", self.trade_ratify_type.to_string()),
             ("Trade Deadline", self.trade_deadline.to_string()),
+            (
+                "Roster Spots",
+                self.roster_spots
+                    .iter()
+                    .map(RosterSpot::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
             // ("", ),
         ]
     }
@@ -289,5 +323,115 @@ impl From<&sleeper::LeagueSettings> for TradeRatifyType {
 impl From<sleeper::LeagueSettings> for TradeRatifyType {
     fn from(value: sleeper::LeagueSettings) -> Self {
         TradeRatifyType::from(&value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RosterSpot {
+    QB,
+    WR,
+    RB,
+    TE,
+    DEF,
+    K,
+    Flex,
+    SuperFlex,
+    CB,
+    S,
+    BN,
+    IR,
+}
+impl RosterSpot {
+    pub fn is_starting_spot(self: &&Self) -> bool {
+        match self {
+            RosterSpot::QB => true,
+            RosterSpot::WR => true,
+            RosterSpot::RB => true,
+            RosterSpot::TE => true,
+            RosterSpot::DEF => true,
+            RosterSpot::K => true,
+            RosterSpot::Flex => true,
+            RosterSpot::SuperFlex => true,
+            RosterSpot::CB => true,
+            RosterSpot::S => true,
+            RosterSpot::BN => false,
+            RosterSpot::IR => false,
+        }
+    }
+    pub fn is_active_spot(self: &&Self) -> bool {
+        match self {
+            RosterSpot::QB => true,
+            RosterSpot::WR => true,
+            RosterSpot::RB => true,
+            RosterSpot::TE => true,
+            RosterSpot::DEF => true,
+            RosterSpot::K => true,
+            RosterSpot::Flex => true,
+            RosterSpot::SuperFlex => true,
+            RosterSpot::CB => true,
+            RosterSpot::S => true,
+            RosterSpot::BN => true,
+            RosterSpot::IR => false,
+        }
+    }
+}
+impl fmt::Display for RosterSpot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RosterSpot::QB => write!(f, "QB"),
+            RosterSpot::WR => write!(f, "WR"),
+            RosterSpot::RB => write!(f, "RB"),
+            RosterSpot::TE => write!(f, "TE"),
+            RosterSpot::DEF => write!(f, "DEF"),
+            RosterSpot::K => write!(f, "K"),
+            RosterSpot::BN => write!(f, "BN"),
+            RosterSpot::IR => write!(f, "IR"),
+            RosterSpot::Flex => write!(f, "Flex"),
+            RosterSpot::SuperFlex => write!(f, "SuperFlex"),
+            RosterSpot::CB => write!(f, "CB"),
+            RosterSpot::S => write!(f, "S"),
+        }
+    }
+}
+impl From<&yahoo::RosterPosition> for RosterSpot {
+    fn from(value: &yahoo::RosterPosition) -> Self {
+        match &value.position {
+            yahoo::Position::QB => RosterSpot::QB,
+            yahoo::Position::WR => RosterSpot::WR,
+            yahoo::Position::RB => RosterSpot::RB,
+            yahoo::Position::TE => RosterSpot::TE,
+            yahoo::Position::Flex => RosterSpot::Flex,
+            yahoo::Position::K => RosterSpot::K,
+            yahoo::Position::DEF => RosterSpot::DEF,
+            yahoo::Position::CB => RosterSpot::CB,
+            yahoo::Position::S => RosterSpot::S,
+            yahoo::Position::BN => RosterSpot::BN,
+            yahoo::Position::IR => RosterSpot::IR,
+        }
+    }
+}
+impl From<yahoo::RosterPosition> for RosterSpot {
+    fn from(value: yahoo::RosterPosition) -> Self {
+        RosterSpot::from(&value)
+    }
+}
+impl From<&sleeper::RosterPosition> for RosterSpot {
+    fn from(value: &sleeper::RosterPosition) -> Self {
+        // For now, sleeper trade ratify type is always Commissioner
+        match value {
+            sleeper::RosterPosition::QB => RosterSpot::QB,
+            sleeper::RosterPosition::RB => RosterSpot::RB,
+            sleeper::RosterPosition::WR => RosterSpot::WR,
+            sleeper::RosterPosition::TE => RosterSpot::TE,
+            sleeper::RosterPosition::FLEX => RosterSpot::Flex,
+            sleeper::RosterPosition::K => RosterSpot::K,
+            sleeper::RosterPosition::DEF => RosterSpot::DEF,
+            sleeper::RosterPosition::BN => RosterSpot::BN,
+        }
+    }
+}
+impl From<sleeper::RosterPosition> for RosterSpot {
+    fn from(value: sleeper::RosterPosition) -> Self {
+        RosterSpot::from(&value)
     }
 }

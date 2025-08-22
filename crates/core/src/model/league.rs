@@ -357,8 +357,8 @@ impl League {
     pub fn draft(&self) -> Option<Draft> {
         match self {
             League::Sleeper {
-                draft, draft_picks, ..
-            } => draft.as_ref().map(|d| Draft::from((d, draft_picks))),
+                draft, draft_picks, rosters, ..
+            } => draft.as_ref().map(|d| Draft::from((d, draft_picks, rosters))),
             League::Yahoo {
                 draft_results,
                 league,
@@ -414,6 +414,7 @@ impl League {
                             }
                         })
                         .collect(),
+                    draft_order: None, //TODO: implement me
                 }),
             },
         }

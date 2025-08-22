@@ -13,6 +13,7 @@ pub struct Draft {
     pub draft_id: String,
     pub league_id: String,
     pub picks: Vec<DraftPick>,
+    pub draft_order: Option<Vec<Option<String>>>,
 }
 impl Draft {
     pub fn check_for_valid_draft(
@@ -44,19 +45,44 @@ impl
     From<(
         &sleeper_fantasy_rs::Draft,
         &Vec<sleeper_fantasy_rs::DraftPick>,
+        &HashMap<u8, sleeper::Roster>,
     )> for Draft
 {
     fn from(
-        value: (
+        (draft, picks, rosters): (
             &sleeper_fantasy_rs::Draft,
             &Vec<sleeper_fantasy_rs::DraftPick>,
+            &HashMap<u8, sleeper::Roster>,
         ),
     ) -> Self {
         Draft {
-            draft_type: value.0._type.to_string(),
-            draft_id: value.0.draft_id.clone(),
-            league_id: value.0.league_id.clone(),
-            picks: value.1.iter().map(DraftPick::from).collect(),
+            draft_type: draft._type.to_string(),
+            draft_id: draft.draft_id.clone(),
+            league_id: draft.league_id.clone(),
+            picks: picks.iter().map(DraftPick::from).collect(),
+            draft_order: draft.draft_order.as_ref().map(|order| {
+                (1..draft.settings.rounds)
+                    .into_iter()
+                    .map(|slot| {
+                        order
+                            .iter()
+                            .find(|(_, v)| *v == &slot)
+                            .map(|(owner_id, _)| {
+                                rosters
+                                    .iter()
+                                    .find(|(_, r)| {
+                                        if let Some(id) = &r.owner_id {
+                                            owner_id == id
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .map(|(_, r)| r.roster_id.to_string())
+                            })
+                    })
+                    .flatten()
+                    .collect()
+            }),
         }
     }
 }
