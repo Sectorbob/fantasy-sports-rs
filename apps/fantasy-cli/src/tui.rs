@@ -1,5 +1,5 @@
 use crate::{
-    constants::SEASONS_TO_SCAN, data_fetch,
+    constants::SEASONS_TO_SCAN, data_fetch, draft_board::DraftBoardPage,
     league_history_owner_records::LeagueHistoryOwnerRecordsPage,
     league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
     transactions_table::TransactionsPage,
@@ -110,6 +110,7 @@ async fn render_loop(
     let league_matchups_page = LeagueMatchupsTilesPage {};
     // let mut league_transactions_page = TransactionsPage::new();
     let mut league_transactions_page;
+    let mut league_draft_board_page;
     let mut navi_stack: Vec<NaviItem> = vec![];
 
     loop {
@@ -120,7 +121,7 @@ async fn render_loop(
             for league in new_leagues_state {
                 leagues_page.add_league(league);
                 league_history_owner_records_page =
-                    LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues)
+                    LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
             }
         }
 
@@ -189,6 +190,27 @@ async fn render_loop(
                     .draw(&mut terminal)
                     .unwrap();
             }
+            NaviItem::LeagueDraftBoardPage(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
+                if let Some(selected_league) = leagues_page.selected() {
+                    league_draft_board_page = DraftBoardPage::from(selected_league);
+                    terminal
+                        .draw(|f| {
+                            let size = f.size();
+                            league_draft_board_page.draw(f, &size);
+                        })
+                        .unwrap();
+                } else {
+                    page = NaviItem::LeaguesPage;
+                    // navi_stack.push(NaviItem::LeaguesPage);
+                }
+            }
         }
 
         // Exit on 'q'
@@ -231,6 +253,10 @@ async fn render_loop(
                         } else if key.code == KeyCode::Char('t') {
                             navi_stack.push(page);
                             page = NaviItem::TransactionsPage(league_id.to_string());
+                            true
+                        } else if key.code == KeyCode::Char('d') {
+                            navi_stack.push(page);
+                            page = NaviItem::LeagueDraftBoardPage(league_id.to_string());
                             true
                         } else {
                             false
@@ -287,4 +313,5 @@ enum NaviItem {
     LeagueMatchups(String),
     LeagueHistoryOwnerRecords,
     TransactionsPage(String),
+    LeagueDraftBoardPage(String),
 }

@@ -6,6 +6,7 @@ use log::*;
 
 mod config;
 mod constants;
+mod draft_board;
 mod data_fetch;
 mod draft_picks_widget;
 mod league_history_owner_records;
