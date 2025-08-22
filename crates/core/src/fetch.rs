@@ -683,7 +683,7 @@ mod tests {
                 .fetch_league_context(&external_id)
                 .await
                 .expect("failed to get sleeper league")
-                .with_team(user_id.clone());
+                .with_owner_id(user_id.clone());
             debug_assert_eq!(
                 season,
                 league.season(),
