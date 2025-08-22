@@ -1,6 +1,6 @@
 use serde_json::Number;
 use sleeper_fantasy_rs as sleeper;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 use yahoo_fantasy_rs as yahoo;
 
 use crate::{
@@ -87,6 +87,18 @@ impl League {
         }
     }
 
+    pub fn selected_team_id(&self) -> Option<String> {
+        match self {
+            League::Sleeper { user_id, .. } => user_id.as_ref().map(String::clone),
+            League::Yahoo { team, .. } => team.as_ref().map(|t| t.team_id.to_string()),
+        }
+    }
+    pub fn status(&self) -> LeagueStatus {
+        match self {
+            League::Sleeper { league, .. } => LeagueStatus::from(league),
+            League::Yahoo { league, .. } => LeagueStatus::from(league),
+        }
+    }
     pub fn id(&self) -> String {
         match self {
             League::Sleeper { league, .. } => league.league_id.clone(),
@@ -190,12 +202,14 @@ impl League {
     }
 
     pub fn record(&self) -> String {
+        self.selected_team_id()
+            .map_or(String::from("n/a"), |team_id| self.record_for_team(team_id))
+    }
+    pub fn record_for_team(&self, team_id: String) -> String {
         match self {
-            League::Sleeper {
-                rosters, user_id, ..
-            } => match rosters
+            League::Sleeper { rosters, .. } => match rosters
                 .iter()
-                .find(|(_, r)| r.owner_id.is_some() && &r.owner_id == user_id)
+                .find(|(_, r)| r.owner_id.is_some() && &r.owner_id == &Some(team_id.clone()))
             {
                 Some((_, roster)) => format!(
                     "{}-{}-{}",
@@ -214,12 +228,10 @@ impl League {
                 ),
                 None => "n/a".to_string(),
             },
-            League::Yahoo {
-                standings, team, ..
-            } => match standings
+            League::Yahoo { standings, .. } => match standings
                 .teams
                 .iter()
-                .find(|t| Some(t.team_id) == team.as_ref().map(|t| t.team_id))
+                .find(|t| t.team_id.to_string() == team_id.clone())
             {
                 Some(team_w_standings) => match &team_w_standings.team_standings {
                     Some(team_standings) => format!(
@@ -392,7 +404,10 @@ impl League {
                 .map(|r| r.1)
                 .map(|r| Roster::from((r, owners)))
                 .collect(),
-            League::Yahoo { rosters, .. } => rosters.iter().map(Roster::from).collect(),
+            League::Yahoo { rosters, teams, .. } => rosters
+                .iter()
+                .map(|(roster_id, roster)| Roster::from((roster_id, roster, teams)))
+                .collect(),
         }
     }
     pub fn transactions(&self) -> Vec<Transaction> {
@@ -408,34 +423,55 @@ impl League {
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{season}] {name} ({platform}) - {status}       Record: {record}",
+            season = self.season(),
+            name = self.name(),
+            platform = self.platform(),
+            status = self.status(),
+            record = self.record(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LeagueStatus {
+    PreDraft,
+    Drafting,
+    InSeason,
+    Complete,
+    InComplete,
+}
+impl fmt::Display for LeagueStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            League::Sleeper { league, .. } => write!(
-                f,
-                "[{season}] {name} (Sleeper) - {status}    Record: {record}",
-                season = league.season,
-                name = league.name,
-                status = match league.status {
-                    sleeper_fantasy_rs::LeagueStatus::PreDraft => "predraft",
-                    sleeper_fantasy_rs::LeagueStatus::Drafting => "drafting",
-                    sleeper_fantasy_rs::LeagueStatus::InSeason => "inseason",
-                    sleeper_fantasy_rs::LeagueStatus::Complete => "complete",
-                },
-                record = self.record(),
-            ),
-            League::Yahoo { league, .. } => write!(
-                f,
-                "[{}] {} (Yahoo) - {}       Record: {}",
-                league.season,
-                league.name,
-                match league.is_finished {
-                    Some(is_finished) => match is_finished {
-                        true => "complete",
-                        false => "in-progress",
-                    },
-                    None => "incomplete",
-                },
-                self.record(),
-            ),
+            LeagueStatus::PreDraft => write!(f, "Pre-draft"),
+            LeagueStatus::Drafting => write!(f, "Drafting"),
+            LeagueStatus::InSeason => write!(f, "In-Season"),
+            LeagueStatus::Complete => write!(f, "Complete"),
+            LeagueStatus::InComplete => write!(f, "Incomplete"),
+        }
+    }
+}
+impl From<&sleeper::League> for LeagueStatus {
+    fn from(value: &sleeper::League) -> Self {
+        match value.status {
+            sleeper::LeagueStatus::PreDraft => LeagueStatus::PreDraft,
+            sleeper::LeagueStatus::Drafting => LeagueStatus::Drafting,
+            sleeper::LeagueStatus::InSeason => LeagueStatus::InSeason,
+            sleeper::LeagueStatus::Complete => LeagueStatus::Complete,
+        }
+    }
+}
+impl From<&yahoo::League> for LeagueStatus {
+    fn from(value: &yahoo::League) -> Self {
+        match value.is_finished {
+            Some(is_finished) => match is_finished {
+                true => LeagueStatus::Complete,
+                false => LeagueStatus::InSeason,
+            },
+            None => LeagueStatus::InComplete,
         }
     }
 }

@@ -131,8 +131,8 @@ impl From<&sleeper_fantasy_rs::Player> for Player {
         }
     }
 }
-impl From<yahoo_fantasy_rs::Player> for Player {
-    fn from(value: yahoo_fantasy_rs::Player) -> Self {
+impl From<yahoo::Player> for Player {
+    fn from(value: yahoo::Player) -> Self {
         Player {
             _id: value.player_key.to_string(),
             name: value.name.full,
@@ -141,8 +141,8 @@ impl From<yahoo_fantasy_rs::Player> for Player {
         }
     }
 }
-impl From<&yahoo_fantasy_rs::Player> for Player {
-    fn from(value: &yahoo_fantasy_rs::Player) -> Self {
+impl From<&yahoo::Player> for Player {
+    fn from(value: &yahoo::Player) -> Self {
         Player {
             _id: value.player_key.to_string(),
             name: value.name.full.to_string(),
@@ -184,14 +184,20 @@ impl From<(&sleeper_fantasy_rs::Roster, &HashMap<String, sleeper::User>)> for Ro
         }
     }
 }
-impl From<(&u32, &yahoo_fantasy_rs::Roster)> for Roster {
-    fn from(value: (&u32, &yahoo_fantasy_rs::Roster)) -> Self {
+impl From<(&u32, &yahoo::Roster, &Vec<yahoo::Team>)> for Roster {
+    fn from((roster_id, roster, teams): (&u32, &yahoo::Roster, &Vec<yahoo::Team>)) -> Self {
+        let team = teams.iter().find(|t| &t.team_id == roster_id);
         Roster {
-            id: value.0.to_string(),
-            team_name: String::new(),
-            owner_name: String::new(),
-            player_ids: value
-                .1
+            id: roster_id.to_string(),
+            team_name: team.map_or(format!("Roster {roster_id}"), |t| t.name.clone()),
+            owner_name: team.map_or(format!("Roster {roster_id}"), |t| {
+                t.managers()
+                    .iter()
+                    .map(|m| m.nickname.clone())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            }),
+            player_ids: roster
                 .players
                 .iter()
                 .map(|p| p.player_id.to_string())

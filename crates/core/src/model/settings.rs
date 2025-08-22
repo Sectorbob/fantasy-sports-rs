@@ -37,8 +37,8 @@ impl LeagueSettings {
             league_type: if !yahoo_settings.uses_roster_import {
                 LeagueType::Redraft
             } else {
-                // how do I check if it's a keeper vs dynasty league
-                todo!()
+                // TODO: how do I check if it's a keeper vs dynasty league
+                LeagueType::Keeper
             },
             scoring: Some(ScoringSettings::from(yahoo_settings)),
             has_pick_trading: yahoo_settings.can_trade_draft_picks,
@@ -80,17 +80,17 @@ impl LeagueSettings {
     }
     pub fn formatted_settings(&self) -> Vec<(&'static str, String)> {
         vec![
-            ("league_type", self.league_type.to_string()),
-            ("draft_type", self.draft_type.to_string()),
-            ("has_playoffs", self.has_playoffs.to_string()),
-            ("waiver_type", self.waiver_type.to_string()),
-            ("playoff_start_week", self.playoff_start_week.to_string()),
-            ("num_playoff_teams", self.num_playoff_teams.to_string()),
-            ("max_keepers", self.max_keepers.to_string()),
-            ("has_pick_trading", self.has_pick_trading.to_string()),
-            ("trade_ratify_type", self.trade_ratify_type.to_string()),
-            ("trade_deadline", self.trade_deadline.to_string()),
-            ("start_week", self.start_week.to_string()),
+            ("Type", self.league_type.to_string()),
+            ("Max Keepers", self.max_keepers.to_string()),
+            ("Draft Type", self.draft_type.to_string()),
+            ("Start Week", self.start_week.to_string()),
+            ("Playoffs?", self.has_playoffs.to_string()),
+            ("Waiver Type", self.waiver_type.to_string()),
+            ("Playoffs Start", self.playoff_start_week.to_string()),
+            ("Playoff Teams", self.num_playoff_teams.to_string()),
+            ("Pick Trading?", self.has_pick_trading.to_string()),
+            ("Trade Approval", self.trade_ratify_type.to_string()),
+            ("Trade Deadline", self.trade_deadline.to_string()),
             // ("", ),
         ]
     }
