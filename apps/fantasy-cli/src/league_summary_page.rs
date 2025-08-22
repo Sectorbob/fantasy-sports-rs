@@ -137,6 +137,9 @@ fn render_league_details(
         "{} ('q' to quit, 'w' to welcome 'l' to leagues)",
         league.name()
     );
+
+    let settings = league.settings();
+
     let mut lines = vec![
         format!("League ID:    {}", league.id()),
         format!("Platform:     {}", league.platform()),
@@ -144,23 +147,23 @@ fn render_league_details(
         format!("Team Name:    {}", league.team_name()),
         format!("Record:       {}", league.record()),
         format!("Total Points: {}", format!("{:.2}", league.total_points())),
-        format!("Divisions:    {:?}", league.settings().divisions),
+        format!(
+            "Divisions:    {:?}",
+            match settings.divisions.is_empty() {
+                true => String::from("None"),
+                false => settings.divisions.join(","),
+            }
+        ),
         format!(
             "Total Txns:   {}",
             format!("{}", league.transactions().len())
         ),
     ];
-    league
-        .settings()
-        .formatted_settings()
-        .iter()
-        .for_each(|(k, v)| {
-            lines.push(format!("{}: {}", k, v));
-        });
-    if let Some(draft) = league.draft() {
-        lines.push(format!("Draft Type: {}", draft.draft_type));
-    }
-    // lines.push(format!("{}", league.raw()));
+
+    let fmt_settings = settings.formatted_settings();
+    fmt_settings.iter().for_each(|(k, v)| {
+        lines.push(format!("{key:<13} {v}", key = format!("{k}:")));
+    });
 
     let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
@@ -177,7 +180,14 @@ fn render_league_teams(
 ) {
     let rosters = league.rosters();
     let title = format!("Teams ({})", rosters.len(),);
-    let lines = rosters.iter().map(|r| r.team_name.clone()).collect::<Vec<_>>();
+    let lines = rosters
+        .iter()
+        .map(|r| {
+            let team_name = &r.team_name;
+            let record = league.record_for_team(r.id.clone());
+            format!("{team_name:<20} {record}")
+        })
+        .collect::<Vec<_>>();
     let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
     f.render_widget(paragraph, *row);

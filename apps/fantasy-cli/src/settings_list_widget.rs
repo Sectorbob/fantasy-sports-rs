@@ -10,7 +10,7 @@ use tui::{
 
 pub struct SettingsListWidget {
     title_override: Option<String>,
-    settings: Vec<(String, String)>,
+    settings: Vec<(&'static str, String)>,
 }
 impl SettingsListWidget {
     pub fn from_league(title_override: Option<String>, league: &League) -> Self {
@@ -42,7 +42,7 @@ impl SettingsListWidget {
         let rows = self
             .settings
             .iter()
-            .map(|(k, v)| Row::new(vec![Cell::from(k.as_str()), Cell::from(v.as_str())]))
+            .map(|(k, v)| Row::new(vec![Cell::from(*k), Cell::from(v.as_str())]))
             .collect::<Vec<Row>>();
 
         let table = Table::new(rows)

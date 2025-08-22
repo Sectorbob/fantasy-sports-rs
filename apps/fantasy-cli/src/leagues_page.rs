@@ -1,7 +1,7 @@
 use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
-use fantasy_core_rs::League;
+use fantasy_core_rs::{League, LeagueStatus};
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -13,6 +13,7 @@ use tui::{
 pub struct LeaguesPage {
     pub leagues: Vec<League>,
     selected: usize,
+    omit_incomplete: bool,
     // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
 }
 impl<'a> LeaguesPage {
@@ -20,13 +21,20 @@ impl<'a> LeaguesPage {
         LeaguesPage {
             leagues: vec![],
             selected: 0,
-            // terminal: terminal,
+            omit_incomplete: true, // terminal: terminal,
         }
     }
+
+    // pub fn leagues(&self) -> &Vec<League> {
+    //     &self.leagues
+    //         .iter()
+    //         .filter(|l| !self.omit_incomplete || l.status() != LeagueStatus::InComplete)
+    // }
 
     fn make_list(&self) -> Vec<ListItem<'a>> {
         self.leagues
             .iter()
+            // .filter(|l| !self.omit_incomplete || l.status() != LeagueStatus::InComplete)
             .map(|league| ListItem::new(league.to_string()))
             .collect()
     }
