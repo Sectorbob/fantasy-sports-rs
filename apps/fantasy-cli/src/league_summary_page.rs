@@ -178,13 +178,13 @@ fn render_league_teams(
     f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
     row: &tui::layout::Rect,
 ) {
-    let rosters = league.rosters();
-    let title = format!("Teams ({})", rosters.len(),);
-    let lines = rosters
+    let teams = league.teams();
+    let title = format!("Teams ({})", teams.len(),);
+    let lines = teams
         .iter()
-        .map(|r| {
-            let team_name = &r.team_name;
-            let record = league.record_for_team(r.id.clone());
+        .map(|team| {
+            let team_name = &team.team_name;
+            let record = league.record_for_roster(team.roster_id.clone());
             format!("{team_name:<20} {record}")
         })
         .collect::<Vec<_>>();

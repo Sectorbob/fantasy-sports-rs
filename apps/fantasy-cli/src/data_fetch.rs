@@ -97,7 +97,7 @@ async fn get_sleeper_leagues(
             })
             .await?;
 
-        leagues.push(league_context.with_team(ExternalId::new(
+        leagues.push(league_context.with_owner_id(ExternalId::new(
             fantasy_core_rs::Platform::Sleeper,
             sleeper_user_id.clone(),
         )));
@@ -165,7 +165,7 @@ async fn get_yahoo_leagues(
     }
     while let Some(yahoo_league) = yahoo_teams_tasks.try_next().await? {
         if let Some(user_guid) = &yahoo_user_guid {
-            leagues.push(yahoo_league.with_team(ExternalId {
+            leagues.push(yahoo_league.with_owner_id(ExternalId {
                 platform: fantasy_core_rs::Platform::Yahoo,
                 id: user_guid.clone(),
             }));
