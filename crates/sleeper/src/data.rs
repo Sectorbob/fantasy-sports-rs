@@ -479,7 +479,7 @@ pub struct League {
     pub season_type: SeasonType,
     pub season: String,
     pub scoring_settings: ScoringSettings,
-    pub roster_positions: Vec<String>,
+    pub roster_positions: Vec<RosterPosition>,
     pub previous_league_id: Option<String>, // "0" or null when there is no previous league
     pub name: String,
     pub league_id: String,
@@ -562,6 +562,8 @@ pub struct LeagueSettings {
     /// The final week to allow trading for your fantasy season. Trades must
     /// be accepted prior to the end of the final game of the week.
     pub trade_deadline: usize,
+    #[serde(default)]
+    pub reserve_slots: usize,
     #[serde(flatten)]
     pub other_data: HashMap<String, Number>,
 }
@@ -572,6 +574,18 @@ pub enum LeagueType {
     Redraft = 0,
     Keeper = 1,
     Dynasty = 2,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum RosterPosition {
+    QB,
+    RB,
+    WR,
+    TE,
+    FLEX,
+    K,
+    DEF,
+    BN,
 }
 
 #[derive(Serialize_repr, Deserialize_repr, Clone, Copy, Eq, PartialEq, Debug)]
