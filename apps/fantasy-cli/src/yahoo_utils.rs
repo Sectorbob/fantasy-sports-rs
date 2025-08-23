@@ -2,7 +2,6 @@ use fantasy_core_rs::LeagueAccessor;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
-    error::Error as StdError,
     io::{Error as IOError, ErrorKind},
 };
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -11,7 +10,7 @@ use yahoo_fantasy_rs::{
     Team, TeamStandings, Token, Transaction,
 };
 
-pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdError>> {
+pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), yahoo_fantasy_rs::Error> {
     let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
@@ -25,7 +24,11 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
     let enable_check_team_in_seasons = true;
 
     debug!("Building Yahoo Fantasy Client...");
-    let client = league_accessor.yahoo_cli.unwrap();
+    let client = league_accessor
+        .yahoo_cli
+        .ok_or(yahoo_fantasy_rs::Error::UnknownError(
+            "no yahoo_cli is set".to_string(),
+        ))?;
     debug!("Yahoo Fantasy Client built");
 
     let public_league_key = LeagueKey::new(GameKey::Id(223), 431);
@@ -47,8 +50,7 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
                 vec![GameCode::NFL],
                 seasons.iter().map(|s| s.as_str()).collect(),
             )
-            .await
-            .unwrap();
+            .await?;
 
         let mut game_codes: HashSet<&GameCode> = HashSet::new();
         for game in games.iter() {
@@ -70,22 +72,22 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
     }
 
     if enable_check_game {
-        let game = client.get_game(GameKey::Code(GameCode::NFL)).await.unwrap();
+        let game = client.get_game(GameKey::Code(GameCode::NFL)).await?;
         println!("Game: {:#?}", game);
     }
 
     if enable_check_teams {
-        let teams = client.get_teams_for_user(GameKey::Id(371)).await.unwrap();
+        let teams = client.get_teams_for_user(GameKey::Id(371)).await?;
         println!("Teams: {:#?}", teams);
     }
 
     if enable_check_league {
-        let league = client.get_league(&ecr_2017).await.unwrap();
+        let league = client.get_league(&ecr_2017).await?;
         println!("League: {:#?}", league);
 
         let mut team_standings: HashMap<String, &TeamStandings> = HashMap::new();
 
-        let standings = client.get_league_standings(&ecr_2017).await.unwrap();
+        let standings = client.get_league_standings(&ecr_2017).await?;
 
         for team in &standings.teams {
             if let Some(standings) = &team.team_standings {
@@ -93,7 +95,7 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
             }
         }
 
-        let teams = client.get_teams_in_league(&ecr_2017).await.unwrap();
+        let teams = client.get_teams_in_league(&ecr_2017).await?;
         println!("Teams: {:#?}", teams);
         for team in teams {
             println!(" {}", team.name);
@@ -124,16 +126,14 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
     if enable_check_league_scoreboard {
         let scoreboard = client
             .get_league_scoreboard(&public_league_key, None, None)
-            .await
-            .unwrap();
+            .await?;
         println!("Scoreboard: {:#?}", scoreboard);
     }
 
     if enable_check_league_settings {
         let league_settings = client
             .get_league_settings(&LeagueKey::new(GameKey::Id(371), 20028))
-            .await
-            .unwrap();
+            .await?;
         println!("League Settings: {:#?}", league_settings);
     }
 
@@ -142,18 +142,12 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), Box<dyn StdErro
     }
 
     if enable_league_transactions {
-        let transactions = client
-            .get_league_transactions(&public_league_key)
-            .await
-            .unwrap();
+        let transactions = client.get_league_transactions(&public_league_key).await?;
         fancy_navigate_transactions(&transactions);
     }
 
     if enable_check_players {
-        let players = client
-            .get_players_for_league(&ecr_2017, None)
-            .await
-            .unwrap();
+        let players = client.get_players_for_league(&ecr_2017, None).await?;
         info!("got {} yahoo players in response", players.len());
 
         let mut player_statuses: HashSet<String> = HashSet::new();

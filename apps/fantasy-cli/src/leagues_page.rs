@@ -40,11 +40,9 @@ impl<'a> LeaguesPage {
     }
 
     pub fn select_by_league_id(&mut self, league_id: String) {
-        self.selected = self
-            .leagues
-            .iter()
-            .position(|l| l.id() == league_id)
-            .unwrap()
+        if let Some(index) = self.leagues.iter().position(|l| l.id() == league_id) {
+            self.selected = index
+        }
     }
 
     pub fn selected(&self) -> Option<&League> {

@@ -30,7 +30,7 @@ fn get_temp_dir() -> PathBuf {
     }
     #[cfg(windows)]
     {
-        let exe = env::current_exe().unwrap();
+        let exe = env::current_exe().expect("failed to get current exe");
         let mut components = exe.components();
         let root = components.next().unwrap();
         PathBuf::from(root.as_os_str())

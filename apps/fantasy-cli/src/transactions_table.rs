@@ -84,21 +84,13 @@ impl TransactionsPage {
                                 .find(|r| &r.id == id)
                                 .map_or(id.clone(), |r| r.team_name.clone())
                         })
-                        .unwrap(),
+                        .unwrap_or("N/A".to_string()),
                     _ => roster_ids
                         .iter()
                         .map(String::clone)
                         .collect::<Vec<_>>()
                         .join(", "),
-                    // 1 => rosters.iter().next().map(|r| r.id.clone()).unwrap(),
-                    // _ => rosters
-                    //     .iter()
-                    //     .map(|r| r.id.clone())
-                    //     .collect::<Vec<_>>()
-                    //     .join(", "),
-                    // _ => String::from("multiple")
                 };
-                // let players =
 
                 Row::new(vec![
                     Cell::from(txn.ts().to_string()),

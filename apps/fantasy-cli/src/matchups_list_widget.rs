@@ -82,7 +82,7 @@ impl MatchupsList {
             let mut weeks: Vec<String> = week_set.into_iter().collect();
             weeks.sort();
             if weeks.len() == 1 {
-                format!("Week {}", weeks.first().unwrap())
+                format!("Week {}", weeks.first().unwrap_or(&"/N/A".to_string()))
             } else {
                 format!("Matchup List {}", weeks.join(","))
             }

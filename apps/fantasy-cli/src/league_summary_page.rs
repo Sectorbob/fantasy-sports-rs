@@ -7,7 +7,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     terminal::CompletedFrame,
     text::Text,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 
 use crate::{
@@ -55,6 +55,13 @@ impl<'a> LeagueSummaryPage<'a> {
 
         terminal.draw(|f| {
             let size = f.size();
+            let block = Block::default()
+                .title(format!(
+                    "{} ('q' to quit, 'w' to welcome, 'l' to leagues, 'b' to go back, 'd' to draftboard, 'm' to matchups, 't' to transactions)",
+                    self.league.map_or("N/A".to_string(), |l| l.name())
+                ))
+                .borders(Borders::all());
+
             if let Some(league) = &self.league {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
@@ -64,7 +71,7 @@ impl<'a> LeagueSummaryPage<'a> {
                             .map(|_| Constraint::Percentage(100 / num_of_columns))
                             .collect::<Vec<Constraint>>(),
                     )
-                    .split(size);
+                    .split(block.inner(size));
 
                 // For each column, split into two rows
                 for (i, col) in chunks.iter().enumerate() {
@@ -122,8 +129,9 @@ impl<'a> LeagueSummaryPage<'a> {
             } else {
                 let text = Text::from("No league selected.");
                 let paragraph = Paragraph::new(text).block(Block::default().borders(Borders::NONE));
-                f.render_widget(paragraph, size);
+                f.render_widget(paragraph, block.inner(size));
             }
+            f.render_widget(block, size);
         })
     }
 }
@@ -133,10 +141,7 @@ fn render_league_details(
     f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
     row: &tui::layout::Rect,
 ) {
-    let title = format!(
-        "{} ('q' to quit, 'w' to welcome 'l' to leagues)",
-        league.name()
-    );
+    let title = "Summary";
 
     let settings = league.settings();
 

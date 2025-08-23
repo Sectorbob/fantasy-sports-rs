@@ -62,15 +62,6 @@ impl DraftBoardPage {
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);
-        // let scoreboards = league.scoreboards();
-        // let rows_needed_in_each_tile = scoreboards
-        //     .iter()
-        //     .map(|s| s.matchups.len())
-        //     .max()
-        //     .unwrap_or(6);
-        // let min_tile_height = rows_needed_in_each_tile + 2;
-        // let weeks = scoreboards.len();
-        // let rows = area.height as usize / min_tile_height;
 
         let chunks = Layout::default()
             .direction(Direction::Horizontal)

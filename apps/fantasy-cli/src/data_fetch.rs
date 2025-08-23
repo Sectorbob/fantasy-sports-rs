@@ -54,15 +54,14 @@ async fn get_sleeper_leagues(
     sleeper_sport: &sleeper::Sport,
     // players: &HashMap<String, sleeper::Player>,
 ) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
+    let sleeper_cli = league_accessor
+        .sleeper_cli
+        .as_ref()
+        .ok_or(core::Error::DevError("sleeper_cli not set".to_string()))?;
+
     let mut sleeper_leagues_for_season_tasks: FuturesUnordered<_> = seasons
         .iter()
-        .map(|season| {
-            league_accessor
-                .sleeper_cli
-                .as_ref()
-                .unwrap()
-                .get_leagues_for_user(sleeper_user_id, sleeper_sport, season)
-        })
+        .map(|season| sleeper_cli.get_leagues_for_user(sleeper_user_id, sleeper_sport, season))
         .collect();
 
     // let mut sleeper_leagues_tasks = FuturesUnordered::new();
@@ -111,27 +110,29 @@ async fn get_yahoo_leagues(
     seasons: &[String],
     yahoo_game_code: yahoo::GameCode,
 ) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
-    let games = league_accessor
+    let yahoo_cli = league_accessor
         .yahoo_cli
         .as_ref()
-        .unwrap()
+        .ok_or(core::Error::DevError("yahoo_cli not set".to_string()))?;
+
+    let games = yahoo_cli
         .get_games(
             vec![yahoo_game_code],
             seasons.iter().map(|s| s.as_str()).collect(),
         )
-        .await
-        .unwrap();
+        .await?;
 
     let mut yahoo_teams: Vec<yahoo::Team> = vec![];
     let mut user_ids = HashSet::new();
     for game in games {
         let game_key: yahoo::GameKey = yahoo::GameKey::Id(game.game_id);
-        let teams_in_season = league_accessor
-            .yahoo_cli
-            .as_ref()
-            .unwrap()
-            .get_teams_for_user(game_key)
-            .await?;
+        let teams_in_season = match yahoo_cli.get_teams_for_user(game_key.clone()).await {
+            Ok(t) => t,
+            Err(e) => {
+                log::warn!("failed to fetch yahoo teams for user in {game_key}: {e}");
+                continue;
+            }
+        };
         for team in teams_in_season {
             user_ids.extend(team.managers().iter().filter_map(|m| {
                 if m.is_current_login.unwrap_or(false) {

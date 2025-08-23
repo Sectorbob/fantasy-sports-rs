@@ -1,13 +1,13 @@
 use std::env;
 
-use fantasy_core_rs::{LeagueAccessor, sleeper_utils};
+use fantasy_core_rs as core;
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 
 mod config;
 mod constants;
-mod draft_board;
 mod data_fetch;
+mod draft_board;
 mod draft_picks_widget;
 mod league_history_owner_records;
 mod league_matchups_all;
@@ -21,9 +21,9 @@ mod tui;
 mod yahoo_utils;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Logger::try_with_str("info") // set log level
-        .unwrap()
+async fn main() -> Result<(), core::Error> {
+    let logger = Logger::try_with_str("info")
+        .map_err(|e| core::Error::new(format!("failed to set log level: {e}")))?
         .log_to_file(FileSpec::default().suppress_timestamp())
         .format(flexi_logger::detailed_format)
         // .rotate(
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_mode(WriteMode::BufferAndFlush)
         // .directory("log_files") // optional: log file directory
         .start()
-        .unwrap();
+        .map_err(|e| core::Error::new(format!("failed to start logger: {e}")))?;
 
     info!("Starting the application...");
 
@@ -46,7 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Setup Core LeagueAccessor
-    let mut fantasy_league_accessor = LeagueAccessor::new().with_cache_dir(config::cache_dir());
+    let mut fantasy_league_accessor =
+        core::LeagueAccessor::new().with_cache_dir(config::cache_dir());
     fantasy_league_accessor
         .init()
         .await
@@ -57,10 +58,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     debug_assert!(fantasy_league_accessor.yahoo_enabled(), "yahoo not enabled");
 
-    match args[1].to_lowercase().as_str() {
-        "yahoo" => yahoo_utils::exec(fantasy_league_accessor).await,
-        "sleeper" => sleeper_utils::exec().await,
-        "tui" => tui::exec(fantasy_league_accessor).await,
+    let result = match args[1].to_lowercase().as_str() {
+        "yahoo" => yahoo_utils::exec(fantasy_league_accessor)
+            .await
+            .map_err(|e| core::Error::YahooError(e)),
+        "sleeper" => core::sleeper_utils::exec()
+            .await
+            .map_err(|e| core::Error::DevError(format!("sleeper cli quit {e:?}"))),
+        "tui" => tui::exec(fantasy_league_accessor)
+            .await
+            .map_err(|e| core::Error::DevError(format!("tui quit {e:?}"))),
         _ => panic!("BOOM!"),
+    };
+    if let Err(e) = result {
+        log::error!("app quit: {e:?}");
+        eprintln!("app quit: {e:?}");
     }
+
+    logger.flush();
+
+    Ok(())
 }
