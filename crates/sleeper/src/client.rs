@@ -5,7 +5,7 @@ use reqwest;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    Draft,
+    Draft, DraftPickMove, SportState,
     cache::{Cacheable, FileSystemCacher},
     data::{
         Bracket, DraftPick, League, Matchup, Player, PlayoffBracketEntry, Roster, Sport,
@@ -272,16 +272,22 @@ impl Client {
             .await
     }
 
-    // /// This endpoint retrieves all traded picks in a league, including future
-    // /// picks.
-    // pub async fn get_traded_picks<T: Id>(&self, _league_id: T) -> Result<Vec<Value>, Error> {
-    //     todo!("implement get traded picks")
-    // }
+    /// This endpoint retrieves all traded picks in a league, including future
+    /// picks.
+    pub async fn get_traded_picks_in_league<T: Id>(
+        &self,
+        league_id: T,
+    ) -> Result<Vec<DraftPickMove>, Error> {
+        let league_id = league_id.to_string();
+        self.get_traded_picks_in_league_request(league_id.as_str())
+            .send()
+            .await
+    }
 
-    // /// This endpoint returns information about the current state for any sport.
-    // pub async fn get_sport_state(&self, sport: &Sport) -> Result<(), Error> {
-    //     todo!("implement get {sport} state")
-    // }
+    /// This endpoint returns information about the current state for any sport.
+    pub async fn get_sport_state(&self, sport: &Sport) -> Result<SportState, Error> {
+        self.get_sport_state_request(sport).send().await
+    }
 
     /// This endpoint retrieves all drafts by a user.
     pub async fn get_drafts_for_user<T: Id>(
@@ -434,6 +440,22 @@ impl Client {
         }
     }
 
+    pub fn get_traded_picks_in_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetTradedPicksInLeague { league_id },
+        }
+    }
+
+    pub fn get_sport_state_request<'a>(&'a self, sport: &'a Sport) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: true, // don't rely on cache for this request
+            ctx: RequestContext::GetSportState { sport },
+        }
+    }
+
     pub fn get_drafts_for_user_request<'a>(
         &'a self,
         user_id: &'a str,
@@ -571,6 +593,12 @@ pub enum RequestContext<'a> {
         league_id: &'a str,
         week: &'a str,
     },
+    GetTradedPicksInLeague {
+        league_id: &'a str,
+    },
+    GetSportState {
+        sport: &'a Sport,
+    },
     GetDraftsForUser {
         user_id: &'a str,
         sport: &'a Sport,
@@ -585,6 +613,7 @@ pub enum RequestContext<'a> {
     GetDraftPicks {
         draft_id: &'a str,
     },
+
     GetPlayoffBracket {
         league_id: &'a str,
         is_losers_bracket: bool,
@@ -614,6 +643,10 @@ impl<'a> RequestContext<'a> {
             RequestContext::GetTransactions { league_id, week } => {
                 format!("/league/{league_id}/transactions/{week}")
             }
+            RequestContext::GetTradedPicksInLeague { league_id } => {
+                format!("/league/{league_id}/traded_picks")
+            }
+            RequestContext::GetSportState { sport } => format!("/state/{sport}"),
             RequestContext::GetDraftsForUser {
                 user_id,
                 sport,
@@ -666,6 +699,8 @@ impl<'a> RequestContext<'a> {
             RequestContext::GetUsersForLeague { .. } => None,
             RequestContext::GetMatchups { .. } => None,
             RequestContext::GetTransactions { .. } => None,
+            RequestContext::GetTradedPicksInLeague { .. } => None,
+            RequestContext::GetSportState { .. } => None,
             RequestContext::GetDraftsForUser { .. } => None,
             RequestContext::GetDraftsForLeague { .. } => None,
             RequestContext::GetDraft { .. } => None,
@@ -677,9 +712,10 @@ impl<'a> RequestContext<'a> {
 
 #[cfg(test)]
 mod client_tests {
-    use crate::{SeasonType, Sport, TrendType, data::ScoringSettings};
+    use crate::{SeasonType, Sport, SportState, TrendType, data::ScoringSettings};
 
     use super::Client;
+    use chrono::NaiveDate;
     use flate2::read::GzDecoder;
     use std::{
         collections::{HashMap, HashSet},
@@ -1261,6 +1297,71 @@ mod client_tests {
             .unwrap();
         assert_eq!(Some(10), losers_bracket.champion()); // rob bob
         assert_eq!(Some(6), losers_bracket.runner_up()); // rich b shafer
+    }
+
+    #[tokio::test]
+    async fn test_traded_picks_for_league() {
+        let league_id = "164974877262287888".to_string();
+        let json_body =
+            fs::read_to_string(format!("testdata/v1/league/{league_id}/traded_picks.json"))
+                .unwrap();
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/league/{league_id}/traded_picks")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
+            .mount(&mock_server)
+            .await;
+        let traded_draft_picks = client.get_traded_picks_in_league(league_id).await.unwrap();
+        assert_eq!(50, traded_draft_picks.len());
+    }
+
+    #[tokio::test]
+    async fn test_sport_state() {
+        let cases = [
+            (
+                Sport::NFL,
+                SportState {
+                    week: 1,
+                    season_type: SeasonType::Regular,
+                    season_start_date: NaiveDate::parse_from_str("2025-09-04", "%Y-%m-%d").unwrap(),
+                    season: "2025".to_string(),
+                    previous_season: "2024".to_string(),
+                    leg: 1,
+                    league_season: "2025".to_string(),
+                    league_create_season: "2025".to_string(),
+                    display_week: 1,
+                    season_has_scores: true,
+                },
+            ),
+            (
+                Sport::NBA,
+                SportState {
+                    week: 0,
+                    season_type: SeasonType::Off,
+                    season_start_date: NaiveDate::parse_from_str("2025-10-21", "%Y-%m-%d").unwrap(),
+                    season: "2025".to_string(),
+                    previous_season: "2024".to_string(),
+                    leg: 0,
+                    league_season: "2025".to_string(),
+                    league_create_season: "2025".to_string(),
+                    display_week: 0,
+                    season_has_scores: true,
+                },
+            ),
+        ];
+        let (mock_server, client) = setup().await;
+        for (sport, expected_state) in cases {
+            let json_body = fs::read_to_string(format!("testdata/v1/state/{sport}.json")).unwrap();
+            Mock::given(method("GET"))
+                .and(path(format!("/state/{sport}")))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_raw(json_body, "application/json"),
+                )
+                .mount(&mock_server)
+                .await;
+            let sport_state = client.get_sport_state(&sport).await.unwrap();
+            debug_assert_eq!(expected_state, sport_state, "sport state does not match");
+        }
     }
 }
 

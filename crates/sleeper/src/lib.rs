@@ -8,6 +8,6 @@ pub use data::{
     Bracket, BracketTeam, Draft, DraftPick, DraftPickMove, DraftSettings, DraftType,
     LastMessageDetails, League, LeagueSettings, LeagueStatus, LeagueType, LeagueUserDetails,
     Matchup, Player, PlayoffBracketEntry, PlayoffType, Roster, RosterPosition, ScoringSettings,
-    SeasonType, Sport, Transaction, TransactionStatus, TransactionType, TrendType, TrendingPlayer,
-    User, WaiverType,
+    SeasonType, Sport, SportState, Transaction, TransactionStatus, TransactionType, TrendType,
+    TrendingPlayer, User, WaiverType,
 };

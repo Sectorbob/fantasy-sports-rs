@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 use serde_json::{Number, Value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -472,6 +472,7 @@ pub enum SeasonType {
     Regular,
     Post,
     Pre,
+    Off, //offseason
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -908,6 +909,28 @@ pub struct DraftPickMetadata {
     pub status: String, // known value: Active
     pub team: String,   // team abbreviation
     pub years_exp: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct SportState {
+    /// week
+    pub week: usize,
+    /// pre, post, regular
+    pub season_type: SeasonType,
+    /// regular season start
+    pub season_start_date: NaiveDate,
+    /// current season
+    pub season: String,
+    pub previous_season: String,
+    /// week of regular season
+    pub leg: usize,
+    /// active season for leagues
+    pub league_season: String,
+    /// flips in December
+    pub league_create_season: String,
+    /// Which week to display in UI, can be different than week
+    pub display_week: usize,
+    pub season_has_scores: bool,
 }
 
 fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
