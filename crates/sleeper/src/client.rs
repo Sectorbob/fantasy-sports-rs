@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display, path::PathBuf, sync::atomic::AtomicU64};
 
 use log::{debug, error, info};
-use reqwest::{Request, StatusCode};
+use reqwest;
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -55,7 +55,7 @@ impl Client {
         &self,
         path: String,
         filters: Option<Vec<(&str, String)>>,
-    ) -> Result<Request, reqwest::Error> {
+    ) -> Result<reqwest::Request, reqwest::Error> {
         let url = format!("{}{}", self.base_url, path);
 
         let mut request_builder = self.client.get(&url).header("Accept", "application/json");
@@ -70,6 +70,7 @@ impl Client {
         &self,
         path: String,
         filters: Option<Vec<(&str, String)>>,
+        force_update: bool,
     ) -> Result<T, Error> {
         let req = match self.build_get_json_request(path, filters) {
             Ok(req) => req,
@@ -83,7 +84,9 @@ impl Client {
         let url = req.url().to_string();
 
         // check cache if exists (TODO: some time-based logic)
-        if let Some(cacher) = &self.cache {
+        if force_update {
+            info!("GET {url} force skip cache");
+        } else if let Some(cacher) = &self.cache {
             if let Some(body_text) = cacher.load_cache(url.as_str()).await {
                 debug!("GET {} cache hit", url);
                 return match serde_json::from_str(&body_text) {
@@ -103,7 +106,7 @@ impl Client {
 
         match self.client.execute(req).await {
             Ok(resp) => match resp.status() {
-                StatusCode::OK => {
+                reqwest::StatusCode::OK => {
                     if let Some(cacher) = &self.cache {
                         // load to memory buffer then save to file and return deserialized struct
                         match resp.text().await {
@@ -143,7 +146,7 @@ impl Client {
                         }
                     }
                 }
-                StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
+                reqwest::StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
                 code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
             },
             // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
@@ -159,125 +162,332 @@ impl Client {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Since rosters and draft picks contain Player IDs which look like
+    /// "1042", "2403", "CAR", etc, you will need to know what those IDs map
+    /// to. The /players call provides you the map necessary to look up any
+    /// player.
+    ///
+    /// You should save this information on your own servers as this is not
+    /// intended to be called every time you need to look up players due to the
+    /// filesize being close to 5MB in size. You do not need to call this
+    /// endpoint more than once per day.
     pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
-        self.get_json(format!("/players/{}", sport), None).await
+        self.fetch_all_players_request(sport).send().await
     }
 
+    /// You can use this endpoint to get a list of trending players based on
+    /// adds or drops in the past 24 hours.
     pub async fn get_trending_players(
         &self,
         sport: &Sport,
-        _type: TrendType,
-        lookback_hours: Option<u32>, //TODO: implement this filter
-        limit: Option<u32>,          //TODO: implement this filter
+        r#type: TrendType,
+        lookback_hours: Option<u32>,
+        limit: Option<u32>,
     ) -> Result<Vec<TrendingPlayer>, Error> {
-        let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
-            .into_iter()
-            .filter_map(|(k, v)| match v {
-                Some(0) => None,
-                Some(value) => Some((k, value.to_string())),
-                None => None,
-            })
-            .collect::<Vec<(&str, String)>>();
-        let filters = if filters_vec.is_empty() {
-            None
-        } else {
-            Some(filters_vec)
-        };
-
-        self.get_json(format!("/players/{}/trending/{}", sport, _type), filters)
+        self.get_trending_players_request(sport, &r#type, &lookback_hours, &limit)
+            .send()
             .await
     }
 
-    pub async fn get_user(&self, user: String) -> Result<User, Error> {
-        self.get_json(format!("/user/{}", user.trim()), None).await
+    /// Sleeper does not perform authentication as their API is read-only and
+    /// only contains league information.
+    ///
+    /// Via the user resource, you can GET the user object by either providing
+    /// the username or user_id of the user.
+    pub async fn get_user<T: Id>(&self, user: T) -> Result<User, Error> {
+        let user: String = user.to_string();
+        self.get_user_request(user.as_str()).send().await
     }
 
+    /// Retreives all of the leagues that the user (provided numerical user_id)
+    /// belongs to in a season.
     pub async fn get_leagues_for_user<T: Id>(
         &self,
         user_id: T,
         sport: &Sport,
-        season: &String,
+        season: T,
     ) -> Result<Vec<League>, Error> {
-        self.get_json(
-            format!("/user/{}/leagues/{}/{}", user_id, sport, season),
-            None,
-        )
-        .await
+        let user_id = user_id.to_string();
+        let season = season.to_string();
+        self.get_leagues_for_user_request(user_id.as_str(), sport, season.as_str())
+            .send()
+            .await
     }
 
+    /// This endpoint retrieves a specific league.
     pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, Error> {
-        self.get_json(format!("/league/{league_id}"), None).await
+        let league_id: String = league_id.to_string();
+        self.get_league_request(league_id.as_str()).send().await
     }
 
-    pub async fn get_rosters_for_league<T: Id>(&self, league_id: T) -> Result<Vec<Roster>, Error> {
-        self.get_json(format!("/league/{league_id}/rosters"), None)
+    /// This endpoint retrieves all rosters in a league.
+    pub async fn get_rosters_in_league<T: Id>(&self, league_id: T) -> Result<Vec<Roster>, Error> {
+        let league_id = league_id.to_string();
+        self.get_rosters_in_league_request(league_id.as_str())
+            .send()
             .await
     }
 
+    /// This endpoint retrieves all users in a league.
+    ///
+    /// This also includes each user's display_name, avatar, and their metadata
+    /// which sometimes includes a nickname they gave their team.
     pub async fn get_users_for_league<T: Id>(&self, league_id: T) -> Result<Vec<User>, Error> {
-        self.get_json(format!("/league/{league_id}/users"), None)
+        let league_id = league_id.to_string();
+        self.get_users_for_league_request(league_id.as_str())
+            .send()
             .await
     }
 
+    /// This endpoint retrieves all matchups in a league for a given week. Each
+    /// object in the list represents one team. The two teams with the same
+    /// matchup_id match up against each other.
+    ///
+    /// The starters is in an ordered list of player_ids, and players is a list
+    /// of all player_ids in this matchup.
+    ///
+    /// The bench can be deduced by removing the starters from the players field.
     pub async fn get_matchups<T: Id, I: Id>(
         &self,
         league_id: T,
         week: I,
     ) -> Result<Vec<Matchup>, Error> {
-        self.get_json(format!("/league/{}/matchups/{}", league_id, week), None)
+        let league_id = league_id.to_string();
+        let week = week.to_string();
+        self.get_matchups_request(league_id.as_str(), week.as_str())
+            .send()
             .await
     }
 
+    /// This endpoint retrieves all free agent transactions, waivers and trades
     pub async fn get_transactions<T: Id, I: Id>(
         &self,
         league_id: T,
         week: I,
     ) -> Result<Vec<Transaction>, Error> {
-        self.get_json(format!("/league/{league_id}/transactions/{week}"), None)
+        let league_id = league_id.to_string();
+        let week = week.to_string();
+        self.get_transactions_request(league_id.as_str(), week.as_str())
+            .send()
             .await
     }
 
+    // /// This endpoint retrieves all traded picks in a league, including future
+    // /// picks.
+    // pub async fn get_traded_picks<T: Id>(&self, _league_id: T) -> Result<Vec<Value>, Error> {
+    //     todo!("implement get traded picks")
+    // }
+
+    // /// This endpoint returns information about the current state for any sport.
+    // pub async fn get_sport_state(&self, sport: &Sport) -> Result<(), Error> {
+    //     todo!("implement get {sport} state")
+    // }
+
+    /// This endpoint retrieves all drafts by a user.
     pub async fn get_drafts_for_user<T: Id>(
         &self,
         user_id: T,
-        sport: Sport,
-        season: String,
+        sport: &Sport,
+        season: T,
     ) -> Result<Vec<Draft>, Error> {
-        self.get_json(format!("/user/{user_id}/drafts/{sport}/{season}"), None)
+        let user_id = user_id.to_string();
+        let season = season.to_string();
+        self.get_drafts_for_user_request(user_id.as_str(), sport, season.as_str())
+            .send()
             .await
     }
 
+    /// This endpoint retrieves all drafts for a league. Keep in mind that a
+    /// league can have multiple drafts, especially dynasty leagues.
+    ///
+    /// Drafts are sorted by most recent to earliest. Most leagues should only
+    /// have one draft.
     pub async fn get_drafts_for_league<T: Id>(&self, league_id: T) -> Result<Vec<Draft>, Error> {
-        self.get_json(format!("/league/{league_id}/drafts"), None)
+        let league_id = league_id.to_string();
+        self.get_drafts_for_league_request(league_id.as_str())
+            .send()
             .await
     }
 
+    /// This endpoint retrieves a specific draft.
     pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, Error> {
-        self.get_json(format!("/draft/{draft_id}"), None).await
+        let draft_id = draft_id.to_string();
+        self.get_draft_request(draft_id.as_str()).send().await
     }
 
+    /// This endpoint retrieves all picks in a draft.
     pub async fn get_draft_picks<T: Id>(&self, draft_id: T) -> Result<Vec<DraftPick>, Error> {
-        self.get_json(format!("/draft/{draft_id}/picks"), None)
-            .await
+        let draft_id = draft_id.to_string();
+        self.get_draft_picks_request(draft_id.as_str()).send().await
     }
 
+    /// This endpoint retrieves the playoff bracket for a league for 4, 6, and
+    /// 8 team playoffs.
+    ///
+    /// Each row represents a matchup between 2 teams.
     pub async fn get_playoff_bracket<T: Id>(
         &self,
         league_id: T,
-        losers: bool,
+        is_losers_bracket: bool,
     ) -> Result<Bracket, Error> {
-        let bracket_name = if losers {
-            "losers_bracket"
-        } else {
-            "winners_bracket"
-        };
+        let league_id = league_id.to_string();
         let bracket_matchups: Vec<PlayoffBracketEntry> = self
-            .get_json(format!("/league/{league_id}/{bracket_name}"), None)
+            .get_playoff_bracket_request(league_id.as_str(), is_losers_bracket)
+            .send()
             .await?;
         Ok(Bracket {
             matchups: bracket_matchups,
-            is_losers: losers,
+            is_losers: is_losers_bracket,
         })
+    }
+
+    pub fn get_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetLeague { league_id },
+        }
+    }
+    pub fn fetch_all_players_request<'a>(&'a self, sport: &'a Sport) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::FetchAllPlayers { sport },
+        }
+    }
+    pub fn get_trending_players_request<'a>(
+        &'a self,
+        sport: &'a Sport,
+        r#type: &'a TrendType,
+        lookback_hours: &'a Option<u32>, //TODO: implement this filter
+        limit: &'a Option<u32>,
+    ) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetTrendingPlayers {
+                sport,
+                r#type,
+                lookback_hours,
+                limit,
+            },
+        }
+    }
+    pub fn get_user_request<'a>(&'a self, user: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetUser { user },
+        }
+    }
+
+    pub fn get_leagues_for_user_request<'a>(
+        &'a self,
+        user_id: &'a str,
+        sport: &'a Sport,
+        season: &'a str,
+    ) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetLeaguesForUser {
+                user_id,
+                sport,
+                season,
+            },
+        }
+    }
+
+    pub fn get_rosters_in_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetRostersInLeague { league_id },
+        }
+    }
+
+    pub fn get_users_for_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetUsersForLeague { league_id },
+        }
+    }
+
+    pub fn get_matchups_request<'a>(&'a self, league_id: &'a str, week: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetMatchups { league_id, week },
+        }
+    }
+
+    pub fn get_transactions_request<'a>(
+        &'a self,
+        league_id: &'a str,
+        week: &'a str,
+    ) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetTransactions { league_id, week },
+        }
+    }
+
+    pub fn get_drafts_for_user_request<'a>(
+        &'a self,
+        user_id: &'a str,
+        sport: &'a Sport,
+        season: &'a str,
+    ) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetDraftsForUser {
+                user_id,
+                sport,
+                season,
+            },
+        }
+    }
+
+    pub fn get_drafts_for_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetDraftsForLeague { league_id },
+        }
+    }
+
+    pub fn get_draft_request<'a>(&'a self, draft_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetDraft { draft_id },
+        }
+    }
+
+    pub fn get_draft_picks_request<'a>(&'a self, draft_id: &'a str) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetDraftPicks { draft_id },
+        }
+    }
+
+    pub fn get_playoff_bracket_request<'a>(
+        &'a self,
+        league_id: &'a str,
+        is_losers_bracket: bool,
+    ) -> Request<'a> {
+        Request {
+            cli: self,
+            force_update: false,
+            ctx: RequestContext::GetPlayoffBracket {
+                league_id,
+                is_losers_bracket,
+            },
+        }
     }
 
     // user with basketball league: ManagerSilent58
@@ -301,11 +511,168 @@ impl Client {
 }
 
 pub fn avatar_url(avatar_id: String) -> String {
-    format!("{}/avatars/{}", SLEEPER_CDN_BASE_URL, avatar_id)
+    format!("{SLEEPER_CDN_BASE_URL}/avatars/{avatar_id}")
 }
 
 pub fn avatar_thumbnail_url(avatar_id: String) -> String {
-    format!("{}/avatars/thumbs/{}", SLEEPER_CDN_BASE_URL, avatar_id)
+    format!("{SLEEPER_CDN_BASE_URL}/avatars/thumbs/{avatar_id}")
+}
+
+pub struct Request<'a> {
+    cli: &'a Client,
+    force_update: bool,
+    ctx: RequestContext<'a>,
+}
+impl<'a> Request<'a> {
+    pub fn force_update(mut self) -> Self {
+        self.force_update = true;
+        self
+    }
+
+    pub async fn send<T: DeserializeOwned>(&self) -> Result<T, Error> {
+        self.cli
+            .get_json(self.ctx.url(), self.ctx.filters(), self.force_update)
+            .await
+    }
+}
+
+pub enum RequestContext<'a> {
+    GetLeague {
+        league_id: &'a str,
+    },
+    FetchAllPlayers {
+        sport: &'a Sport,
+    },
+    GetTrendingPlayers {
+        sport: &'a Sport,
+        r#type: &'a TrendType,
+        lookback_hours: &'a Option<u32>,
+        limit: &'a Option<u32>,
+    },
+    GetUser {
+        user: &'a str,
+    },
+    GetLeaguesForUser {
+        user_id: &'a str,
+        sport: &'a Sport,
+        season: &'a str,
+    },
+    GetRostersInLeague {
+        league_id: &'a str,
+    },
+    GetUsersForLeague {
+        league_id: &'a str,
+    },
+    GetMatchups {
+        league_id: &'a str,
+        week: &'a str,
+    },
+    GetTransactions {
+        league_id: &'a str,
+        week: &'a str,
+    },
+    GetDraftsForUser {
+        user_id: &'a str,
+        sport: &'a Sport,
+        season: &'a str,
+    },
+    GetDraftsForLeague {
+        league_id: &'a str,
+    },
+    GetDraft {
+        draft_id: &'a str,
+    },
+    GetDraftPicks {
+        draft_id: &'a str,
+    },
+    GetPlayoffBracket {
+        league_id: &'a str,
+        is_losers_bracket: bool,
+    },
+}
+impl<'a> RequestContext<'a> {
+    pub fn url(&self) -> String {
+        match self {
+            RequestContext::GetLeague { league_id } => format!("/league/{league_id}"),
+            RequestContext::FetchAllPlayers { sport } => format!("/players/{sport}"),
+            RequestContext::GetTrendingPlayers { sport, r#type, .. } => {
+                format!("/players/{sport}/trending/{}", r#type)
+            }
+            RequestContext::GetUser { user } => format!("/user/{user}"),
+            RequestContext::GetLeaguesForUser {
+                user_id,
+                sport,
+                season,
+            } => format!("/user/{user_id}/leagues/{sport}/{season}"),
+            RequestContext::GetRostersInLeague { league_id } => {
+                format!("/league/{league_id}/rosters")
+            }
+            RequestContext::GetUsersForLeague { league_id } => format!("/league/{league_id}/users"),
+            RequestContext::GetMatchups { league_id, week } => {
+                format!("/league/{league_id}/matchups/{week}")
+            }
+            RequestContext::GetTransactions { league_id, week } => {
+                format!("/league/{league_id}/transactions/{week}")
+            }
+            RequestContext::GetDraftsForUser {
+                user_id,
+                sport,
+                season,
+            } => format!("/user/{user_id}/drafts/{sport}/{season}"),
+            RequestContext::GetDraftsForLeague { league_id } => {
+                format!("/league/{league_id}/drafts")
+            }
+            RequestContext::GetDraft { draft_id } => format!("/draft/{draft_id}"),
+            RequestContext::GetDraftPicks { draft_id } => format!("/draft/{draft_id}/picks"),
+            RequestContext::GetPlayoffBracket {
+                league_id,
+                is_losers_bracket,
+            } => format!(
+                "/league/{league_id}/{bracket_name}",
+                bracket_name = if *is_losers_bracket {
+                    "losers_bracket"
+                } else {
+                    "winners_bracket"
+                }
+            ),
+        }
+    }
+    pub fn filters(&self) -> Option<Vec<(&str, String)>> {
+        match self {
+            RequestContext::GetLeague { .. } => None,
+            RequestContext::FetchAllPlayers { .. } => None,
+            RequestContext::GetTrendingPlayers {
+                lookback_hours,
+                limit,
+                ..
+            } => {
+                let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
+                    .into_iter()
+                    .filter_map(|(k, v)| match v {
+                        Some(0) => None,
+                        Some(value) => Some((k, value.to_string())),
+                        None => None,
+                    })
+                    .collect::<Vec<(&str, String)>>();
+                if filters_vec.is_empty() {
+                    None
+                } else {
+                    Some(filters_vec)
+                }
+            }
+            RequestContext::GetUser { .. } => None,
+            RequestContext::GetLeaguesForUser { .. } => None,
+            RequestContext::GetRostersInLeague { .. } => None,
+            RequestContext::GetUsersForLeague { .. } => None,
+            RequestContext::GetMatchups { .. } => None,
+            RequestContext::GetTransactions { .. } => None,
+            RequestContext::GetDraftsForUser { .. } => None,
+            RequestContext::GetDraftsForLeague { .. } => None,
+            RequestContext::GetDraft { .. } => None,
+            RequestContext::GetDraftPicks { .. } => None,
+            RequestContext::GetPlayoffBracket { .. } => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -441,7 +808,7 @@ mod client_tests {
             .await;
 
         let rosters = client
-            .get_rosters_for_league(&String::from(TEST_LEAGUE_ID))
+            .get_rosters_in_league(&String::from(TEST_LEAGUE_ID))
             .await
             .unwrap();
         assert_eq!(12, rosters.len());

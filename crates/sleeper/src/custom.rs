@@ -306,7 +306,7 @@ impl Standings {
         let client = Client::new(None);
         let league_id = "2489066589662560510";
         let roster_map = client
-            .get_rosters_for_league(league_id)
+            .get_rosters_in_league(league_id)
             .await?
             .into_iter()
             .map(|r| (r.roster_id, r))
@@ -515,7 +515,7 @@ mod custom_tests {
         let client = Client::new(None);
         let league_id = "2489066589662560510";
         let roster_map = client
-            .get_rosters_for_league(league_id)
+            .get_rosters_in_league(league_id)
             .await
             .unwrap()
             .into_iter()
