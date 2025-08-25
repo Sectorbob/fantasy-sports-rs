@@ -1314,27 +1314,62 @@ mod client_tests {
     #[tokio::test]
     async fn test_get_completed_playoff_bracket() {
         let league_id = "164974877262287888".to_string();
-        // let json_body = fs::read_to_string(format!("testdata/v1/draft/{draft_id}.json")).unwrap();
-        // let (mock_server, client) = setup().await;
-        let client = Client::new();
-        // Mock::given(method("GET"))
-        //     .and(path(format!("/draft/{draft_id}")))
-        //     .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
-        //     .mount(&mock_server)
-        //     .await;
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/league/{league_id}/winners_bracket")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(
+                    fs::read_to_string(format!(
+                        "testdata/v1/league/{league_id}/winners_bracket.json"
+                    ))
+                    .expect("failed to load testdata file"),
+                    "application/json",
+                ),
+            )
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/league/{league_id}/losers_bracket")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(
+                    fs::read_to_string(format!(
+                        "testdata/v1/league/{league_id}/losers_bracket.json"
+                    ))
+                    .expect("failed to load testdata file"),
+                    "application/json",
+                ),
+            )
+            .mount(&mock_server)
+            .await;
         let winners_bracket = client
             .get_playoff_bracket(league_id.clone(), false)
             .await
-            .unwrap();
-        assert_eq!(Some(7), winners_bracket.champion()); // ManagerGolden06
-        assert_eq!(Some(9), winners_bracket.runner_up()); // ManagerMighty58
+            .expect("failed to get winners bracket");
+        debug_assert_eq!(
+            Some(7),
+            winners_bracket.champion(),
+            "incorrect winner's bracket champion"
+        ); // ManagerGolden06
+        debug_assert_eq!(
+            Some(9),
+            winners_bracket.runner_up(),
+            "incorrect winner's bracket runner-up"
+        ); // ManagerMighty58
 
         let losers_bracket = client
             .get_playoff_bracket(league_id.clone(), true)
             .await
             .unwrap();
-        assert_eq!(Some(10), losers_bracket.champion()); // rob bob
-        assert_eq!(Some(6), losers_bracket.runner_up()); // rich b shafer
+        debug_assert_eq!(
+            Some(10),
+            losers_bracket.champion(),
+            "incorrect loser's bracket champion"
+        ); // rob bob
+        debug_assert_eq!(
+            Some(6),
+            losers_bracket.runner_up(),
+            "incorrect loser's bracket runner-up"
+        ); // rich b shafer
     }
 
     #[tokio::test]
@@ -1417,7 +1452,7 @@ pub enum Error {
 
 pub trait Id: Display {}
 
-impl Id for usize {}
+impl Id for usize {} 
 impl Id for &usize {}
 impl Id for &str {}
 impl Id for String {}
