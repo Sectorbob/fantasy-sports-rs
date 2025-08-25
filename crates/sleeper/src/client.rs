@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fmt::Display, path::PathBuf, sync::atomic::AtomicU64};
+use std::{
+    collections::HashMap, fmt::Display, marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64,
+};
 
 use log::{debug, error, info};
 use reqwest;
@@ -247,27 +249,25 @@ impl Client {
     /// of all player_ids in this matchup.
     ///
     /// The bench can be deduced by removing the starters from the players field.
-    pub async fn get_matchups<T: Id, I: Id>(
+    pub async fn get_matchups<T: Id>(
         &self,
         league_id: T,
-        week: I,
+        week: usize,
     ) -> Result<Vec<Matchup>, Error> {
         let league_id = league_id.to_string();
-        let week = week.to_string();
-        self.get_matchups_request(league_id.as_str(), week.as_str())
+        self.get_matchups_request(league_id.as_str(), week)
             .send()
             .await
     }
 
     /// This endpoint retrieves all free agent transactions, waivers and trades
-    pub async fn get_transactions<T: Id, I: Id>(
+    pub async fn get_transactions<T: Id>(
         &self,
         league_id: T,
-        week: I,
+        week: usize,
     ) -> Result<Vec<Transaction>, Error> {
         let league_id = league_id.to_string();
-        let week = week.to_string();
-        self.get_transactions_request(league_id.as_str(), week.as_str())
+        self.get_transactions_request(league_id.as_str(), week)
             .send()
             .await
     }
@@ -347,18 +347,23 @@ impl Client {
         })
     }
 
-    pub fn get_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+    pub fn get_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a, League> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetLeague { league_id },
+            phantom: PhantomData,
         }
     }
-    pub fn fetch_all_players_request<'a>(&'a self, sport: &'a Sport) -> Request<'a> {
+    pub fn fetch_all_players_request<'a>(
+        &'a self,
+        sport: &'a Sport,
+    ) -> Request<'a, HashMap<String, Player>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::FetchAllPlayers { sport },
+            phantom: PhantomData,
         }
     }
     pub fn get_trending_players_request<'a>(
@@ -367,7 +372,7 @@ impl Client {
         r#type: &'a TrendType,
         lookback_hours: &'a Option<u32>, //TODO: implement this filter
         limit: &'a Option<u32>,
-    ) -> Request<'a> {
+    ) -> Request<'a, Vec<TrendingPlayer>> {
         Request {
             cli: self,
             force_update: false,
@@ -377,13 +382,15 @@ impl Client {
                 lookback_hours,
                 limit,
             },
+            phantom: PhantomData,
         }
     }
-    pub fn get_user_request<'a>(&'a self, user: &'a str) -> Request<'a> {
+    pub fn get_user_request<'a>(&'a self, user: &'a str) -> Request<'a, User> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetUser { user },
+            phantom: PhantomData,
         }
     }
 
@@ -392,7 +399,7 @@ impl Client {
         user_id: &'a str,
         sport: &'a Sport,
         season: &'a str,
-    ) -> Request<'a> {
+    ) -> Request<'a, Vec<League>> {
         Request {
             cli: self,
             force_update: false,
@@ -401,58 +408,78 @@ impl Client {
                 sport,
                 season,
             },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_rosters_in_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+    pub fn get_rosters_in_league_request<'a>(
+        &'a self,
+        league_id: &'a str,
+    ) -> Request<'a, Vec<Roster>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetRostersInLeague { league_id },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_users_for_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+    pub fn get_users_for_league_request<'a>(
+        &'a self,
+        league_id: &'a str,
+    ) -> Request<'a, Vec<User>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetUsersForLeague { league_id },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_matchups_request<'a>(&'a self, league_id: &'a str, week: &'a str) -> Request<'a> {
+    pub fn get_matchups_request<'a>(
+        &'a self,
+        league_id: &'a str,
+        week: usize,
+    ) -> Request<'a, Vec<Matchup>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetMatchups { league_id, week },
+            phantom: PhantomData,
         }
     }
 
     pub fn get_transactions_request<'a>(
         &'a self,
         league_id: &'a str,
-        week: &'a str,
-    ) -> Request<'a> {
+        week: usize,
+    ) -> Request<'a, Vec<Transaction>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetTransactions { league_id, week },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_traded_picks_in_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+    pub fn get_traded_picks_in_league_request<'a>(
+        &'a self,
+        league_id: &'a str,
+    ) -> Request<'a, Vec<DraftPickMove>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetTradedPicksInLeague { league_id },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_sport_state_request<'a>(&'a self, sport: &'a Sport) -> Request<'a> {
+    pub fn get_sport_state_request<'a>(&'a self, sport: &'a Sport) -> Request<'a, SportState> {
         Request {
             cli: self,
             force_update: true, // don't rely on cache for this request
             ctx: RequestContext::GetSportState { sport },
+            phantom: PhantomData,
         }
     }
 
@@ -461,7 +488,7 @@ impl Client {
         user_id: &'a str,
         sport: &'a Sport,
         season: &'a str,
-    ) -> Request<'a> {
+    ) -> Request<'a, Vec<Draft>> {
         Request {
             cli: self,
             force_update: false,
@@ -470,30 +497,37 @@ impl Client {
                 sport,
                 season,
             },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_drafts_for_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a> {
+    pub fn get_drafts_for_league_request<'a>(
+        &'a self,
+        league_id: &'a str,
+    ) -> Request<'a, Vec<Draft>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetDraftsForLeague { league_id },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_draft_request<'a>(&'a self, draft_id: &'a str) -> Request<'a> {
+    pub fn get_draft_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Draft> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetDraft { draft_id },
+            phantom: PhantomData,
         }
     }
 
-    pub fn get_draft_picks_request<'a>(&'a self, draft_id: &'a str) -> Request<'a> {
+    pub fn get_draft_picks_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Vec<DraftPick>> {
         Request {
             cli: self,
             force_update: false,
             ctx: RequestContext::GetDraftPicks { draft_id },
+            phantom: PhantomData,
         }
     }
 
@@ -501,7 +535,7 @@ impl Client {
         &'a self,
         league_id: &'a str,
         is_losers_bracket: bool,
-    ) -> Request<'a> {
+    ) -> Request<'a, Vec<PlayoffBracketEntry>> {
         Request {
             cli: self,
             force_update: false,
@@ -509,6 +543,7 @@ impl Client {
                 league_id,
                 is_losers_bracket,
             },
+            phantom: PhantomData,
         }
     }
 
@@ -540,18 +575,24 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
     format!("{SLEEPER_CDN_BASE_URL}/avatars/thumbs/{avatar_id}")
 }
 
-pub struct Request<'a> {
+pub struct Request<'a, T: DeserializeOwned> {
     cli: &'a Client,
     force_update: bool,
     ctx: RequestContext<'a>,
+    phantom: PhantomData<&'a T>,
 }
-impl<'a> Request<'a> {
+impl<'a, T: DeserializeOwned> Request<'a, T> {
     pub fn force_update(mut self) -> Self {
         self.force_update = true;
         self
     }
 
-    pub async fn send<T: DeserializeOwned>(&self) -> Result<T, Error> {
+    pub fn with_force_update(mut self, force_update: &bool) -> Self {
+        self.force_update = *force_update;
+        self
+    }
+
+    pub async fn send(self) -> Result<T, Error> {
         self.cli
             .get_json(self.ctx.url(), self.ctx.filters(), self.force_update)
             .await
@@ -587,11 +628,11 @@ pub enum RequestContext<'a> {
     },
     GetMatchups {
         league_id: &'a str,
-        week: &'a str,
+        week: usize,
     },
     GetTransactions {
         league_id: &'a str,
-        week: &'a str,
+        week: usize,
     },
     GetTradedPicksInLeague {
         league_id: &'a str,
@@ -813,7 +854,7 @@ mod client_tests {
             .await;
 
         let matchups = client
-            .get_matchups(String::from(TEST_LEAGUE_ID), week.to_string())
+            .get_matchups(String::from(TEST_LEAGUE_ID), week)
             .await
             .unwrap();
         assert_eq!(12, matchups.len());
