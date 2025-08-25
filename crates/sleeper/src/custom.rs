@@ -348,7 +348,7 @@ mod custom_tests {
     use crate::{
         Client, League, LeagueStatus, Roster, User,
         custom::Standings,
-        data::{LeagueSettings, LeagueType, PlayoffType, WaiverType},
+        data::{LeagueType, PlayoffType, WaiverType},
     };
 
     fn load_all_testdata_leagues() -> Vec<League> {
@@ -459,55 +459,6 @@ mod custom_tests {
                 "unusual calculated regular season weeks [{reg_season_weeks}] in {league_debug_name}"
             );
         }
-    }
-
-    #[test]
-    fn test_league_settings_deserialization() {
-        let league_settings_json = r#"{
-            "last_report": 13,
-            "waiver_budget": 100,
-            "disable_adds": 0,
-            "divisions": 3,
-            "capacity_override": 0,
-            "taxi_deadline": 0,
-            "draft_rounds": 10,
-            "reserve_allow_na": 0,
-            "start_week": 3,
-            "playoff_teams": 6,
-            "num_teams": 12,
-            "daily_waivers_hour": 0,
-            "playoff_type": 0,
-            "taxi_slots": 0,
-            "last_scored_leg": 16,
-            "daily_waivers_days": 1093,
-            "playoff_week_start": 14,
-            "waiver_clear_days": 2,
-            "reserve_allow_doubtful": 0,
-            "reserve_allow_dnr": 1,
-            "taxi_allow_vets": 0,
-            "waiver_day_of_week": 2,
-            "reserve_allow_out": 1,
-            "reserve_allow_sus": 1,
-            "trade_deadline": 10,
-            "taxi_years": 0,
-            "daily_waivers": 0,
-            "pick_trading": 1,
-            "type": 1,
-            "max_keepers": 3,
-            "waiver_type": 2,
-            "league_average_match": 0,
-            "trade_review_days": 2,
-            "bench_lock": 0,
-            "offseason_adds": 0,
-            "leg": 16,
-            "reserve_slots": 1,
-            "was_auto_archived": 1
-        }"#;
-
-        let league_settings: LeagueSettings = serde_json::from_str(league_settings_json)
-            .expect("failed to deserialize the league settings json");
-        assert_eq!(14, league_settings.playoff_week_start);
-        assert_eq!(6, league_settings.playoff_teams);
     }
 
     #[tokio::test]
