@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::data::helpers::{ParseError, deserialize_naive_date, empty_string_as_none};
 use crate::data::settings::ScoringType;
-use crate::{DraftResult, GameCode, GameKey, Player, Settings, Team};
+use crate::{DraftResult, GameCode, GameKey, Player, Settings, Team, TeamKey};
 use crate::{DraftStatus, Transaction};
 
 #[derive(Deserialize, Debug)]
@@ -155,7 +155,7 @@ pub struct Matchup {
     pub week: Option<u32>,
     pub status: String, // known values: postevent
     pub is_tied: bool,
-    pub winner_team_key: Option<String>,
+    pub winner_team_key: Option<TeamKey>,
     #[serde(deserialize_with = "Team::deserialize_teams")]
     pub teams: Vec<Team>,
 }
