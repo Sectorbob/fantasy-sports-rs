@@ -233,7 +233,7 @@ impl Standings {
         }
     }
     pub async fn from_sleeper<T: Into<String>>(league_id: T) -> Result<Self, Error> {
-        let client = Client::new(None);
+        let client = Client::new();
         let league_id: String = league_id.into();
         let league_future = client.get_league(league_id.as_str());
         // let rosters_future = client.get_rosters_for_league(league_id.as_str());
@@ -303,7 +303,7 @@ impl Standings {
     }
 
     pub async fn visualize_draft_order(draft_order_roster_ids: Vec<u8>) -> Result<String, Error> {
-        let client = Client::new(None);
+        let client = Client::new();
         let league_id = "2489066589662560510";
         let roster_map = client
             .get_rosters_in_league(league_id)
@@ -512,7 +512,7 @@ mod custom_tests {
 
     #[tokio::test]
     async fn test_randomize_bucketed_draft_order() {
-        let client = Client::new(None);
+        let client = Client::new();
         let league_id = "2489066589662560510";
         let roster_map = client
             .get_rosters_in_league(league_id)

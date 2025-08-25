@@ -27,22 +27,9 @@ pub struct Client {
     outgoing_request_count: AtomicU64,
 }
 impl Client {
-    pub fn new_with_cache<T: Into<PathBuf>>(base_url: Option<String>, cache_dir: T) -> Self {
+    pub fn new() -> Self {
         Client {
-            base_url: base_url.unwrap_or(SLEEPER_API_BASE_URL.to_string()),
-            client: reqwest::ClientBuilder::new()
-                .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
-                // .default_headers(headers)
-                .build()
-                .expect("dev error while building http client"),
-            cache: Some(Box::new(FileSystemCacher::new(cache_dir))),
-            outgoing_request_count: AtomicU64::new(0),
-        }
-    }
-
-    pub fn new(base_url: Option<String>) -> Self {
-        Client {
-            base_url: base_url.unwrap_or(SLEEPER_API_BASE_URL.to_string()),
+            base_url: SLEEPER_API_BASE_URL.to_string(),
             client: reqwest::ClientBuilder::new()
                 .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
                 // .default_headers(headers)
@@ -51,6 +38,16 @@ impl Client {
             cache: None,
             outgoing_request_count: AtomicU64::new(0),
         }
+    }
+
+    pub fn with_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
+        self.cache = Some(Box::new(FileSystemCacher::new(cache_dir)));
+        self
     }
 
     pub(crate) fn build_get_json_request(
@@ -772,7 +769,7 @@ mod client_tests {
 
     async fn setup() -> (MockServer, Client) {
         let mock_server = MockServer::start().await;
-        let client = Client::new(Some(mock_server.uri()));
+        let client = Client::new().with_base_url(mock_server.uri());
         (mock_server, client)
     }
 
@@ -1319,7 +1316,7 @@ mod client_tests {
         let league_id = "164974877262287888".to_string();
         // let json_body = fs::read_to_string(format!("testdata/v1/draft/{draft_id}.json")).unwrap();
         // let (mock_server, client) = setup().await;
-        let client = Client::new(None);
+        let client = Client::new();
         // Mock::given(method("GET"))
         //     .and(path(format!("/draft/{draft_id}")))
         //     .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
