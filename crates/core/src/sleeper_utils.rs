@@ -8,12 +8,13 @@ use std::{collections::HashMap, error::Error, ops::Range};
 const START_WEEK: usize = 1;
 
 pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
+    let force_update = false;
     let sport = Sport::NFL;
-    let client = Client::new(None);
+    let client = Client::new(); //.with_cache(cache_dir);
     let players = client.fetch_all_players(&sport).await?;
     check_trending_players(&players, &client, &sport).await;
     println!("Sport: {}", sport);
-    let user = client.get_user(String::from("sectorbob")).await.unwrap();
+    let user = client.get_user("sectorbob").await.unwrap();
     println!("User: {:#?}", user);
     check_all_leagues_in(&client, "2019", &user, &sport).await;
     check_all_leagues_in(&client, "2024", &user, &sport).await;
@@ -23,7 +24,7 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
     let owners_future = client.get_users_for_league(&league.league_id);
-    let rosters_future = client.get_rosters_for_league(&league.league_id);
+    let rosters_future = client.get_rosters_in_league(&league.league_id);
 
     let mut owners = match owners_future.await {
         Ok(owners) => owners,
@@ -45,7 +46,7 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
-    match get_league_matchups(&league, &client).await {
+    match get_league_matchups(&league, &client, &force_update).await {
         Ok(fantasy_matchups_for_week) => {
             let num_of_weeks = 17; //league.settings.weeks;
             println!("League matchups checked successfully.");
@@ -73,13 +74,10 @@ async fn check_transactions(client: &Client, league_id: &String, sport: &Sport) 
     let players = client.fetch_all_players(sport).await.unwrap();
     let mut owners = client.get_users_for_league(league_id).await.unwrap();
     owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
-    let mut rosters = client.get_rosters_for_league(league_id).await.unwrap();
+    let mut rosters = client.get_rosters_in_league(league_id).await.unwrap();
     rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
 
-    let transactions = client
-        .get_transactions(league_id, &String::from("1"))
-        .await
-        .unwrap();
+    let transactions = client.get_transactions(league_id, 1).await.unwrap();
     for transaction in transactions.iter() {
         let added: Vec<(&Player, &Roster)> = transaction
             .adds
@@ -227,6 +225,7 @@ fn determine_weeks_to_scan(league: &League) -> Range<usize> {
 pub async fn get_league_matchups(
     league: &League,
     client: &Client,
+    force_update: &bool,
 ) -> Result<HashMap<usize, Vec<Matchup>>, Box<dyn std::error::Error + Send + Sync>> {
     let weeks_to_scan = determine_weeks_to_scan(league);
 
@@ -234,7 +233,9 @@ pub async fn get_league_matchups(
         .into_iter()
         .map(|week| {
             let result = client
-                .get_matchups(league.league_id.clone(), week.to_string())
+                .get_matchups_request(&league.league_id, week)
+                .with_force_update(force_update)
+                .send()
                 .map(move |res| {
                     let result: Result<(usize, Vec<Matchup>), Box<dyn Error + Send + Sync>> =
                         match res {
@@ -284,6 +285,7 @@ pub async fn get_league_matchups(
 pub async fn get_league_transactions(
     client: &Client,
     league: &League,
+    force_update: &bool,
 ) -> Result<Vec<Transaction>, sleeper_fantasy_rs::Error> {
     let weeks_to_scan = determine_weeks_to_scan(league);
 
@@ -291,7 +293,9 @@ pub async fn get_league_transactions(
         .into_iter()
         .map(move |week| {
             let result = client
-                .get_transactions(&league.league_id, week)
+                .get_transactions_request(&league.league_id, week)
+                .with_force_update(&force_update)
+                .send()
                 .map(move |res| {
                     let result: Result<(usize, Vec<Transaction>), sleeper_fantasy_rs::Error> =
                         match res {
@@ -332,7 +336,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_league_matchups_runs_without_panic() {
-        let client = Client::new_with_cache(None, "cache/sleeper");
+        let force_update = false;
+        let client = Client::new().with_cache("cache/sleeper");
         let league_ids = vec![
             "4581480575134427121", // 2024
             "383786432088067320",  // 2023
@@ -350,7 +355,7 @@ mod tests {
 
         for league_id in league_ids.iter() {
             let league = client.get_league(league_id).await.unwrap();
-            let _matchups = get_league_matchups(&league, &client /*&players*/)
+            let _matchups = get_league_matchups(&league, &client /*&players*/, &force_update)
                 .await
                 .unwrap();
         }

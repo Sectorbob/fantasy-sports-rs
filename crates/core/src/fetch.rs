@@ -50,8 +50,8 @@ impl LeagueAccessor {
             player_cache.map(|player_cache| PlayerCache::new_with_path(&player_cache));
 
         let sleeper_cli = match sleeper_cache_dir {
-            Some(sleeper_cache_dir) => sleeper::Client::new_with_cache(None, sleeper_cache_dir),
-            None => sleeper::Client::new(None),
+            Some(sleeper_cache_dir) => sleeper::Client::new().with_cache(sleeper_cache_dir),
+            None => sleeper::Client::new(),
         };
         let mut yahoo_cli = yahoo::Client::new_from_env()
             .inspect_err(|err| log::warn!("failed to setup yahoo cli: {err}"))
@@ -111,6 +111,7 @@ impl LeagueAccessor {
     pub async fn fetch_league_context(
         &self,
         id: &ExternalId,
+        force_update: bool,
     ) -> Result<crate::model::League, Error> {
         match &id.platform {
             Platform::Sleeper => {
@@ -119,6 +120,7 @@ impl LeagueAccessor {
                         cli,
                         self.players_cache.clone().as_ref(),
                         id.id.clone(),
+                        force_update,
                     )
                     .await
                 } else {
@@ -148,23 +150,40 @@ pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
     cli: &sleeper::Client,
     player_cache: Option<&PlayerCache>,
     league_id: T,
+    force_update: bool,
 ) -> Result<crate::League, Error> {
-    let sleeper_league = cli.get_league(league_id.into()).await?;
-    fetch_sleeper_league_context(cli, player_cache, &sleeper_league).await
+    let league_id: String = league_id.into();
+    let sleeper_league = cli
+        .get_league_request(league_id.as_str())
+        .with_force_update(&force_update)
+        .send()
+        .await?;
+    fetch_sleeper_league_context(cli, player_cache, &sleeper_league, force_update).await
 }
 
 pub(crate) async fn fetch_sleeper_league_context(
     cli: &sleeper::Client,
     optional_player_cache: Option<&PlayerCache>,
     sleeper_league: &sleeper::League,
+    force_update: bool,
 ) -> Result<crate::League, Error> {
     let mut optional_players_future = if optional_player_cache.is_none() {
-        Some(cli.fetch_all_players(&sleeper_league.sport))
+        Some(
+            cli.fetch_all_players_request(&sleeper_league.sport)
+                .with_force_update(&force_update)
+                .send(),
+        )
     } else {
         None
     };
-    let owners_future = cli.get_users_for_league(&sleeper_league.league_id);
-    let rosters_future = cli.get_rosters_for_league(&sleeper_league.league_id);
+    let owners_future = cli
+        .get_users_for_league_request(&sleeper_league.league_id)
+        .with_force_update(&force_update)
+        .send();
+    let rosters_future = cli
+        .get_rosters_in_league_request(&sleeper_league.league_id)
+        .with_force_update(&force_update)
+        .send();
     let (owners_result, rosters_result) = tokio::join!(owners_future, rosters_future);
     let owners = owners_result?
         .into_iter()
@@ -172,19 +191,22 @@ pub(crate) async fn fetch_sleeper_league_context(
         .collect::<HashMap<String, sleeper::User>>();
     let rosters = rosters_result?;
 
-    let matchups = match sleeper_utils::get_league_matchups(&sleeper_league, &cli).await {
-        Ok(matchups) => matchups,
-        Err(e) => {
-            eprintln!(
-                "Error fetching matchups for league {}: {:?}",
-                sleeper_league.league_id, e
-            );
-            HashMap::new()
-        }
-    };
+    let matchups =
+        match sleeper_utils::get_league_matchups(&sleeper_league, &cli, &force_update).await {
+            Ok(matchups) => matchups,
+            Err(e) => {
+                eprintln!(
+                    "Error fetching matchups for league {}: {:?}",
+                    sleeper_league.league_id, e
+                );
+                HashMap::new()
+            }
+        };
 
     let drafts = match cli
-        .get_drafts_for_league(sleeper_league.league_id.clone())
+        .get_drafts_for_league_request(&sleeper_league.league_id)
+        .with_force_update(&force_update)
+        .send()
         .await
     {
         Ok(d) => d,
@@ -200,7 +222,12 @@ pub(crate) async fn fetch_sleeper_league_context(
     let draft: Option<sleeper::Draft> = core::Draft::check_for_valid_draft(&drafts);
     let mut draft_picks: Vec<sleeper::DraftPick> = vec![];
     if let Some(draft) = &draft {
-        draft_picks = match cli.get_draft_picks(draft.draft_id.clone()).await {
+        draft_picks = match cli
+            .get_draft_picks_request(&draft.draft_id)
+            .with_force_update(&force_update)
+            .send()
+            .await
+        {
             Ok(picks) => picks,
             Err(err) => {
                 log::error!(
@@ -214,7 +241,7 @@ pub(crate) async fn fetch_sleeper_league_context(
     }
 
     let transactions: Vec<sleeper::Transaction> =
-        match sleeper_utils::get_league_transactions(cli, &sleeper_league).await {
+        match sleeper_utils::get_league_transactions(cli, &sleeper_league, &force_update).await {
             Ok(txns) => txns,
             Err(err) => {
                 log::error!(
@@ -268,7 +295,12 @@ pub(crate) async fn fetch_sleeper_league_context(
 
     // if we have cache missed and a sleep player update request is not yet in flight, then fetch players
     if !player_cache_misses.is_empty() && optional_players_future.is_none() {
-        optional_players_future = Some(cli.fetch_all_players(&sleeper_league.sport));
+        let tmp = cli
+            .fetch_all_players_request(&sleeper_league.sport)
+            .with_force_update(&force_update)
+            .send();
+
+        optional_players_future = Some(tmp);
     }
 
     let mut unmatched_players = HashSet::new();
@@ -680,7 +712,7 @@ mod tests {
         {
             let external_id = ExternalId::try_from(league_id).expect("invalid league_id");
             let league = fixture
-                .fetch_league_context(&external_id)
+                .fetch_league_context(&external_id, false)
                 .await
                 .expect("failed to get sleeper league")
                 .with_owner_id(user_id.clone());

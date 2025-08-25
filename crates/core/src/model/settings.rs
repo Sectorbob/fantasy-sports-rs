@@ -427,6 +427,13 @@ impl From<&sleeper::RosterPosition> for RosterSpot {
             sleeper::RosterPosition::K => RosterSpot::K,
             sleeper::RosterPosition::DEF => RosterSpot::DEF,
             sleeper::RosterPosition::BN => RosterSpot::BN,
+            sleeper::RosterPosition::SuperFlex => RosterSpot::SuperFlex,
+            sleeper::RosterPosition::PG => todo!(),
+            sleeper::RosterPosition::SG => todo!(),
+            sleeper::RosterPosition::SF => todo!(),
+            sleeper::RosterPosition::PF => todo!(),
+            sleeper::RosterPosition::C => todo!(),
+            sleeper::RosterPosition::UTIL => todo!(),
         }
     }
 }
