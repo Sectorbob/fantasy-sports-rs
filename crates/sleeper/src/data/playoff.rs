@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bracket {
@@ -8,9 +8,32 @@ pub struct Bracket {
 }
 // FIXME: these don't properly determin the toilet bowl matchup
 impl Bracket {
+    pub fn rosters(&self) -> Vec<u8> {
+        let set = self
+            .matchups
+            .iter()
+            .flat_map(|b| {
+                let mut v = vec![];
+                if let Some(rid) = b.team_1_roster_id {
+                    v.push(rid);
+                }
+                if let Some(rid) = b.team_2_roster_id {
+                    v.push(rid);
+                }
+                v
+            })
+            .collect::<HashSet<_>>();
+        let mut v = set.into_iter().collect::<Vec<_>>();
+        v.sort();
+        v
+    }
     pub fn champion(&self) -> Option<u8> {
         match self.championship_match() {
-            Some(matchup_id) => match self.matchups.iter().find(|m| m.matchup_id == matchup_id) {
+            Some(m) => match self
+                .matchups
+                .iter()
+                .find(|m2| m.matchup_id == m2.matchup_id)
+            {
                 Some(matchup) => {
                     if self.is_losers {
                         Some(matchup.loser_roster_id)
@@ -25,7 +48,7 @@ impl Bracket {
     }
     pub fn runner_up(&self) -> Option<u8> {
         match self.championship_match() {
-            Some(matchup_id) => match self.matchups.iter().find(|m| m.matchup_id == matchup_id) {
+            Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
                 Some(matchup) => {
                     if self.is_losers {
                         Some(matchup.winner_roster_id)
@@ -38,7 +61,55 @@ impl Bracket {
             None => None,
         }
     }
-    pub fn championship_match(&self) -> Option<u8> {
+    pub fn third_place(&self) -> Option<u8> {
+        match self.third_place_match() {
+            Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
+                Some(matchup) => {
+                    if self.is_losers {
+                        Some(matchup.loser_roster_id)
+                    } else {
+                        Some(matchup.winner_roster_id)
+                    }
+                }
+                None => None,
+            },
+            None => None,
+        }
+    }
+    pub fn fourth_place(&self) -> Option<u8> {
+        match self.third_place_match() {
+            Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
+                Some(matchup) => {
+                    if self.is_losers {
+                        Some(matchup.winner_roster_id)
+                    } else {
+                        Some(matchup.loser_roster_id)
+                    }
+                }
+                None => None,
+            },
+            None => None,
+        }
+    }
+    pub fn rosters_with_byes(&self) -> Vec<u8> {
+        let mut rosters = self.rosters();
+        for m in self.matchups.iter() {
+            if m.team_1_from.is_none() && m.team_2_from.is_none() {
+                if let Some(rid) = m.team_1_roster_id {
+                    if let Some(i) = rosters.iter().position(|i| *i == rid) {
+                        rosters.remove(i);
+                    }
+                }
+                if let Some(rid) = m.team_2_roster_id {
+                    if let Some(i) = rosters.iter().position(|i| *i == rid) {
+                        rosters.remove(i);
+                    }
+                }
+            }
+        }
+        rosters
+    }
+    pub fn championship_match(&self) -> Option<&PlayoffBracketEntry> {
         let last_round_matches: Option<Vec<&PlayoffBracketEntry>> =
             self.matchups.iter().max_by_key(|e| e.round).map(|e| {
                 self.matchups
@@ -72,11 +143,31 @@ impl Bracket {
         match last_round_matches {
             Some(m) => match m.len() {
                 0 => None,
-                1 => Some(m[0].matchup_id),
+                1 => Some(&m[0]),
                 _ => None,
             },
             None => None,
         }
+    }
+    pub fn third_place_match(&self) -> Option<&PlayoffBracketEntry> {
+        let championship_match = self.championship_match()?;
+        let semi_final_match_1 = championship_match.team_1_from.as_ref()?.source_matchup_id();
+        let semi_final_match_2 = championship_match.team_2_from.as_ref()?.source_matchup_id();
+        let semi_final_match_ids = [semi_final_match_1, semi_final_match_2];
+        let third_place_match_round = championship_match.round;
+        self.matchups.iter().find(|m| {
+            if let Some(s) = &m.team_1_from {
+                if !semi_final_match_ids.contains(&s.source_matchup_id()) {
+                    return false;
+                }
+            }
+            if let Some(s) = &m.team_2_from {
+                if !semi_final_match_ids.contains(&s.source_matchup_id()) {
+                    return false;
+                }
+            }
+            m.round == third_place_match_round && m.matchup_id != championship_match.matchup_id
+        })
     }
 }
 
@@ -166,6 +257,14 @@ pub enum UnresolvedPlayoffSlot {
     LoserOfMatch(u8),
     WinnerOfMatch(u8),
 }
+impl UnresolvedPlayoffSlot {
+    pub fn source_matchup_id(&self) -> u8 {
+        match self {
+            UnresolvedPlayoffSlot::LoserOfMatch(id) => *id,
+            UnresolvedPlayoffSlot::WinnerOfMatch(id) => *id,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum BracketTeam {
@@ -188,14 +287,58 @@ impl From<UnresolvedPlayoffSlot> for BracketTeam {
 }
 
 #[cfg(test)]
-mod data_tests {
-    use crate::data::{BracketTeam, PlayoffBracketEntry};
+mod tests {
+    use crate::{Bracket, Roster, User, data::BracketTeam};
+    use std::fs;
+
+    const LEAGUE_ID_2019: &str = "164974877262287888";
+
+    fn load_test_winners_bracket(league_id: &str) -> Bracket {
+        let json = fs::read_to_string(format!(
+            "testdata/v1/league/{league_id}/winners_bracket.json"
+        ))
+        .expect("failed to load test data file");
+
+        Bracket {
+            matchups: serde_json::from_str(json.as_str())
+                .expect("failed to deserialize playoff bracket json"),
+            is_losers: false,
+        }
+    }
+
+    fn load_rosters_in_league(league_id: &str) -> Vec<Roster> {
+        let json = fs::read_to_string(format!("testdata/v1/league/{league_id}/rosters.json"))
+            .expect("failed to load test data file");
+
+        serde_json::from_str(json.as_str()).expect("failed to deserialize league rosters json")
+    }
+
+    fn load_users_in_league(league_id: &str) -> Vec<User> {
+        let json = fs::read_to_string(format!("testdata/v1/league/{league_id}/users.json"))
+            .expect("failed to load test data file");
+
+        serde_json::from_str(json.as_str()).expect("failed to deserialize league users json")
+    }
+
+    fn team_name_for_roster(
+        roster_id: u8,
+        rosters: &Vec<Roster>,
+        users: &Vec<User>,
+    ) -> Option<String> {
+        let owner_id = rosters
+            .iter()
+            .find(|r| r.roster_id == roster_id)
+            .map(|r| r.owner_id.as_ref())
+            .flatten()?;
+        users
+            .iter()
+            .find(|user| &user.user_id == owner_id)
+            .map(User::team_name)
+    }
 
     #[test]
     fn test_playoff_bracket_deserialization() {
-        let bracket_json = r#"[{"m":1,"r":1,"l":12,"w":7,"t1":7,"t2":12},{"m":2,"r":1,"l":5,"w":9,"t1":5,"t2":9},{"m":3,"r":2,"l":4,"w":7,"t1":4,"t2":7,"t2_from":{"w":1}},{"m":4,"r":2,"l":1,"w":9,"t1":1,"t2":9,"t2_from":{"w":2}},{"p":5,"m":5,"r":2,"l":12,"w":5,"t1":12,"t2":5,"t2_from":{"l":2},"t1_from":{"l":1}},{"p":1,"m":6,"r":3,"l":9,"w":7,"t1":7,"t2":9,"t2_from":{"w":4},"t1_from":{"w":3}},{"p":3,"m":7,"r":3,"l":1,"w":4,"t1":4,"t2":1,"t2_from":{"l":4},"t1_from":{"l":3}}]"#;
-        let bracket: Vec<PlayoffBracketEntry> =
-            serde_json::from_str(bracket_json).expect("deserialize did not pass");
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019).matchups;
         assert_eq!(7, bracket.len());
         println!("{:#?}", bracket);
         assert_eq!(BracketTeam::Roster(7), bracket[0].team1());
@@ -212,5 +355,127 @@ mod data_tests {
         assert_eq!(BracketTeam::Roster(1), bracket[6].team2());
         assert_eq!(3, bracket[6].round);
         assert_eq!(7, bracket[6].matchup_id);
+    }
+
+    #[test]
+    fn test_playoff_rosters() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let expected_team_names: Vec<String> = vec![
+            "Stormy Badgers 01",
+            "Team ManagerStormy10",
+            "Team ManagerBrave17",
+            "Team ManagerGolden06",
+            "Team ManagerMighty58",
+            "Team ManagerBrave24",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+        let actual = bracket.rosters();
+        for roster_id in actual {
+            let team_name = team_name_for_roster(roster_id, &rosters, &users)
+                .expect("can't find team name for {roster_id}");
+            debug_assert!(
+                expected_team_names.contains(&team_name),
+                "unexpected team in winners bracket: {team_name}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_playoff_rosters_with_bye() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let expected_team_names: Vec<String> = vec!["Stormy Badgers 01", "Team ManagerStormy10"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        let actual = bracket.rosters_with_byes();
+        for roster_id_with_bye in actual {
+            let team_name = team_name_for_roster(roster_id_with_bye, &rosters, &users)
+                .expect("can't find team name for {roster_id_with_bye}");
+            debug_assert!(
+                expected_team_names.contains(&team_name),
+                "unexpected team with bye: {team_name}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_playoff_champion() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let actual = bracket.champion().expect("unable to find champion");
+        let team_name = team_name_for_roster(actual, &rosters, &users)
+            .expect("can't find team name for {actual}");
+        debug_assert_eq!(
+            "Team ManagerGolden06", team_name,
+            "unexpected team with bye: {team_name}",
+        );
+    }
+
+    #[test]
+    fn test_playoff_runner_up() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let actual = bracket.runner_up().expect("unable to find runner-up");
+        let team_name = team_name_for_roster(actual, &rosters, &users)
+            .expect("can't find team name for {actual}");
+        debug_assert_eq!(
+            "Team ManagerMighty58", team_name,
+            "unexpected team with bye: {team_name}",
+        );
+    }
+
+    #[test]
+    fn test_playoff_third_place() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let actual = bracket.third_place().expect("unable to find third place team");
+        let team_name = team_name_for_roster(actual, &rosters, &users)
+            .expect("can't find team name for {actual}");
+        debug_assert_eq!("Team ManagerStormy10", team_name, "unexpected team with bye: {team_name}",);
+    }
+
+    #[test]
+    fn test_playoff_fourth_place() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let actual = bracket.fourth_place().expect("unable to find fourth place team");
+        let team_name = team_name_for_roster(actual, &rosters, &users)
+            .expect("can't find team name for {actual}");
+        debug_assert_eq!(
+            "Stormy Badgers 01", team_name,
+            "unexpected team with bye: {team_name}",
+        );
+    }
+
+    #[test]
+    fn test_playoff_get_third_place_matchup() {
+        let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
+        let rosters = load_rosters_in_league(LEAGUE_ID_2019);
+        let users = load_users_in_league(LEAGUE_ID_2019);
+        let actual = bracket
+            .third_place_match()
+            .expect("unable to find third place match");
+        let roster_1 = actual.team_1_roster_id.expect("roster 1 is not resolved");
+        let roster_2 = actual.team_2_roster_id.expect("roster 2 is not resolved");
+        debug_assert_eq!(
+            "Team ManagerStormy10",
+            team_name_for_roster(roster_1, &rosters, &users).unwrap(),
+            "unexpected team 1",
+        );
+        debug_assert_eq!(
+            "Stormy Badgers 01",
+            team_name_for_roster(roster_2, &rosters, &users).unwrap(),
+            "unexpected team 2",
+        );
     }
 }
