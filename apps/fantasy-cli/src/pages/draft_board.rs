@@ -4,7 +4,7 @@ use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    text::Text,
+    text::{Span, Spans, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
@@ -99,12 +99,7 @@ impl DraftBoardPage {
                     } else {
                         "Blerp".to_string()
                     };
-
-                    let paragraph = Paragraph::new(team_name);
-                    // .block(Block::default()
-                    // .title("Blerp")
-                    // .borders(Borders::ALL));
-                    f.render_widget(paragraph, *row);
+                    f.render_widget(Paragraph::new(team_name), *row);
                     continue;
                 }
                 let round = i;
@@ -134,21 +129,37 @@ impl DraftBoardPage {
                         player_name = format!("{}", player_name_parts.join(" "));
                     }
 
-                    Text::from(format!(
-                        "{player_name}\n{pos} - {team}",
-                        pos = pick_player
-                            .player
-                            .positions
-                            .iter()
-                            .map(String::from)
-                            .collect::<Vec<_>>()
-                            .join(","),
-                        team = pick_player
-                            .player
-                            .irl_team
-                            .as_ref()
-                            .map_or("FA".to_string(), String::clone)
-                    ))
+                    Text::from(vec![
+                        Spans::from(vec![Span::raw(player_name)]),
+                        Spans::from(vec![
+                            Span::styled(
+                                pick_player
+                                    .player
+                                    .positions
+                                    .iter()
+                                    .map(String::from)
+                                    .collect::<Vec<_>>()
+                                    .join(","),
+                                Style::default().fg(match pick_player.player.positions.get(0) {
+                                    Some(pos) if pos.contains("RB") => constants::COLOR_RB,
+                                    Some(pos) if pos.contains("TE") => constants::COLOR_TE,
+                                    Some(pos) if pos.contains("WR") => constants::COLOR_WR,
+                                    Some(pos) if pos.contains("QB") => constants::COLOR_QB,
+                                    Some(pos) if pos.contains("DEF") => constants::COLOR_DEF,
+                                    Some(pos) if pos.contains("K") => constants::COLOR_K,
+                                    _ => tui::style::Color::Reset,
+                                }),
+                            ),
+                            Span::raw(format!(
+                                " - {}",
+                                pick_player
+                                    .player
+                                    .irl_team
+                                    .as_ref()
+                                    .map_or("FA".to_string(), String::clone)
+                            )),
+                        ]),
+                    ])
                 } else {
                     Text::from(format!("Overall\n{overall}"))
                 };
