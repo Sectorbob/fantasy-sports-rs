@@ -1,16 +1,16 @@
-use fantasy_core_rs::{League, Player};
+use fantasy_core_rs::{League, Player, PlayerPosition};
 use sleeper_fantasy_rs::User;
 use std::{collections::HashMap, io::Stdout};
 use tui::{
     backend::CrosstermBackend,
     layout::{self, Rect},
     style::Style,
-    text::Text,
+    text::{Span, Spans, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use yahoo_fantasy_rs;
+use yahoo_fantasy_rs as yahoo;
 
-use crate::constants;
+use crate::{constants, helpers};
 
 pub struct RosterWidget {
     pub team_name: String,
@@ -67,8 +67,8 @@ impl RosterWidget {
                         )
                         .trim()
                         .to_string(),
-                        positions: match player.position.clone() {
-                            Some(pos) => vec![pos],
+                        positions: match &player.position {
+                            Some(pos) => vec![PlayerPosition::from(pos)],
                             None => vec![],
                         },
                         irl_team: player.team.clone(),
@@ -93,7 +93,14 @@ impl RosterWidget {
                 .map(|p| Player {
                     _id: p.player_key.to_string(),
                     name: p.name.full.clone(),
-                    positions: vec![p.display_position.to_string()],
+                    positions: match &p.display_position {
+                        yahoo::PlayerPositions::One(player_position) => {
+                            vec![PlayerPosition::from(player_position)]
+                        }
+                        yahoo::PlayerPositions::Many(player_positions) => {
+                            player_positions.iter().map(PlayerPosition::from).collect()
+                        }
+                    },
                     irl_team: Some(p.editorial_team_abbr.clone()),
                 })
                 .collect::<Vec<Player>>(),
@@ -114,7 +121,13 @@ impl RosterWidget {
         let pos_col_width = self
             .players
             .iter()
-            .map(|player| player.positions.iter().map(String::len).sum::<usize>())
+            .map(|player| {
+                player
+                    .positions
+                    .iter()
+                    .map(|p| p.to_string().len())
+                    .sum::<usize>()
+            })
             .max()
             .unwrap_or(2);
 
@@ -133,16 +146,21 @@ impl RosterWidget {
         let left_text = Text::from(
             self.players
                 .iter()
-                .map(|p| p.positions.join(","))
-                .collect::<Vec<String>>()
-                .join("\n"),
+                .map(|p| {
+                    Spans::from(
+                        p.positions
+                            .iter()
+                            .map(|pos| helpers::position_span(pos))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>(),
         );
         let right_text = Text::from(
             self.players
                 .iter()
-                .map(|p| p.name.as_str())
-                .collect::<Vec<&str>>()
-                .join("\n"),
+                .map(|p| Spans::from(Span::raw(p.name.as_str())))
+                .collect::<Vec<_>>(),
         );
 
         f.render_widget(Paragraph::new(left_text), layout[0]);

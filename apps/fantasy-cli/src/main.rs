@@ -7,6 +7,7 @@ mod config;
 mod constants;
 mod data_fetch;
 mod events;
+mod helpers;
 mod pages;
 mod tui;
 mod widgets;

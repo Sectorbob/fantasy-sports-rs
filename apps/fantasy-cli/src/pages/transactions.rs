@@ -1,4 +1,5 @@
-use fantasy_core_rs::{self as core};
+use crate::{constants, helpers};
+use fantasy_core_rs::{self as core, PlayerMove};
 use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
@@ -7,10 +8,11 @@ use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
+    text::{Span, Spans},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
-use crate::constants;
+const NA: &str = "N/A";
 
 pub struct TransactionsPage {
     title_override: Option<String>,
@@ -73,51 +75,15 @@ impl TransactionsPage {
                         .into_iter()
                         .flat_map(|m| vec![m.dest_team_id.clone(), m.src_team_id.clone()]),
                 );
-                let adds = player_moves
+                let adds: Vec<Spans> = player_moves
                     .iter()
-                    .filter(|v| v.add())
-                    .map(|p_move| {
-                        let player_id = p_move.player_id();
-                        let player = self.players.get(&player_id);
-                        match player {
-                            Some(p) => format!(
-                                "{name} [{pos}]",
-                                name = p.name,
-                                pos = p
-                                    .positions
-                                    .iter()
-                                    .map(String::from)
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                                    .trim()
-                                    .to_string()
-                            ),
-                            None => format!("Player({player_id})"),
-                        }
-                    })
+                    .filter(PlayerMove::is_add)
+                    .map(|p_move| self.player_cell(p_move))
                     .collect::<Vec<_>>();
                 let drops = player_moves
                     .iter()
-                    .filter(|v| v.drop())
-                    .map(|p_move| {
-                        let player_id = p_move.player_id();
-                        let player = self.players.get(&player_id);
-                        match player {
-                            Some(p) => format!(
-                                "{name} [{pos}]",
-                                name = p.name,
-                                pos = p
-                                    .positions
-                                    .iter()
-                                    .map(String::from)
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                                    .trim()
-                                    .to_string()
-                            ),
-                            None => format!("Player({player_id})"),
-                        }
-                    })
+                    .filter(PlayerMove::is_drop)
+                    .map(|p_move| self.player_cell(p_move))
                     .collect::<Vec<_>>();
                 // let rosters = roster_ids
                 //     .into_iter()
@@ -125,7 +91,7 @@ impl TransactionsPage {
                 //     .filter_map(|roster_id| self.rosters.iter().find(|r| r.id == roster_id))
                 //     .collect::<Vec<_>>();
                 let roster_name = match roster_ids.len() {
-                    0 => String::from("N/A"),
+                    0 => String::from(NA),
                     1 => roster_ids
                         .iter()
                         .next()
@@ -135,7 +101,7 @@ impl TransactionsPage {
                                 .find(|r| &r.id == id)
                                 .map_or(id.clone(), |r| r.team_name.clone())
                         })
-                        .unwrap_or("N/A".to_string()),
+                        .unwrap_or(String::from(NA)),
                     _ => roster_ids
                         .iter()
                         .map(String::clone)
@@ -148,23 +114,8 @@ impl TransactionsPage {
                     Cell::from("TBD"),
                     Cell::from(roster_name),
                     Cell::from(txn.r#type()),
-                    Cell::from(
-                        adds.iter()
-                            .map(String::from)
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                            .trim()
-                            .to_string(),
-                    ),
-                    Cell::from(
-                        drops
-                            .iter()
-                            .map(String::from)
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                            .trim()
-                            .to_string(),
-                    ),
+                    Cell::from(adds),
+                    Cell::from(drops),
                 ])
             })
             .collect::<Vec<Row>>();
@@ -183,5 +134,22 @@ impl TransactionsPage {
             ]));
 
         f.render_widget(table, area);
+    }
+
+    fn player_cell(&self, player_move: &fantasy_core_rs::PlayerMove) -> Spans {
+        let player_id = player_move.player_id();
+        if let Some(player) = self.players.get(&player_id) {
+            let mut spans = vec![Span::raw(format!("{} [", player.name))];
+            spans.extend(
+                player
+                    .positions
+                    .iter()
+                    .map(|pos| helpers::position_span(pos)),
+            );
+            spans.push(Span::raw("]"));
+            Spans::from(spans)
+        } else {
+            Spans::from(Span::raw(format!("Player({player_id})")))
+        }
     }
 }

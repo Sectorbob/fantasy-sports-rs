@@ -8,7 +8,7 @@ use tui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::constants;
+use crate::{constants, helpers};
 
 pub struct DraftBoardPage {
     league_name: Option<String>,
@@ -129,36 +129,26 @@ impl DraftBoardPage {
                         player_name = format!("{}", player_name_parts.join(" "));
                     }
 
+                    let mut pos_team = vec![];
+                    pos_team.extend(
+                        pick_player
+                            .player
+                            .positions
+                            .iter()
+                            .map(helpers::position_span),
+                    );
+                    pos_team.push(Span::raw(format!(
+                        " - {}",
+                        pick_player
+                            .player
+                            .irl_team
+                            .as_ref()
+                            .map_or("FA".to_string(), String::clone)
+                    )));
+
                     Text::from(vec![
                         Spans::from(vec![Span::raw(player_name)]),
-                        Spans::from(vec![
-                            Span::styled(
-                                pick_player
-                                    .player
-                                    .positions
-                                    .iter()
-                                    .map(String::from)
-                                    .collect::<Vec<_>>()
-                                    .join(","),
-                                Style::default().fg(match pick_player.player.positions.get(0) {
-                                    Some(pos) if pos.contains("RB") => constants::COLOR_RB,
-                                    Some(pos) if pos.contains("TE") => constants::COLOR_TE,
-                                    Some(pos) if pos.contains("WR") => constants::COLOR_WR,
-                                    Some(pos) if pos.contains("QB") => constants::COLOR_QB,
-                                    Some(pos) if pos.contains("DEF") => constants::COLOR_DEF,
-                                    Some(pos) if pos.contains("K") => constants::COLOR_K,
-                                    _ => tui::style::Color::Reset,
-                                }),
-                            ),
-                            Span::raw(format!(
-                                " - {}",
-                                pick_player
-                                    .player
-                                    .irl_team
-                                    .as_ref()
-                                    .map_or("FA".to_string(), String::clone)
-                            )),
-                        ]),
+                        Spans::from(pos_team),
                     ])
                 } else {
                     Text::from(format!("Overall\n{overall}"))

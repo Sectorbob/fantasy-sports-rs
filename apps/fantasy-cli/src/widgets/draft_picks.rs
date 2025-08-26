@@ -1,42 +1,39 @@
+use fantasy_core_rs as core;
 use std::io::Stdout;
-
-use fantasy_core_rs::{DraftPick, League};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
+    text::{Span, Spans},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
-use crate::constants;
+use crate::{constants, helpers};
 
 pub struct DraftPicksWidget {
     title_override: Option<String>,
     _league_id: String,
-    picks: Vec<(String, String, String)>,
+    picks: Vec<core::DraftPick>,
     _roster_id_filter: Option<String>,
 }
 impl DraftPicksWidget {
     pub fn from_league(
         title_override: Option<String>,
-        league: &League,
+        league: &core::League,
         roster_id_filter: Option<String>,
     ) -> Self {
         DraftPicksWidget {
             title_override: title_override,
             _league_id: league.id(),
-            picks: match &league.draft() {
-                Some(draft) => draft
-                    .picks
-                    .iter()
+            picks: league.draft().map_or(vec![], |d| {
+                d.picks
+                    .into_iter()
                     .filter(|p| match &roster_id_filter {
                         Some(rid) => rid == &p.roster_id,
                         None => true,
                     })
-                    .map(format_entry)
-                    .collect(),
-                None => vec![],
-            },
+                    .collect::<Vec<_>>()
+            }),
             _roster_id_filter: roster_id_filter,
         }
     }
@@ -60,12 +57,9 @@ impl DraftPicksWidget {
         let rows = self
             .picks
             .iter()
-            .map(|(r, p, pl)| {
-                Row::new(vec![
-                    Cell::from(r.as_str()),
-                    Cell::from(p.as_str()),
-                    Cell::from(pl.as_str()),
-                ])
+            .map(|pick| {
+                let (r, p, pl) = format_entry(pick);
+                Row::new(vec![Cell::from(r), Cell::from(p), Cell::from(pl)])
             })
             .collect::<Vec<Row>>();
 
@@ -79,12 +73,47 @@ impl DraftPicksWidget {
 
         f.render_widget(table, area);
     }
+
+    // fn player_cell(&self, player_move: &fantasy_core_rs::PlayerMove) -> Spans {
+    //     let player_id = player_move.player_id();
+    //     if let Some(player) = self.players.get(&player_id) {
+    //         let mut spans = vec![Span::raw(format!("{} [", player.name))];
+    //         spans.extend(
+    //             player
+    //                 .positions
+    //                 .iter()
+    //                 .map(|pos| helpers::position_span(pos)),
+    //         );
+    //         spans.push(Span::raw("]"));
+    //         Spans::from(spans)
+    //     } else {
+    //         Spans::from(Span::raw(format!("Player({player_id})")))
+    //     }
+    // }
 }
 
-fn format_entry(draft_pick: &DraftPick) -> (String, String, String) {
+fn format_entry<'d>(draft_pick: &'d core::DraftPick) -> (String, String, Spans<'d>) {
+    let mut player_spans: Vec<Span> = vec![Span::raw("[")];
+    player_spans.extend(
+        draft_pick
+            .player
+            .positions
+            .iter()
+            .map(|pos| helpers::position_span(&pos).clone()),
+    );
+    player_spans.push(Span::raw("] "));
+    player_spans.push(Span::raw(draft_pick.player.name.clone()));
+    if let Some(irl_team) = &draft_pick.player.irl_team {
+        player_spans.push(Span::raw(" - "));
+        player_spans.push(Span::raw(irl_team.clone()));
+    }
+
+    let draft_pick_round = draft_pick.round.to_string();
+    let draft_pick_overall = draft_pick.overall_pick.to_string();
+
     (
-        draft_pick.round.to_string(),
-        draft_pick.overall_pick.to_string(),
-        draft_pick.player.to_string(),
+        draft_pick_round,
+        draft_pick_overall,
+        Spans::from(player_spans),
     )
 }
