@@ -19,15 +19,11 @@ impl RosterWidget {
     pub fn from_league(league: &League) -> Option<Self> {
         match league {
             League::Sleeper {
-                draft: _,
-                draft_picks: _,
-                league: _,
-                matchups: _,
                 owners,
                 players,
                 rosters,
-                transactions: _,
                 user_id,
+                ..
             } => rosters
                 .iter()
                 .find(|(_, r)| &r.owner_id == user_id)

@@ -90,10 +90,13 @@ async fn get_sleeper_leagues(
 
     for sleeper_league in sleeper_leagues {
         let league_context = league_accessor
-            .fetch_league_context(&core::ExternalId {
-                platform: fantasy_core_rs::Platform::Sleeper,
-                id: sleeper_league.league_id.clone(),
-            })
+            .fetch_league_context(
+                &core::ExternalId {
+                    platform: fantasy_core_rs::Platform::Sleeper,
+                    id: sleeper_league.league_id.clone(),
+                },
+                false,
+            )
             .await?;
 
         leagues.push(league_context.with_owner_id(ExternalId::new(
@@ -155,10 +158,13 @@ async fn get_yahoo_leagues(
         yahoo_teams_tasks.push(async move {
             let league_key = &yahoo_team.team_key.league_key;
             let league_ctx = league_accessor
-                .fetch_league_context(&core::ExternalId {
-                    platform: fantasy_core_rs::Platform::Yahoo,
-                    id: league_key.to_string(),
-                })
+                .fetch_league_context(
+                    &core::ExternalId {
+                        platform: fantasy_core_rs::Platform::Yahoo,
+                        id: league_key.to_string(),
+                    },
+                    false,
+                )
                 .await?;
 
             Ok::<core::League, fantasy_core_rs::Error>(league_ctx)

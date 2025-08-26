@@ -109,8 +109,11 @@ impl<'a> LeagueSummaryPage<'a> {
                                 f.render_widget(paragraph, *row);
                             }
                         } else if i == 2 && j == 0 {
-                            // Render league rosters in the third column
+                            // Render league rosters in the third column, top row
                             render_league_teams(league, f, row);
+                        } else if i == 2 && j == 1 {
+                            // Render league playoff results in the third column, bottom row
+                            render_league_playoff_results(league, f, row);
                         } else if i == 1 && j == 1 {
                             if let Some(draft_picks_widget) = &self.draft_picks_widget {
                                 draft_picks_widget.draw(f, row);
@@ -196,4 +199,43 @@ fn render_league_teams(
     let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
     f.render_widget(paragraph, *row);
+}
+
+fn render_league_playoff_results(
+    league: &League,
+    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
+    row: &tui::layout::Rect,
+) {
+    let teams = league.teams();
+    if let Some(playoff_results) = league.playoff_results() {
+        let mut entries = playoff_results.into_iter().collect::<Vec<_>>();
+        entries.sort_by_key(|e| e.0);
+
+        let lines = entries
+            .iter()
+            .map(|(place, team)| {
+                format!(
+                    "{place}: {team_id}",
+                    team_id = teams
+                        .iter()
+                        .find(|t| { t.id == team.id })
+                        .map_or(format!(""), |t| t.team_name.clone())
+                )
+            })
+            .collect::<Vec<_>>();
+        let text = Text::from(lines.join("\n"));
+        let paragraph = Paragraph::new(text).block(
+            Block::default()
+                .title("Playoff Results")
+                .borders(Borders::ALL),
+        );
+        f.render_widget(paragraph, *row);
+    } else {
+        let paragraph = Paragraph::new("").block(
+            Block::default()
+                .title("No Playoff Results")
+                .borders(Borders::ALL),
+        );
+        f.render_widget(paragraph, *row);
+    }
 }
