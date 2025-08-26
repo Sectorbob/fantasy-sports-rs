@@ -184,6 +184,12 @@ pub(crate) async fn fetch_sleeper_league_context(
         .get_rosters_in_league_request(&sleeper_league.league_id)
         .with_force_update(&force_update)
         .send();
+    let winners_bracket_future = cli
+        .get_playoff_bracket_request(&sleeper_league.league_id, false)
+        .send();
+    let losers_bracket_future = cli
+        .get_playoff_bracket_request(&sleeper_league.league_id, true)
+        .send();
     let (owners_result, rosters_result) = tokio::join!(owners_future, rosters_future);
     let owners = owners_result?
         .into_iter()
@@ -336,6 +342,26 @@ pub(crate) async fn fetch_sleeper_league_context(
         owners,
         players: players_in_league,
         rosters: rosters.into_iter().map(|r| (r.roster_id, r)).collect(),
+        winners_bracket: match winners_bracket_future.await {
+            Ok(b) => Some(sleeper::Bracket {
+                matchups: b,
+                is_losers: false,
+            }),
+            Err(e) => {
+                log::warn!("failed to get winners bracket: {e}");
+                None
+            }
+        },
+        losers_bracket: match losers_bracket_future.await {
+            Ok(b) => Some(sleeper::Bracket {
+                matchups: b,
+                is_losers: true,
+            }),
+            Err(e) => {
+                log::warn!("failed to get losers bracket: {e}");
+                None
+            }
+        },
         transactions,
         matchups,
         user_id: None,

@@ -19,6 +19,8 @@ pub enum League {
         matchups: HashMap<usize, Vec<sleeper::Matchup>>,
         owners: HashMap<String, sleeper::User>,
         players: HashMap<String, sleeper::Player>,
+        winners_bracket: Option<sleeper::Bracket>,
+        losers_bracket: Option<sleeper::Bracket>,
         rosters: HashMap<u8, sleeper::Roster>,
         transactions: Vec<sleeper::Transaction>,
         user_id: Option<String>,
@@ -46,6 +48,8 @@ impl League {
                 matchups,
                 owners,
                 players,
+                winners_bracket,
+                losers_bracket,
                 rosters,
                 transactions,
                 user_id: _,
@@ -56,6 +60,8 @@ impl League {
                 matchups,
                 owners,
                 players,
+                winners_bracket,
+                losers_bracket,
                 rosters,
                 transactions,
                 user_id: Some(id.id),
@@ -88,7 +94,6 @@ impl League {
             },
         }
     }
-
     pub fn selected_owner_id(&self) -> Option<String> {
         match self {
             League::Sleeper { user_id, .. } => user_id.as_ref().map(String::clone),
@@ -205,6 +210,72 @@ impl League {
             },
         }
     }
+    pub fn playoff_results(&self) -> Option<HashMap<u8, Team>> {
+        let mut teams = self
+            .teams()
+            .into_iter()
+            .map(|t| (t.id.clone(), t))
+            .collect::<HashMap<_, _>>();
+        match self {
+            League::Sleeper {
+                winners_bracket,
+                losers_bracket: _,
+                league,
+                ..
+            } => {
+                match &league.settings.playoff_type {
+                    sleeper_fantasy_rs::PlayoffType::Default => {
+                        // implemented below
+                    }
+                    sleeper_fantasy_rs::PlayoffType::ReSeed => {
+                        //TODO
+                        log::warn!("sleeper playoff setting for reseed not yet implemented");
+                        return None;
+                    }
+                };
+
+                let winners_bracket = if let Some(w) = winners_bracket {
+                    w
+                } else {
+                    return None;
+                };
+                let mut s = HashMap::new();
+                if let Some(champ_roster_id) = winners_bracket.champion() {
+                    if let Some(t) = teams.remove(&champ_roster_id.to_string()) {
+                        s.insert(1, t);
+                    }
+                }
+                if let Some(runner_up_roster_id) = winners_bracket.runner_up() {
+                    if let Some(t) = teams.remove(&runner_up_roster_id.to_string()) {
+                        s.insert(2, t);
+                    }
+                }
+                if let Some(third_place_roster_id) = winners_bracket.third_place() {
+                    if let Some(t) = teams.remove(&third_place_roster_id.to_string()) {
+                        s.insert(3, t);
+                    }
+                }
+                if let Some(fourth_place_roster_id) = winners_bracket.fourth_place() {
+                    if let Some(t) = teams.remove(&fourth_place_roster_id.to_string()) {
+                        s.insert(4, t);
+                    }
+                }
+                log::warn!(
+                    "sleeper playoff results not collected for 5+ place in winners bracket and any of the losers bracket"
+                );
+                Some(s)
+            }
+            League::Yahoo {
+                scoreboards: _,
+                settings: _,
+                ..
+            } => {
+                log::warn!("league playoff results not yet implemented for yahoo leagues");
+                None
+            }
+        }
+    }
+
     pub fn teams(&self) -> Vec<Team> {
         match self {
             League::Sleeper {
@@ -357,8 +428,13 @@ impl League {
     pub fn draft(&self) -> Option<Draft> {
         match self {
             League::Sleeper {
-                draft, draft_picks, rosters, ..
-            } => draft.as_ref().map(|d| Draft::from((d, draft_picks, rosters))),
+                draft,
+                draft_picks,
+                rosters,
+                ..
+            } => draft
+                .as_ref()
+                .map(|d| Draft::from((d, draft_picks, rosters))),
             League::Yahoo {
                 draft_results,
                 league,
@@ -447,9 +523,25 @@ impl League {
 }
 impl std::fmt::Display for League {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let team = self.team();
+        let placement_sfx = match team {
+            Some(t) => match self.playoff_results() {
+                Some(playoff_results) => playoff_results
+                    .iter()
+                    .find(|(_, t2)| t.id == t2.id)
+                    .map_or(String::new(), |(place, _)| match *place {
+                        1 => format!(" 👑"),
+                        2 => format!(" 🥈"),
+                        3 => format!(" 🥉"),
+                        _ => String::new(),
+                    }),
+                None => String::new(),
+            },
+            None => String::new(),
+        };
         write!(
             f,
-            "[{season}] {name} ({platform}) - {status}       Record: {record}",
+            "[{season}] {name} ({platform}) - {status}       Record: {record}{placement_sfx}",
             season = self.season(),
             name = self.name(),
             platform = self.platform(),
@@ -496,6 +588,139 @@ impl From<&yahoo::League> for LeagueStatus {
                 false => LeagueStatus::InSeason,
             },
             None => LeagueStatus::InComplete,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[cfg(test)]
+mod tests {
+    use crate::{ExternalId, League, LeagueAccessor};
+    use std::{collections::HashMap, ops::Index};
+    use yahoo_fantasy_rs as yahoo;
+
+    // #[tokio::test]
+    //TODO: stub out data, vs using cache
+    async fn testme() {
+        let mut accessor = LeagueAccessor::new().with_cache_dir("cache");
+        accessor
+            .init()
+            .await
+            .expect("failed to setup league accessor");
+
+        let l = accessor
+            .fetch_league_context(&ExternalId::try_from("yahoo:359.l.564503").unwrap(), false)
+            .await
+            .unwrap();
+
+        if let League::Yahoo {
+            scoreboards,
+            settings,
+            ..
+        } = l
+        {
+            let matchups = extract_playoffs_into_matchups(&scoreboards, &settings);
+            for matchup in matchups {
+                let team_1 = matchup.2.teams.index(0);
+                let team_2 = matchup.2.teams.index(1);
+                let left_side = format!(
+                    "{} {}",
+                    team_1.name,
+                    team_1
+                        .team_points
+                        .as_ref()
+                        .map_or(0.0, |team_points| team_points.total.map_or(0.0, |p| p))
+                );
+                let right_side = format!(
+                    "{} {}",
+                    team_2.name,
+                    team_2
+                        .team_points
+                        .as_ref()
+                        .map_or(0.0, |team_points| team_points.total.map_or(0.0, |p| p))
+                );
+                println!(
+                    "Round: {rd} MatchupId {id} {left_side} vs {right_side}",
+                    rd = matchup.0,
+                    id = matchup.1
+                );
+                println!(
+                    "{:?}",
+                    convert_yahoo_to_sleeper_playoff_bracket(matchup.0, matchup.1, matchup.2),
+                );
+            }
+        }
+        assert!(false)
+    }
+
+    fn extract_playoffs_into_matchups<'a>(
+        scoreboards: &'a Vec<yahoo::Scoreboard>,
+        settings: &yahoo::Settings,
+    ) -> Vec<(u8, u8, &'a yahoo::Matchup)> {
+        let mut matchups = vec![];
+        if settings.uses_playoff {
+            if let Some(first_week_of_playoffs) = settings.playoff_start_week {
+                let num_of_playoff_teams = settings.num_playoff_teams;
+                log::warn!(
+                    "still need to do a yahoo check for the num of teams allowed in playoffs: {num_of_playoff_teams}"
+                );
+                let mut playoff_rounds: HashMap<u8, &yahoo::Scoreboard> = HashMap::new();
+                let mut rounds = vec![];
+                let mut matchup_counter: u8 = 0;
+                for scoreboard in scoreboards {
+                    if scoreboard.week >= first_week_of_playoffs {
+                        // is playoff week
+                        let round: u8 = scoreboard.week as u8 - first_week_of_playoffs as u8 + 1;
+                        playoff_rounds.insert(round as u8, scoreboard);
+                        rounds.push(round);
+                    }
+                }
+                rounds.sort();
+                for round in rounds {
+                    if let Some(scoreboard) = playoff_rounds.get(&round) {
+                        for matchup in &scoreboard.matchups.matchups {
+                            if matchup.teams.len() != 2 {
+                                continue;
+                            }
+                            // let team_1 = matchup.teams.index(0);
+                            // let team_2 = matchup.teams.index(1);
+                            matchup_counter = matchup_counter + 1;
+                            matchups.push((round as u8, matchup_counter, matchup));
+                        }
+                    }
+                }
+            }
+        }
+        matchups
+    }
+
+    fn convert_yahoo_to_sleeper_playoff_bracket(
+        round: u8,
+        matchup_id: u8,
+        matchup: &yahoo::Matchup,
+    ) -> sleeper_fantasy_rs::PlayoffBracketEntry {
+        sleeper_fantasy_rs::PlayoffBracketEntry {
+            round,
+            matchup_id,
+            team_1_roster_id: matchup.teams.get(0).map(|t| t.team_id as u8),
+            team_2_roster_id: matchup.teams.get(1).map(|t| t.team_id as u8),
+            winner_roster_id: matchup
+                .winner_team_key
+                .as_ref()
+                .map(|k| k.team_id as u8)
+                .map_or(0, |i| i),
+            loser_roster_id: match matchup.winner_team_key.as_ref() {
+                Some(winner_team_key) => {
+                    if Some(winner_team_key.team_id) == matchup.teams.get(0).map(|t| t.team_id) {
+                        matchup.teams.get(1).map_or(0, |t| t.team_id as u8)
+                    } else {
+                        matchup.teams.get(0).map_or(0, |t| t.team_id as u8)
+                    }
+                }
+                None => 0,
+            },
+            team_1_from: None,
+            team_2_from: None,
         }
     }
 }
