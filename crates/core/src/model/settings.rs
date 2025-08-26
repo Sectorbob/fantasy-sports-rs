@@ -1,8 +1,7 @@
-use std::fmt;
-
 use crate::ScoringSettings;
 use chrono::{DateTime, NaiveDate, Utc};
 use sleeper_fantasy_rs as sleeper;
+use std::fmt;
 use yahoo_fantasy_rs as yahoo;
 
 #[derive(Debug)]

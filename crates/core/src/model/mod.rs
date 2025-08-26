@@ -1,8 +1,10 @@
 mod league;
+mod player;
 mod scoring_settings;
 mod settings;
 mod team;
 pub use league::*;
+pub use player::*;
 pub use scoring_settings::*;
 pub use settings::*;
 pub use team::*;

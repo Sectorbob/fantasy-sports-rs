@@ -1,10 +1,9 @@
-use crate::ExternalId;
+use crate::{ExternalId, Player};
 use chrono::{DateTime, Utc};
-use core::fmt;
-use serde::{Deserialize, Serialize};
-use sleeper_fantasy_rs::{self as sleeper};
+use sleeper_fantasy_rs as sleeper;
 use std::collections::{HashMap, HashSet};
-use yahoo_fantasy_rs::{self as yahoo};
+use std::fmt;
+use yahoo_fantasy_rs as yahoo;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -16,9 +15,7 @@ pub struct Draft {
     pub draft_order: Option<Vec<Option<String>>>,
 }
 impl Draft {
-    pub fn check_for_valid_draft(
-        drafts: &Vec<sleeper_fantasy_rs::Draft>,
-    ) -> Option<sleeper_fantasy_rs::Draft> {
+    pub fn check_for_valid_draft(drafts: &Vec<sleeper::Draft>) -> Option<sleeper::Draft> {
         match drafts.len() {
             0 => None,
             1 => Some(drafts[0].clone()),
@@ -27,7 +24,7 @@ impl Draft {
                 let mut filtered = drafts
                     .iter()
                     .filter(|d| d.start_time.is_some())
-                    .collect::<Vec<&sleeper_fantasy_rs::Draft>>();
+                    .collect::<Vec<&sleeper::Draft>>();
                 if filtered.len() == 1 {
                     Some(filtered[0].clone())
                 } else if filtered.len() > 1 {
@@ -43,15 +40,15 @@ impl Draft {
 }
 impl
     From<(
-        &sleeper_fantasy_rs::Draft,
-        &Vec<sleeper_fantasy_rs::DraftPick>,
+        &sleeper::Draft,
+        &Vec<sleeper::DraftPick>,
         &HashMap<u8, sleeper::Roster>,
     )> for Draft
 {
     fn from(
         (draft, picks, rosters): (
-            &sleeper_fantasy_rs::Draft,
-            &Vec<sleeper_fantasy_rs::DraftPick>,
+            &sleeper::Draft,
+            &Vec<sleeper::DraftPick>,
             &HashMap<u8, sleeper::Roster>,
         ),
     ) -> Self {
@@ -96,8 +93,8 @@ pub struct DraftPick {
     pub player: Player,
     pub roster_id: String,
 }
-impl From<&sleeper_fantasy_rs::DraftPick> for DraftPick {
-    fn from(value: &sleeper_fantasy_rs::DraftPick) -> Self {
+impl From<&sleeper::DraftPick> for DraftPick {
+    fn from(value: &sleeper::DraftPick) -> Self {
         DraftPick {
             round: value.round as u32,
             pick: value.pick_no as u32, // TODO: this is wrong
@@ -116,79 +113,6 @@ impl From<&sleeper_fantasy_rs::DraftPick> for DraftPick {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Player {
-    pub _id: String,
-    pub name: String,
-    pub positions: Vec<String>,
-    pub irl_team: Option<String>,
-}
-impl Player {
-    pub fn missing(id: &String) -> Self {
-        Player {
-            _id: id.clone(),
-            name: format!("Missing Player ({})", id),
-            positions: vec![],
-            irl_team: None,
-        }
-    }
-}
-impl From<sleeper_fantasy_rs::Player> for Player {
-    fn from(value: sleeper_fantasy_rs::Player) -> Self {
-        let name = value.to_string();
-        Player {
-            _id: value.player_id,
-            name,
-            positions: value.position.map(|v| vec![v]).unwrap_or_default(),
-            irl_team: value.team,
-        }
-    }
-}
-impl From<&sleeper_fantasy_rs::Player> for Player {
-    fn from(value: &sleeper_fantasy_rs::Player) -> Self {
-        Player {
-            _id: value.player_id.clone(),
-            name: value.to_string(),
-            positions: match value.position.clone() {
-                Some(position) => vec![position.clone()],
-                None => vec![],
-            },
-            irl_team: value.team.clone(),
-        }
-    }
-}
-impl From<yahoo::Player> for Player {
-    fn from(value: yahoo::Player) -> Self {
-        Player {
-            _id: value.player_key.to_string(),
-            name: value.name.full,
-            positions: vec![value.display_position.to_string()],
-            irl_team: Some(value.editorial_team_abbr),
-        }
-    }
-}
-impl From<&yahoo::Player> for Player {
-    fn from(value: &yahoo::Player) -> Self {
-        Player {
-            _id: value.player_key.to_string(),
-            name: value.name.full.to_string(),
-            positions: vec![value.display_position.to_string()],
-            irl_team: Some(value.editorial_team_abbr.to_string()),
-        }
-    }
-}
-impl fmt::Display for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}] {} {}",
-            self.positions.join(","),
-            self.name,
-            self.irl_team.clone().unwrap_or("".to_string())
-        )
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Roster {
     pub id: String,
@@ -196,10 +120,8 @@ pub struct Roster {
     pub owner_name: String,
     pub player_ids: Vec<String>,
 }
-impl From<(&sleeper_fantasy_rs::Roster, &HashMap<String, sleeper::User>)> for Roster {
-    fn from(
-        (roster, owners): (&sleeper_fantasy_rs::Roster, &HashMap<String, sleeper::User>),
-    ) -> Self {
+impl From<(&sleeper::Roster, &HashMap<String, sleeper::User>)> for Roster {
+    fn from((roster, owners): (&sleeper::Roster, &HashMap<String, sleeper::User>)) -> Self {
         let roster_id = &roster.roster_id;
         let owner = roster.owner_id.as_ref().map(|id| owners.get(id)).flatten();
         Roster {
@@ -264,7 +186,7 @@ pub enum Transaction {
     },
 }
 impl Transaction {
-    pub fn from_yahoo(value: &yahoo_fantasy_rs::Transaction) -> Self {
+    pub fn from_yahoo(value: &yahoo::Transaction) -> Self {
         let id = value.key();
         let created = DateTime::from_timestamp(*value.timestamp(), 0).unwrap();
         let updated = DateTime::from_timestamp(*value.timestamp(), 0).unwrap();
@@ -294,7 +216,7 @@ impl Transaction {
             .collect();
 
         match value {
-            yahoo_fantasy_rs::Transaction::Commish { .. } => Transaction::CommissionerAction {
+            yahoo::Transaction::Commish { .. } => Transaction::CommissionerAction {
                 id,
                 description: String::new(),
                 created,
@@ -302,16 +224,16 @@ impl Transaction {
                 player_moves,
                 draft_pick_moves,
             },
-            yahoo_fantasy_rs::Transaction::Trade { .. } => Transaction::Trade {
+            yahoo::Transaction::Trade { .. } => Transaction::Trade {
                 id,
                 created,
                 updated,
                 player_moves,
                 draft_pick_moves,
             },
-            yahoo_fantasy_rs::Transaction::Add { .. }
-            | yahoo_fantasy_rs::Transaction::Drop { .. }
-            | yahoo_fantasy_rs::Transaction::AddDrop { .. } => {
+            yahoo::Transaction::Add { .. }
+            | yahoo::Transaction::Drop { .. }
+            | yahoo::Transaction::AddDrop { .. } => {
                 if is_waiver_claim {
                     Transaction::Waiver {
                         id,
@@ -534,6 +456,13 @@ impl PlayerMove {
             PlayerMove::Add { src, .. } => src.clone(),
             PlayerMove::Drop { src, .. } => src.clone(),
             PlayerMove::Trade { dest, .. } => dest.clone(),
+        }
+    }
+    pub fn player_id(&self) -> String {
+        match self {
+            PlayerMove::Add { player_id, .. } => player_id.clone(),
+            PlayerMove::Drop { player_id, .. } => player_id.clone(),
+            PlayerMove::Trade { player_id, .. } => player_id.clone(),
         }
     }
 }
@@ -885,15 +814,11 @@ pub struct StandingsEntry {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::{
-        self as core, Transaction,
-        data::{PlayerMove, RosterSpot},
-    };
+    use crate as core;
     use chrono::DateTime;
     use sleeper_fantasy_rs as sleeper;
-    use yahoo_fantasy_rs::{self as yahoo, LeagueKey};
+    use std::collections::HashMap;
+    use yahoo_fantasy_rs as yahoo;
 
     #[test]
     fn test_convert_yahoo_transaction() {
@@ -906,7 +831,7 @@ mod tests {
             "expect correct timestamp"
         );
         debug_assert_eq!(
-            Transaction::Waiver {
+            core::Transaction::Waiver {
                 id: String::from("359.l.564503.tr.130"),
                 created: DateTime::parse_from_rfc3339("2016-09-28T07:33:23Z")
                     .unwrap()
@@ -914,10 +839,10 @@ mod tests {
                 updated: DateTime::parse_from_rfc3339("2016-09-28T07:33:23Z")
                     .unwrap()
                     .to_utc(),
-                player_moves: vec![PlayerMove::Add {
+                player_moves: vec![core::PlayerMove::Add {
                     player_id: "359.p.28493".to_string(),
-                    dest: RosterSpot::Roster("123.l.564503.t.5".to_string()),
-                    src: RosterSpot::WaiverWire
+                    dest: core::RosterSpot::Roster("123.l.564503.t.5".to_string()),
+                    src: core::RosterSpot::WaiverWire
                 }],
             },
             core_txn,
@@ -945,7 +870,7 @@ mod tests {
             "expect correct timestamp"
         );
         debug_assert_eq!(
-            Transaction::CommissionerAction {
+            core::Transaction::CommissionerAction {
                 id: String::from("848755191285740706"),
                 created: DateTime::parse_from_rfc3339("2019-03-08T15:57:36.943Z")
                     .unwrap()
@@ -953,10 +878,10 @@ mod tests {
                 updated: DateTime::parse_from_rfc3339("2019-03-08T15:57:36.943Z")
                     .unwrap()
                     .to_utc(),
-                player_moves: vec![PlayerMove::Drop {
+                player_moves: vec![core::PlayerMove::Drop {
                     player_id: "1903".to_string(),
-                    src: RosterSpot::Roster("12".to_string()),
-                    dest: RosterSpot::WaiverWire
+                    src: core::RosterSpot::Roster("12".to_string()),
+                    dest: core::RosterSpot::WaiverWire
                 }],
                 draft_pick_moves: vec![],
                 description: String::from(""),
@@ -1036,7 +961,7 @@ mod tests {
                         source_team_name: None,
                         destination_type: yahoo::TransactionSourceType::Team,
                         destination_team_key: Some(yahoo::TeamKey {
-                            league_key: LeagueKey::new(yahoo_fantasy_rs::GameKey::Id(123), 564503),
+                            league_key: yahoo::LeagueKey::new(yahoo::GameKey::Id(123), 564503),
                             team_id: 5,
                         }),
                         destination_team_name: Some("SmeTeam".to_string()),

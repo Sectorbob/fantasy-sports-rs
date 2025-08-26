@@ -1,4 +1,4 @@
-use sleeper_fantasy_rs::{self as sleeper, User};
+use sleeper_fantasy_rs as sleeper;
 use std::{collections::HashMap, fmt};
 use yahoo_fantasy_rs as yahoo;
 
@@ -41,7 +41,10 @@ impl From<(&sleeper::Roster, &HashMap<String, sleeper::User>)> for Team {
             id: roster.roster_id.to_string(),
             owner_id: user.map(|u| u.user_id.clone()),
             roster_id: roster.roster_id.to_string(),
-            team_name: user.map_or(format!("Team {}", roster.roster_id), User::team_name),
+            team_name: user.map_or(
+                format!("Team {}", roster.roster_id),
+                sleeper::User::team_name,
+            ),
             owner_name: user.map(|u| u.display_name.clone()),
         }
     }

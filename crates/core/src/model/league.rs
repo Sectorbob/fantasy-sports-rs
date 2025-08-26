@@ -1,12 +1,11 @@
-use serde_json::Number;
-use sleeper_fantasy_rs as sleeper;
-use std::{collections::HashMap, fmt};
-use yahoo_fantasy_rs as yahoo;
-
 use crate::{
     Draft, DraftPick, ExternalId, LeagueSettings, Player, Roster, Standings, StandingsEntry, Team,
     Transaction, data::Scoreboard,
 };
+use serde_json::Number;
+use sleeper_fantasy_rs as sleeper;
+use std::{collections::HashMap, fmt};
+use yahoo_fantasy_rs as yahoo;
 
 const N_A: &str = "N/A";
 
@@ -224,10 +223,10 @@ impl League {
                 ..
             } => {
                 match &league.settings.playoff_type {
-                    sleeper_fantasy_rs::PlayoffType::Default => {
+                    sleeper::PlayoffType::Default => {
                         // implemented below
                     }
-                    sleeper_fantasy_rs::PlayoffType::ReSeed => {
+                    sleeper::PlayoffType::ReSeed => {
                         //TODO
                         log::warn!("sleeper playoff setting for reseed not yet implemented");
                         return None;
@@ -596,6 +595,7 @@ impl From<&yahoo::League> for LeagueStatus {
 #[cfg(test)]
 mod tests {
     use crate::{ExternalId, League, LeagueAccessor};
+    use sleeper_fantasy_rs as sleeper;
     use std::{collections::HashMap, ops::Index};
     use yahoo_fantasy_rs as yahoo;
 
@@ -698,8 +698,8 @@ mod tests {
         round: u8,
         matchup_id: u8,
         matchup: &yahoo::Matchup,
-    ) -> sleeper_fantasy_rs::PlayoffBracketEntry {
-        sleeper_fantasy_rs::PlayoffBracketEntry {
+    ) -> sleeper::PlayoffBracketEntry {
+        sleeper::PlayoffBracketEntry {
             round,
             matchup_id,
             team_1_roster_id: matchup.teams.get(0).map(|t| t.team_id as u8),
