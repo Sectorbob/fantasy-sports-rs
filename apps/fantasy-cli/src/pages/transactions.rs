@@ -144,7 +144,7 @@ impl TransactionsPage {
                 };
 
                 Row::new(vec![
-                    Cell::from(txn.ts().to_string()),
+                    Cell::from(txn.ts().with_timezone(&constants::TZ).to_string()),
                     Cell::from("TBD"),
                     Cell::from(roster_name),
                     Cell::from(txn.r#type()),
