@@ -121,9 +121,21 @@ impl DraftBoardPage {
                 let overall = (round - 1) * cols + pick;
                 let overall_pick = format!("{round}.{pick}");
                 let text = if let Some(pick_player) = league_draft.picks.get(overall - 1) {
+                    let mut player_name = pick_player.player.name.clone();
+                    if player_name.len() > row.width as usize - 2 {
+                        let mut player_name_parts = player_name
+                            .split_whitespace()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>();
+                        if player_name_parts.len() > 0 {
+                            player_name_parts[0] =
+                                format!("{}.", player_name_parts[0][0..1].to_string());
+                        }
+                        player_name = format!("{}", player_name_parts.join(" "));
+                    }
+
                     Text::from(format!(
-                        "{name}\n{pos} - {team}",
-                        name = pick_player.player.name,
+                        "{player_name}\n{pos} - {team}",
                         pos = pick_player
                             .player
                             .positions
@@ -144,7 +156,7 @@ impl DraftBoardPage {
                 let paragraph = Paragraph::new(text).block(
                     Block::default()
                         .title(overall_pick)
-                        .borders(Borders::ALL)
+                        .borders(Borders::TOP | Borders::RIGHT)
                         .border_style(Style::default().fg(constants::COLOR_BORDER))
                         .border_type(BorderType::Rounded)
                         .style(Style::default().bg(constants::COLOR_BACKGROUND)),
