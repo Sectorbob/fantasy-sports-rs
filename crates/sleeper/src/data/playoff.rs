@@ -36,9 +36,9 @@ impl Bracket {
             {
                 Some(matchup) => {
                     if self.is_losers {
-                        Some(matchup.loser_roster_id)
+                        matchup.loser_roster_id
                     } else {
-                        Some(matchup.winner_roster_id)
+                        matchup.winner_roster_id
                     }
                 }
                 None => None,
@@ -51,9 +51,9 @@ impl Bracket {
             Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
                 Some(matchup) => {
                     if self.is_losers {
-                        Some(matchup.winner_roster_id)
+                        matchup.winner_roster_id
                     } else {
-                        Some(matchup.loser_roster_id)
+                        matchup.loser_roster_id
                     }
                 }
                 None => None,
@@ -66,9 +66,9 @@ impl Bracket {
             Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
                 Some(matchup) => {
                     if self.is_losers {
-                        Some(matchup.loser_roster_id)
+                        matchup.loser_roster_id
                     } else {
-                        Some(matchup.winner_roster_id)
+                        matchup.winner_roster_id
                     }
                 }
                 None => None,
@@ -81,9 +81,9 @@ impl Bracket {
             Some(m2) => match self.matchups.iter().find(|m| m.matchup_id == m2.matchup_id) {
                 Some(matchup) => {
                     if self.is_losers {
-                        Some(matchup.winner_roster_id)
+                        matchup.winner_roster_id
                     } else {
-                        Some(matchup.loser_roster_id)
+                        matchup.loser_roster_id
                     }
                 }
                 None => None,
@@ -182,9 +182,9 @@ pub struct PlayoffBracketEntry {
     #[serde(rename = "t2")]
     pub team_2_roster_id: Option<u8>, //TODO: I'd love to combine this with t2_from in an enum
     #[serde(rename = "w")]
-    pub winner_roster_id: u8,
+    pub winner_roster_id: Option<u8>,
     #[serde(rename = "l")]
-    pub loser_roster_id: u8,
+    pub loser_roster_id: Option<u8>,
     #[serde(rename = "t1_from")]
     pub team_1_from: Option<UnresolvedPlayoffSlot>,
     #[serde(rename = "t2_from")]
@@ -437,10 +437,15 @@ mod tests {
         let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
         let rosters = load_rosters_in_league(LEAGUE_ID_2019);
         let users = load_users_in_league(LEAGUE_ID_2019);
-        let actual = bracket.third_place().expect("unable to find third place team");
+        let actual = bracket
+            .third_place()
+            .expect("unable to find third place team");
         let team_name = team_name_for_roster(actual, &rosters, &users)
             .expect("can't find team name for {actual}");
-        debug_assert_eq!("Team ManagerStormy10", team_name, "unexpected team with bye: {team_name}",);
+        debug_assert_eq!(
+            "Team ManagerStormy10", team_name,
+            "unexpected team with bye: {team_name}",
+        );
     }
 
     #[test]
@@ -448,7 +453,9 @@ mod tests {
         let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
         let rosters = load_rosters_in_league(LEAGUE_ID_2019);
         let users = load_users_in_league(LEAGUE_ID_2019);
-        let actual = bracket.fourth_place().expect("unable to find fourth place team");
+        let actual = bracket
+            .fourth_place()
+            .expect("unable to find fourth place team");
         let team_name = team_name_for_roster(actual, &rosters, &users)
             .expect("can't find team name for {actual}");
         debug_assert_eq!(

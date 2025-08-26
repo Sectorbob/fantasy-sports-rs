@@ -1,3 +1,5 @@
+use crate::data::Position;
+
 use super::helpers::{bool_from_int, int_from_bool, null_to_false};
 use super::league::SeasonType;
 use chrono::{DateTime, Utc};
@@ -94,7 +96,7 @@ pub struct DraftPickMetadata {
     pub news_updated: String, // string wrapping a millis epoch
     pub number: String,
     pub player_id: String,
-    pub position: String,
+    pub position: Position,
     pub sport: super::Sport,
     pub status: String, // known value: Active
     pub team: String,   // team abbreviation

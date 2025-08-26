@@ -34,9 +34,9 @@ pub struct Player {
     pub status: Option<String>, // Active, Inactive, Injured Reserve, Non Football Injury
     pub sport: Sport,
     // #[serde(default)]
-    pub fantasy_positions: Option<Vec<String>>, // NFL: DL, LB, TE, DB, WR, OT, OL, OG, RB, QB, P, K, LS
+    pub fantasy_positions: Option<Vec<Position>>, // NFL: DL, LB, TE, DB, WR, OT, OL, OG, RB, QB, P, K, LS
     pub number: Option<u32>,
-    pub position: Option<String>,
+    pub position: Option<Position>,
     pub team: Option<String>,
     pub injury_status: Option<String>,
     pub injury_body_part: Option<String>,
@@ -94,6 +94,81 @@ impl fmt::Display for Player {
                 Some(last_name) => write!(f, "{}", last_name),
                 None => write!(f, "N/A"),
             },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum Position {
+    QB,
+    RB,
+    WR,
+    TE,
+    K,
+    DEF,
+    DST,
+    LB,
+    DB,
+    DL,
+    OL,
+    P,
+    HC,
+    CB, // Cornerback
+    S,  // Safety
+    FS, // Free Safety
+    SS, // Strong Safety
+    DE, // Defensive End
+    DT, // Defensive Tackle
+    T, // Tackle
+    OT, // Offensive Tackle
+    OG, // Offensive Guard
+    G, // Guard
+    C, // Center
+    LS, // Long Snapper
+    ILB, // Inside Linebacker
+    NT, // Nose Tackle
+    FB, // Fullback
+    OLB, // Outside Linebacker
+    LEO, // WHAT IS THIS????
+    ATH, // WHAT IS THIS????
+    #[serde(rename = "K/P")]
+    KP, // Kicker/Punter
+}
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Position::QB => write!(f, "QB"),
+            Position::RB => write!(f, "RB"),
+            Position::WR => write!(f, "WR"),
+            Position::TE => write!(f, "TE"),
+            Position::K => write!(f, "K"),
+            Position::DST => write!(f, "DST"),
+            Position::LB => write!(f, "LB"),
+            Position::DB => write!(f, "DB"),
+            Position::DL => write!(f, "DL"),
+            Position::OL => write!(f, "OL"),
+            Position::P => write!(f, "P"),
+            Position::HC => write!(f, "HC"),
+            Position::CB => write!(f, "CB"),
+            Position::S => write!(f, "S"),
+            Position::FS => write!(f, "FS"),
+            Position::SS => write!(f, "SS"),
+            Position::DE => write!(f, "DE"),
+            Position::DT => write!(f, "DT"),
+            Position::T => write!(f, "T"),
+            Position::OT => write!(f, "OT"),
+            Position::OG => write!(f, "OG"),
+            Position::G => write!(f, "G"),
+            Position::C => write!(f, "C"),
+            Position::LS => write!(f, "LS"),
+            Position::ILB => write!(f, "ILB"),
+            Position::NT => write!(f, "NT"),
+            Position::FB => write!(f, "FB"),
+            Position::OLB => write!(f, "OLB"),
+            Position::DEF => write!(f, "DEF"),
+            Position::LEO => write!(f, "LEO"),
+            Position::ATH => write!(f, "ATH"),
+            Position::KP => write!(f, "K/P"),
         }
     }
 }
