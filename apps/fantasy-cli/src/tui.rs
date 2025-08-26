@@ -1,17 +1,10 @@
-use crate::{
-    constants::SEASONS_TO_SCAN, data_fetch, draft_board::DraftBoardPage,
-    league_history_owner_records::LeagueHistoryOwnerRecordsPage,
-    league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
-    transactions_table::TransactionsPage,
-};
+use crate::{constants::SEASONS_TO_SCAN, data_fetch, pages};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use fantasy_core_rs::{self as core};
-use league_summary_page::LeagueSummaryPage;
-use leagues_page::LeaguesPage;
 use std::{
     io::{self, Stdout},
     sync::Arc,
@@ -108,9 +101,9 @@ async fn render_loop(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut page = NaviItem::WelcomePage;
-    let mut leagues_page = LeaguesPage::new();
-    let mut league_history_owner_records_page = LeagueHistoryOwnerRecordsPage::new();
-    let league_matchups_page = LeagueMatchupsTilesPage {};
+    let mut leagues_page = pages::LeaguesPage::new();
+    let mut league_history_owner_records_page = pages::LeagueHistoryOwnerRecordsPage::new();
+    let league_matchups_page = pages::LeagueMatchupsPage {};
     // let mut league_transactions_page = TransactionsPage::new();
     let mut league_transactions_page;
     let mut league_draft_board_page;
@@ -126,7 +119,7 @@ async fn render_loop(
             for league in new_leagues_state {
                 leagues_page.add_league(league);
                 league_history_owner_records_page =
-                    LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
+                    pages::LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
             }
         }
 
@@ -148,7 +141,7 @@ async fn render_loop(
                 } else {
                     leagues_page.select_by_league_id(league_id.clone());
                 }
-                LeagueSummaryPage::new(leagues_page.selected())
+                pages::LeagueSummaryPage::new(leagues_page.selected())
                     .draw(&mut terminal)
                     .map_err(|e| {
                         core::Error::new(format!("failed to render league summary page: {e}"))
@@ -185,7 +178,8 @@ async fn render_loop(
                     leagues_page.select_by_league_id(league_id.clone());
                 }
                 if let Some(selected_league) = leagues_page.selected() {
-                    league_transactions_page = TransactionsPage::from_league(selected_league);
+                    league_transactions_page =
+                        pages::TransactionsPage::from_league(selected_league);
                     terminal
                         .draw(|f| {
                             let size = f.size();
@@ -219,7 +213,7 @@ async fn render_loop(
                     leagues_page.select_by_league_id(league_id.clone());
                 }
                 if let Some(selected_league) = leagues_page.selected() {
-                    league_draft_board_page = DraftBoardPage::from(selected_league);
+                    league_draft_board_page = pages::DraftBoardPage::from(selected_league);
                     terminal
                         .draw(|f| {
                             let size = f.size();
@@ -243,8 +237,8 @@ async fn render_loop(
                 let handled = match page.clone() {
                     NaviItem::WelcomePage => false,
                     NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
-                        leagues_page::KeyHandleResult::NOOP => true,
-                        leagues_page::KeyHandleResult::GoToLeagueSummary => {
+                        pages::KeyHandleResult::NOOP => true,
+                        pages::KeyHandleResult::GoToLeagueSummary => {
                             // info!("Selected league: {:?}", leagues_page.selected().);
                             if let Some(selected_league) = leagues_page.selected() {
                                 // Here you can handle the selected league, e.g., navigate to a summary page
@@ -262,12 +256,12 @@ async fn render_loop(
                             true
                         }
 
-                        leagues_page::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
+                        pages::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
                             navi_stack.push(page);
                             page = NaviItem::LeagueHistoryOwnerRecords;
                             true
                         }
-                        leagues_page::KeyHandleResult::Unhandled => false,
+                        pages::KeyHandleResult::Unhandled => false,
                     },
                     NaviItem::LeagueSummary(league_id) => {
                         if key.code == KeyCode::Char('m') {

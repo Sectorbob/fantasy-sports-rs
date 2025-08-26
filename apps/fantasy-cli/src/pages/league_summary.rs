@@ -7,35 +7,32 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     terminal::CompletedFrame,
     text::Text,
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph},
 };
 
-use crate::{
-    draft_picks_widget::DraftPicksWidget, roster_widget::RosterWidget,
-    settings_list_widget::SettingsListWidget,
-};
+use crate::widgets;
 
 pub struct LeagueSummaryPage<'a> {
     league: Option<&'a League>,
-    scoring_settings_widget: Option<SettingsListWidget>,
-    draft_picks_widget: Option<DraftPicksWidget>,
+    scoring_settings_widget: Option<widgets::SettingsListWidget>,
+    draft_picks_widget: Option<widgets::DraftPicksWidget>,
 }
 impl<'a> LeagueSummaryPage<'a> {
     pub fn new(league: Option<&'a League>) -> Self {
         LeagueSummaryPage {
             league: league,
             scoring_settings_widget: match league {
-                Some(l) => Some(SettingsListWidget::from_league(
+                Some(l) => Some(widgets::SettingsListWidget::from_league(
                     Some(String::from("Scoring Settings")),
                     l,
                 )),
                 None => None,
             },
             draft_picks_widget: match league {
-                Some(l) => Some(DraftPicksWidget::from_league(
+                Some(l) => Some(widgets::DraftPicksWidget::from_league(
                     None,
                     l,
-                    RosterWidget::from_league(l).map(|r| r.roster_id.clone()),
+                    widgets::RosterWidget::from_league(l).map(|r| r.roster_id.clone()),
                 )),
                 None => None,
             },
@@ -90,7 +87,7 @@ impl<'a> LeagueSummaryPage<'a> {
                             // Render league details in the first column
                             render_league_details(league, f, row);
                         } else if i == 0 && j == 1 {
-                            if let Some(roster_widget) = RosterWidget::from_league(&league) {
+                            if let Some(roster_widget) = widgets::RosterWidget::from_league(&league) {
                                 // Render roster in the second column
                                 roster_widget.draw(f, row);
                             } else {

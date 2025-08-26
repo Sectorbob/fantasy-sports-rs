@@ -1,3 +1,4 @@
+use fantasy_core_rs::{self as core};
 use std::{collections::HashSet, io::Stdout};
 use tui::{
     backend::CrosstermBackend,
@@ -5,8 +6,6 @@ use tui::{
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-
-use fantasy_core_rs::{self as core};
 
 pub struct TransactionsPage {
     title_override: Option<String>,

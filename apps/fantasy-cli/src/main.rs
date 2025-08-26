@@ -7,17 +7,9 @@ use log::*;
 mod config;
 mod constants;
 mod data_fetch;
-mod draft_board;
-mod draft_picks_widget;
-mod league_history_owner_records;
-mod league_matchups_all;
-mod league_summary_page;
-mod leagues_page;
-mod matchups_list_widget;
-mod roster_widget;
-mod settings_list_widget;
-mod transactions_table;
+mod pages;
 mod tui;
+mod widgets;
 mod yahoo_utils;
 
 #[tokio::main]

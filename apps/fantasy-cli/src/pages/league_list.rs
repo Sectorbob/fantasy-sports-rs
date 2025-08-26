@@ -1,7 +1,7 @@
 use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
-use fantasy_core_rs::{League, LeagueStatus};
+use fantasy_core_rs::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
@@ -13,7 +13,7 @@ use tui::{
 pub struct LeaguesPage {
     pub leagues: Vec<League>,
     selected: usize,
-    omit_incomplete: bool,
+    _omit_incomplete: bool, //TODO: implement filtering
     // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
 }
 impl<'a> LeaguesPage {
@@ -21,7 +21,7 @@ impl<'a> LeaguesPage {
         LeaguesPage {
             leagues: vec![],
             selected: 0,
-            omit_incomplete: true, // terminal: terminal,
+            _omit_incomplete: true, // terminal: terminal,
         }
     }
 

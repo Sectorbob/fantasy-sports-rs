@@ -9,10 +9,10 @@ use tui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::matchups_list_widget::MatchupsList;
+use crate::widgets;
 
-pub struct LeagueMatchupsTilesPage {}
-impl LeagueMatchupsTilesPage {
+pub struct LeagueMatchupsPage {}
+impl LeagueMatchupsPage {
     pub fn draw<'a>(
         &self,
         f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>,
@@ -73,7 +73,7 @@ impl LeagueMatchupsTilesPage {
                 {
                     Some(scoreboard) => {
                         let matchup_widget =
-                            MatchupsList::from(None, &scoreboard.matchups, &league.players());
+                            widgets::MatchupsList::from(None, &scoreboard.matchups, &league.players());
                         matchup_widget.draw(f, row, None);
                     }
                     None => {
