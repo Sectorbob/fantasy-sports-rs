@@ -5,16 +5,18 @@ use fantasy_core_rs::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     terminal::CompletedFrame,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
+
+use crate::constants;
 
 pub struct LeaguesPage {
     pub leagues: Vec<League>,
     selected: usize,
     _omit_incomplete: bool, //TODO: implement filtering
-    // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
+                            // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
 }
 impl<'a> LeaguesPage {
     pub fn new() -> Self {
@@ -65,17 +67,31 @@ impl<'a> LeaguesPage {
                 let size = f.size();
                 let paragraph =
                     Paragraph::new("You do not have any leagues loaded.\n\nPress c to configure.")
-                        .block(Block::default().title(title).borders(Borders::ALL));
+                        .block(
+                            Block::default()
+                                .title(title)
+                                .borders(Borders::ALL)
+                                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                                .border_type(BorderType::Rounded)
+                                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                        );
                 f.render_widget(paragraph, size);
             })
         } else {
             terminal.draw(|f| {
                 let size = f.size();
                 let list = List::new(self.make_list())
-                    .block(Block::default().title(title).borders(Borders::ALL))
+                    .block(
+                        Block::default()
+                            .title(title)
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(constants::COLOR_BORDER))
+                            .border_type(BorderType::Rounded)
+                            .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                    )
                     .highlight_style(
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(constants::COLOR_HIGHLIGHT)
                             .add_modifier(Modifier::BOLD),
                     )
                     .highlight_symbol(">> ");

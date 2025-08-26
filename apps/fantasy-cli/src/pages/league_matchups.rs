@@ -4,12 +4,12 @@ use fantasy_core_rs::League;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::widgets;
+use crate::{constants, widgets};
 
 pub struct LeagueMatchupsPage {}
 impl LeagueMatchupsPage {
@@ -26,9 +26,9 @@ impl LeagueMatchupsPage {
                 season = league.season()
             ))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
             .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            .style(Style::default().bg(constants::COLOR_BACKGROUND));
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);
@@ -72,15 +72,23 @@ impl LeagueMatchupsPage {
                     .find(|s| s.matchups[0].week as usize == week)
                 {
                     Some(scoreboard) => {
-                        let matchup_widget =
-                            widgets::MatchupsList::from(None, &scoreboard.matchups, &league.players());
+                        let matchup_widget = widgets::MatchupsList::from(
+                            None,
+                            &scoreboard.matchups,
+                            &league.players(),
+                        );
                         matchup_widget.draw(f, row, None);
                     }
                     None => {
                         // Render empty paragraph in other cells
                         let text = Text::from(format!("No matchups found for week {}", week));
-                        let paragraph =
-                            Paragraph::new(text).block(Block::default().borders(Borders::ALL));
+                        let paragraph = Paragraph::new(text).block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                                .border_type(BorderType::Rounded)
+                                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                        );
                         f.render_widget(paragraph, *row);
                     }
                 };

@@ -4,9 +4,11 @@ use fantasy_core_rs::League;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
+
+use crate::constants;
 
 pub struct SettingsListWidget {
     title_override: Option<String>,
@@ -32,9 +34,9 @@ impl SettingsListWidget {
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
             .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            .style(Style::default().bg(constants::COLOR_BACKGROUND));
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);

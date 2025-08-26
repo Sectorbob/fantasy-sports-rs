@@ -5,12 +5,13 @@ use tui::{
     Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
+    style::Style,
     terminal::CompletedFrame,
     text::Text,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::widgets;
+use crate::{constants, widgets};
 
 pub struct LeagueSummaryPage<'a> {
     league: Option<&'a League>,
@@ -116,7 +117,12 @@ impl<'a> LeagueSummaryPage<'a> {
                                 draft_picks_widget.draw(f, row);
                             } else {
                                 let paragraph = Paragraph::new("")
-                                    .block(Block::default().borders(Borders::ALL));
+                                    .block(Block::default()
+                                        .borders(Borders::ALL)
+                                        .border_style(Style::default().fg(constants::COLOR_BORDER))
+                                        .border_type(BorderType::Rounded)
+                                        .style(Style::default().bg(constants::COLOR_BACKGROUND))
+                                    );
                                 f.render_widget(paragraph, *row);
                             }
                         } else {
@@ -169,8 +175,10 @@ fn render_league_details(
             lines.push(format!("Owner:        {}", owner_name));
         }
         lines.push(format!("Record:       {}", league.record()));
-        lines.push(format!("Points:       {pts:.2}", pts = league.total_points()));
-        
+        lines.push(format!(
+            "Points:       {pts:.2}",
+            pts = league.total_points()
+        ));
     }
 
     lines.push("".to_string());
@@ -181,7 +189,14 @@ fn render_league_details(
     });
 
     let text = Text::from(lines.join("\n"));
-    let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
+    let paragraph = Paragraph::new(text).block(
+        Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+    );
 
     f.render_widget(paragraph, *row);
 }
@@ -202,7 +217,14 @@ fn render_league_teams(
         })
         .collect::<Vec<_>>();
     let text = Text::from(lines.join("\n"));
-    let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
+    let paragraph = Paragraph::new(text).block(
+        Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+    );
     f.render_widget(paragraph, *row);
 }
 
@@ -232,14 +254,20 @@ fn render_league_playoff_results(
         let paragraph = Paragraph::new(text).block(
             Block::default()
                 .title("Playoff Results")
-                .borders(Borders::ALL),
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
         );
         f.render_widget(paragraph, *row);
     } else {
         let paragraph = Paragraph::new("").block(
             Block::default()
                 .title("No Playoff Results")
-                .borders(Borders::ALL),
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
         );
         f.render_widget(paragraph, *row);
     }

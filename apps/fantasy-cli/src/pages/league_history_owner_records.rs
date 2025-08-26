@@ -3,12 +3,14 @@ use tui::{
     Terminal,
     backend::CrosstermBackend,
     layout::Constraint,
-    style::{Color, Style},
+    style::Style,
     terminal::CompletedFrame,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
 use fantasy_core_rs::{self as core};
+
+use crate::constants;
 
 pub struct LeagueHistoryOwnerRecordsPage {
     title_override: Option<String>,
@@ -112,9 +114,9 @@ impl LeagueHistoryOwnerRecordsPage {
             let block = Block::default()
                 .title(title)
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::White))
+                .border_style(Style::default().fg(constants::COLOR_BORDER))
                 .border_type(BorderType::Rounded)
-                .style(Style::default().bg(Color::Black));
+                .style(Style::default().bg(constants::COLOR_BACKGROUND));
 
             let mut rows = vec![];
             for (_, e) in self.owner_records.iter().enumerate() {

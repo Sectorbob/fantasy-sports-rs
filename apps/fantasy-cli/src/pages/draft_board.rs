@@ -3,10 +3,12 @@ use std::io::Stdout;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
+
+use crate::constants;
 
 pub struct DraftBoardPage {
     league_name: Option<String>,
@@ -139,8 +141,14 @@ impl DraftBoardPage {
                     Text::from(format!("Overall\n{overall}"))
                 };
 
-                let paragraph = Paragraph::new(text)
-                    .block(Block::default().title(overall_pick).borders(Borders::ALL));
+                let paragraph = Paragraph::new(text).block(
+                    Block::default()
+                        .title(overall_pick)
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(constants::COLOR_BORDER))
+                        .border_type(BorderType::Rounded)
+                        .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                );
                 f.render_widget(paragraph, *row);
             }
         }
@@ -166,7 +174,7 @@ fn block_with_title<'a, T: Into<String>>(title: T) -> Block<'a> {
     Block::default()
         .title(title.into())
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::White))
+        .border_style(Style::default().fg(constants::COLOR_BORDER))
         .border_type(BorderType::Rounded)
-        .style(Style::default().bg(Color::Black))
+        .style(Style::default().bg(constants::COLOR_BACKGROUND))
 }

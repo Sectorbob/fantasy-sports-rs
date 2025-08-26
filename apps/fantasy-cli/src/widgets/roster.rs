@@ -4,11 +4,13 @@ use std::{collections::HashMap, io::Stdout};
 use tui::{
     backend::CrosstermBackend,
     layout::{self, Rect},
-    style::{Color, Style},
+    style::Style,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 use yahoo_fantasy_rs;
+
+use crate::constants;
 
 pub struct RosterWidget {
     pub team_name: String,
@@ -103,9 +105,9 @@ impl RosterWidget {
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
             .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            .style(Style::default().bg(constants::COLOR_BACKGROUND));
         f.render_widget(block.clone(), *rect);
         let inside_area = block.inner(*rect);
 
