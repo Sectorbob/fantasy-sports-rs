@@ -1,4 +1,4 @@
-use crate::{constants::SEASONS_TO_SCAN, data_fetch, pages};
+use crate::{constants::SEASONS_TO_SCAN, data_fetch, events, pages};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
@@ -57,46 +57,113 @@ async fn do_it(
     stdout: Stdout,
     fantasy_league_accessor: &Arc<core::LeagueAccessor>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<core::League>>(CHAN_BUF_LEN);
+    let (events_tx, mut events_rx) = tokio::sync::mpsc::channel::<events::Event>(CHAN_BUF_LEN);
+    let (actions_tx, mut actions_rx) =
+        tokio::sync::mpsc::channel::<events::BackendAction>(CHAN_BUF_LEN);
 
     // let mut errors: Vec<String> = vec![];
 
     let league_accessor_clone = Arc::clone(&fantasy_league_accessor);
+    let backend_action_handler = tokio::spawn(async move {
+        loop {
+            if let Some(action) = actions_rx.recv().await {
+                match action {
+                    events::BackendAction::Quit => {
+                        log::warn!(
+                            "Received Quit action, terminating event loop. <not yet implemented>"
+                        );
+                    }
+                    events::BackendAction::RefreshLeague(external_id) => {
+                        let force_update = true;
+                        log::info!("Refreshing league with external_id: {}", external_id);
 
-    let _handle = tokio::spawn(async move {
-        log::info!("Fetching leagues...");
+                        match league_accessor_clone
+                            .fetch_league_context(&external_id, force_update)
+                            .await
+                        {
+                            Ok(league) => {
+                                if events_tx
+                                    .send(events::Event::LeagueRefreshComplete(league))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send league through channel.");
+                                }
+                            }
+                            Err(err) => {
+                                let error_msg =
+                                    format!("Error refreshing league {external_id}: {err:?}");
+                                log::error!("{error_msg}");
+                                if events_tx
+                                    .send(events::Event::Error(error_msg))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send error through channel.");
+                                }
+                            }
+                        }
+                    }
+                    events::BackendAction::FetchAllLeagues => {
+                        log::info!("Fetching leagues...");
 
-        match data_fetch::get_all_leagues(
-            SEASONS_TO_SCAN
-                .into_iter()
-                .map(String::from)
-                .collect::<Vec<String>>(),
-            &league_accessor_clone,
-        )
-        .await
-        {
-            Ok(leagues) => {
-                if tx.send(leagues).await.is_err() {
-                    log::error!("Failed to send leagues through channel.");
+                        match data_fetch::get_all_leagues(
+                            SEASONS_TO_SCAN
+                                .into_iter()
+                                .map(String::from)
+                                .collect::<Vec<String>>(),
+                            &league_accessor_clone,
+                        )
+                        .await
+                        {
+                            Ok(leagues) => {
+                                for league in leagues {
+                                    if events_tx
+                                        .send(events::Event::LeagueRefreshComplete(league))
+                                        .await
+                                        .is_err()
+                                    {
+                                        log::error!("Failed to send leagues through channel.");
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                let error_msg = format!("Error fetching leagues: {:?}", err);
+                                log::error!("{error_msg}");
+                                eprintln!("{error_msg}");
+                                if events_tx
+                                    .send(events::Event::Error(error_msg))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send error through channel.");
+                                }
+                            }
+                        };
+                    }
                 }
+            } else {
+                break; // Exit loop if channel is closed
             }
-            Err(err) => {
-                log::error!("Error fetching leagues: {:?}", err);
-                eprintln!("Error fetching leagues: {:?}", err);
-            }
-        };
+        }
     });
 
+    // load initial data
+    actions_tx
+        .send(events::BackendAction::FetchAllLeagues)
+        .await?;
+
     // Main loop
-    render_loop(stdout, &mut rx).await?;
-    _handle.await?;
+    render_loop(stdout, &mut events_rx, actions_tx).await?;
+    backend_action_handler.await?;
 
     Ok(())
 }
 
 async fn render_loop(
     stdout: Stdout,
-    rx: &mut tokio::sync::mpsc::Receiver<Vec<core::League>>,
+    rx: &mut tokio::sync::mpsc::Receiver<events::Event>,
+    events_tx: tokio::sync::mpsc::Sender<events::BackendAction>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -111,15 +178,22 @@ async fn render_loop(
 
     loop {
         // Poll channel for new value (non-blocking)
-        while let Ok(Some(new_leagues_state)) = rx
+        while let Ok(Some(event)) = rx
             .try_recv()
             .map(Some)
-            .or::<Option<Vec<core::League>>>(Ok(None))
+            .or::<Option<events::Event>>(Ok(None))
         {
-            for league in new_leagues_state {
-                leagues_page.add_league(league);
-                league_history_owner_records_page =
-                    pages::LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
+            match event {
+                // events::Event::Input(_) => todo!(),
+                events::Event::Tick => todo!(),
+                events::Event::LeagueRefreshComplete(league) => {
+                    leagues_page.add_league(league);
+                    league_history_owner_records_page =
+                        pages::LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
+                }
+                events::Event::Error(err) => {
+                    log::warn!("Error event received in render loop: {err}");
+                }
             }
         }
 
@@ -278,6 +352,22 @@ async fn render_loop(
                             // go to draftboard
                             navi_stack.push(page);
                             page = NaviItem::LeagueDraftBoardPage(league_id.to_string());
+                            true
+                        } else if key.code == KeyCode::Char('r') {
+                            // refresh league
+
+                            // TODO: check to see if a league refresh is already in progress
+
+                            if let Err(err) = events_tx
+                                .send(events::BackendAction::RefreshLeague(core::ExternalId {
+                                    platform: fantasy_core_rs::Platform::Sleeper,
+                                    id: league_id.to_string(),
+                                }))
+                                .await
+                            {
+                                log::error!("Failed to send refresh league action: {err}");
+                            }
+                            // TODO: make sure to mark league as refresh in progress
                             true
                         } else {
                             false

@@ -1,12 +1,12 @@
-use std::env;
-
 use fantasy_core_rs as core;
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
+use std::env;
 
 mod config;
 mod constants;
 mod data_fetch;
+mod events;
 mod pages;
 mod tui;
 mod widgets;
