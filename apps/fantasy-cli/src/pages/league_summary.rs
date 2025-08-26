@@ -149,14 +149,11 @@ fn render_league_details(
         format!("League ID:    {}", league.id()),
         format!("Platform:     {}", league.platform()),
         format!("Season:       {}", league.season()),
-        format!("Team Name:    {}", league.team_name()),
-        format!("Record:       {}", league.record()),
-        format!("Total Points: {}", format!("{:.2}", league.total_points())),
         format!(
-            "Divisions:    {:?}",
+            "Divisions:    {}",
             match settings.divisions.is_empty() {
                 true => String::from("None"),
-                false => settings.divisions.join(","),
+                false => settings.divisions.join(", "),
             }
         ),
         format!(
@@ -165,6 +162,19 @@ fn render_league_details(
         ),
     ];
 
+    if let Some(team) = league.team() {
+        lines.push("".to_string());
+        lines.push(format!("Name:         {}", team.team_name));
+        if let Some(owner_name) = &team.owner_name {
+            lines.push(format!("Owner:        {}", owner_name));
+        }
+        lines.push(format!("Record:       {}", league.record()));
+        lines.push(format!("Points:       {pts:.2}", pts = league.total_points()));
+        
+    }
+
+    lines.push("".to_string());
+    lines.push("Settings".to_string());
     let fmt_settings = settings.formatted_settings();
     fmt_settings.iter().for_each(|(k, v)| {
         lines.push(format!("{key:<13} {v}", key = format!("{k}:")));
@@ -173,8 +183,6 @@ fn render_league_details(
     let text = Text::from(lines.join("\n"));
     let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
 
-    // let para = Paragraph::new(format!("Paragraph {},{}", i + 1, j + 1))
-    //     .block(Block::default().borders(Borders::ALL));
     f.render_widget(paragraph, *row);
 }
 
