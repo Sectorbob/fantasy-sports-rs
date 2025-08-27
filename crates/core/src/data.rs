@@ -1,4 +1,4 @@
-use crate::{ExternalId, Player};
+use crate::{ExternalId, Player, PlayerPosition};
 use chrono::{DateTime, Utc};
 use sleeper_fantasy_rs as sleeper;
 use std::collections::{HashMap, HashSet};
@@ -105,7 +105,7 @@ impl From<&sleeper::DraftPick> for DraftPick {
                     "{} {}",
                     &value.metadata.first_name, &value.metadata.last_name
                 ),
-                positions: vec![value.metadata.position.clone()],
+                positions: vec![PlayerPosition::from(&value.metadata.position)],
                 irl_team: Some(value.metadata.team.clone()),
             },
             roster_id: value.roster_id.to_string(),
@@ -432,13 +432,13 @@ pub enum PlayerMove {
     },
 }
 impl PlayerMove {
-    pub fn add(&self) -> bool {
+    pub fn is_add<'a>(self: &'a &Self) -> bool {
         match self {
             PlayerMove::Add { .. } => true,
             _ => false,
         }
     }
-    pub fn drop(&self) -> bool {
+    pub fn is_drop<'a>(self: &'a &Self) -> bool {
         match self {
             PlayerMove::Drop { .. } => true,
             _ => false,

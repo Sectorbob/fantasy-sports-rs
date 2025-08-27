@@ -704,21 +704,18 @@ mod tests {
             matchup_id,
             team_1_roster_id: matchup.teams.get(0).map(|t| t.team_id as u8),
             team_2_roster_id: matchup.teams.get(1).map(|t| t.team_id as u8),
-            winner_roster_id: matchup
+            winner_roster_id: matchup.winner_team_key.as_ref().map(|k| k.team_id as u8),
+            loser_roster_id: matchup
                 .winner_team_key
                 .as_ref()
-                .map(|k| k.team_id as u8)
-                .map_or(0, |i| i),
-            loser_roster_id: match matchup.winner_team_key.as_ref() {
-                Some(winner_team_key) => {
+                .map(|winner_team_key| {
                     if Some(winner_team_key.team_id) == matchup.teams.get(0).map(|t| t.team_id) {
-                        matchup.teams.get(1).map_or(0, |t| t.team_id as u8)
+                        matchup.teams.get(1).map(|t| t.team_id as u8)
                     } else {
-                        matchup.teams.get(0).map_or(0, |t| t.team_id as u8)
+                        matchup.teams.get(0).map(|t| t.team_id as u8)
                     }
-                }
-                None => 0,
-            },
+                })
+                .flatten(),
             team_1_from: None,
             team_2_from: None,
         }
