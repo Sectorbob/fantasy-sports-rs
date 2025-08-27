@@ -113,26 +113,27 @@ pub enum Position {
     OL,
     P,
     HC,
-    CB, // Cornerback
-    S,  // Safety
-    FS, // Free Safety
-    SS, // Strong Safety
-    DE, // Defensive End
-    DT, // Defensive Tackle
-    T, // Tackle
-    OT, // Offensive Tackle
-    OG, // Offensive Guard
-    G, // Guard
-    C, // Center
-    LS, // Long Snapper
+    CB,  // Cornerback
+    S,   // Safety
+    FS,  // Free Safety
+    SS,  // Strong Safety
+    DE,  // Defensive End
+    DT,  // Defensive Tackle
+    T,   // Tackle
+    OT,  // Offensive Tackle
+    OG,  // Offensive Guard
+    G,   // Guard
+    C,   // Center
+    LS,  // Long Snapper
     ILB, // Inside Linebacker
-    NT, // Nose Tackle
-    FB, // Fullback
+    NT,  // Nose Tackle
+    FB,  // Fullback
     OLB, // Outside Linebacker
     LEO, // WHAT IS THIS????
     ATH, // WHAT IS THIS????
     #[serde(rename = "K/P")]
     KP, // Kicker/Punter
+    TEAM, // TODO: what is this?
 }
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -169,6 +170,7 @@ impl fmt::Display for Position {
             Position::LEO => write!(f, "LEO"),
             Position::ATH => write!(f, "ATH"),
             Position::KP => write!(f, "K/P"),
+            Position::TEAM => write!(f, "TEAM"),
         }
     }
 }
