@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
@@ -283,6 +284,16 @@ pub enum SeasonType {
     Post,
     Pre,
     Off, //offseason
+}
+impl fmt::Display for SeasonType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SeasonType::Regular => write!(f, "regular"),
+            SeasonType::Post => write!(f, "post"),
+            SeasonType::Pre => write!(f, "pre"),
+            SeasonType::Off => write!(f, "off"),
+        }
+    }
 }
 
 #[derive(Serialize_repr, Deserialize_repr, Clone, Copy, Eq, PartialEq, Debug)]

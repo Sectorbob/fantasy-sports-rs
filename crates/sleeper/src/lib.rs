@@ -2,6 +2,7 @@ mod cache;
 mod client;
 pub mod custom;
 mod data;
+pub mod unofficial;
 
 pub use client::{Client, Error, avatar_thumbnail_url, avatar_url};
 pub use data::{
