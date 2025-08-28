@@ -10,5 +10,5 @@ pub use data::{
     RosterSpot, Standings, StandingsEntry, Transaction,
 };
 pub use external_id::{ExternalId, ParseExternalIdError, Platform};
-pub use fetch::{Error, LeagueAccessor};
+pub use fetch::{Error, LeagueAccessor, Sport};
 pub use model::*;

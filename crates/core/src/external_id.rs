@@ -228,3 +228,14 @@ impl fmt::Display for Platform {
         }
     }
 }
+impl AsRef<[u8]> for Platform {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Platform::Discord => b"discord",
+            Platform::Twitter => b"twitter",
+            Platform::Youtube => b"youtube",
+            Platform::Sleeper => b"sleeper",
+            Platform::Yahoo => b"yahoo",
+        }
+    }
+}

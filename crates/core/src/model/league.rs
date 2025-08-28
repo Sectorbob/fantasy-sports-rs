@@ -259,7 +259,7 @@ impl League {
                         s.insert(4, t);
                     }
                 }
-                log::warn!(
+                log::debug!(
                     "sleeper playoff results not collected for 5+ place in winners bracket and any of the losers bracket"
                 );
                 Some(s)
@@ -269,7 +269,7 @@ impl League {
                 settings: _,
                 ..
             } => {
-                log::warn!("league playoff results not yet implemented for yahoo leagues");
+                log::debug!("league playoff results not yet implemented for yahoo leagues");
                 None
             }
         }

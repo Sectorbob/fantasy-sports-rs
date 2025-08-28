@@ -1,5 +1,4 @@
 use futures::FutureExt;
-use log::{error, info};
 use sleeper_fantasy_rs::{
     Client, League, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
 };
@@ -13,9 +12,9 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(); //.with_cache(cache_dir);
     let players = client.fetch_all_players(&sport).await?;
     check_trending_players(&players, &client, &sport).await;
-    println!("Sport: {}", sport);
+    log::debug!("Sport: {sport}");
     let user = client.get_user("sectorbob").await.unwrap();
-    println!("User: {:#?}", user);
+    log::debug!("User: {user:#?}");
     check_all_leagues_in(&client, "2019", &user, &sport).await;
     check_all_leagues_in(&client, "2024", &user, &sport).await;
     check_all_ecr_leagues(&client).await;
@@ -199,25 +198,33 @@ fn determine_weeks_to_scan(league: &League) -> Range<usize> {
     let last_leg: Option<usize> = league.settings.last_leg.map(|n| n as usize);
     let leg: Option<usize> = league.settings.leg.map(|n| n as usize);
     let last_scored_leg: Option<usize> = league.settings.last_scored_leg.map(|n| n as usize);
-    info!(
+    log::debug!(
         "{} Sleeper League ({}): last_leg: {:?}",
-        league.season, league.league_id, last_leg
+        league.season,
+        league.league_id,
+        last_leg
     );
-    info!(
+    log::debug!(
         "{} Sleeper League ({}): leg: {:?}",
-        league.season, league.league_id, leg
+        league.season,
+        league.league_id,
+        leg
     );
-    info!(
+    log::debug!(
         "{} Sleeper League ({}): last_scored_leg: {:?}",
-        league.season, league.league_id, last_scored_leg
+        league.season,
+        league.league_id,
+        last_scored_leg
     );
     let total_num_of_weeks =
         last_leg.unwrap_or(leg.unwrap_or(last_scored_leg.unwrap_or(first_leg))) - first_leg + 1;
 
     let weeks_to_scan = first_leg..(total_num_of_weeks + first_leg);
-    info!(
+    log::debug!(
         "{} Sleeper League ({}): weeks_to_scan: {:?}",
-        league.season, league.league_id, weeks_to_scan
+        league.season,
+        league.league_id,
+        weeks_to_scan
     );
     weeks_to_scan
 }
@@ -301,7 +308,7 @@ pub async fn get_league_transactions(
                         match res {
                             Ok(raw_txns) => Ok((week, raw_txns)),
                             Err(e) => {
-                                error!("Error fetching transactions for week {}: {:?}", week, e);
+                                log::error!("Error fetching transactions for week {week}: {e:?}");
                                 Ok((week, Vec::new())) // Return empty vector on error
                             }
                         };

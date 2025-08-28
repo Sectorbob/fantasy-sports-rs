@@ -46,8 +46,12 @@ impl LeagueAccessor {
             ),
             None => (None, None, None),
         };
-        let player_cache =
-            player_cache.map(|player_cache| PlayerCache::new_with_path(&player_cache));
+        let player_cache = player_cache
+            .map(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok())
+            .flatten();
+        if let Some(player_cache) = &player_cache {
+            player_cache.init().await?;
+        }
 
         let sleeper_cli = match sleeper_cache_dir {
             Some(sleeper_cache_dir) => sleeper::Client::new().with_cache(sleeper_cache_dir),
@@ -118,7 +122,7 @@ impl LeagueAccessor {
                 if let Some(cli) = &self.sleeper_cli {
                     fetch_sleeper_league_context_by_id(
                         cli,
-                        self.players_cache.clone().as_ref(),
+                        &self.players_cache,
                         id.id.clone(),
                         force_update,
                     )
@@ -131,7 +135,7 @@ impl LeagueAccessor {
                 if let Some(cli) = &self.yahoo_cli {
                     fetch_yahoo_league_context(
                         cli,
-                        self.players_cache.clone().as_ref(),
+                        &self.players_cache,
                         yahoo::LeagueKey::from_str(&id.id).map_err(|err| {
                             Error::DevError(format!("unable to parse yahoo league key: {err}"))
                         })?,
@@ -148,7 +152,7 @@ impl LeagueAccessor {
 
 pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
     cli: &sleeper::Client,
-    player_cache: Option<&PlayerCache>,
+    player_cache: &Option<PlayerCache>,
     league_id: T,
     force_update: bool,
 ) -> Result<crate::League, Error> {
@@ -163,7 +167,7 @@ pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
 
 pub(crate) async fn fetch_sleeper_league_context(
     cli: &sleeper::Client,
-    optional_player_cache: Option<&PlayerCache>,
+    optional_player_cache: &Option<PlayerCache>,
     sleeper_league: &sleeper::League,
     force_update: bool,
 ) -> Result<crate::League, Error> {
@@ -186,9 +190,11 @@ pub(crate) async fn fetch_sleeper_league_context(
         .send();
     let winners_bracket_future = cli
         .get_playoff_bracket_request(&sleeper_league.league_id, false)
+        .with_force_update(&force_update)
         .send();
     let losers_bracket_future = cli
         .get_playoff_bracket_request(&sleeper_league.league_id, true)
+        .with_force_update(&force_update)
         .send();
     let (owners_result, rosters_result) = tokio::join!(owners_future, rosters_future);
     let owners = owners_result?
@@ -290,11 +296,19 @@ pub(crate) async fn fetch_sleeper_league_context(
     let mut players_in_league: HashMap<String, sleeper::Player> = HashMap::new();
     if let Some(player_cache) = optional_player_cache {
         for player_id in player_id_set.into_iter() {
-            if let Some(player) = player_cache.get_sleeper_player(&player_id) {
-                players_in_league.insert(player.player_id.clone(), player);
-            } else {
-                // cache miss
-                player_cache_misses.insert(player_id);
+            match player_cache.get_sleeper_player(&player_id) {
+                Ok(player) => {
+                    // cache hit
+                    players_in_league.insert(player.player_id.clone(), player);
+                }
+                Err(e) if e.is_none() => {
+                    // cache miss
+                    player_cache_misses.insert(player_id);
+                }
+                Err(err) => {
+                    // cache error
+                    log::error!("failed to lookup sleeper player {player_id} in cache: {err}")
+                }
             }
         }
     }
@@ -316,7 +330,7 @@ pub(crate) async fn fetch_sleeper_league_context(
             if let Some(player) = players.get(&player_id) {
                 // add to cache
                 if let Some(player_cache) = optional_player_cache {
-                    player_cache.insert_sleeper_player(player);
+                    player_cache.insert_sleeper_player(player)?;
                 }
                 players_in_league.insert(player_id, player.clone());
             } else {
@@ -370,7 +384,7 @@ pub(crate) async fn fetch_sleeper_league_context(
 
 pub(crate) async fn fetch_yahoo_league_context(
     cli: &yahoo::Client,
-    optional_player_cache: Option<&PlayerCache>,
+    optional_player_cache: &Option<PlayerCache>,
     league_key: yahoo::LeagueKey,
 ) -> Result<crate::League, Error> {
     // Fire out http requests
@@ -442,22 +456,34 @@ pub(crate) async fn fetch_yahoo_league_context(
     // check player cache for player
     if let Some(player_cache) = optional_player_cache {
         for player_key in player_key_set.into_iter() {
-            if let Some(player) = player_cache.get_yahoo_player(player_key.to_string()) {
-                // found player
-                players_in_league.insert(player_key, player);
-            } else {
-                // cache miss
-                player_cache_misses.insert(player_key);
+            match player_cache.get(&ExternalId {
+                platform: Platform::Yahoo,
+                id: player_key.to_string(),
+            }) {
+                Ok(player) => {
+                    // found player
+                    players_in_league.insert(player_key, player);
+                }
+                Err(e) if e.is_none() => {
+                    // cache miss
+                    player_cache_misses.insert(player_key);
+                }
+                Err(err) => {
+                    // cache error
+                    log::error!("failed to lookup yahoo player {player_key} in cache: {err}")
+                }
             }
         }
     } else {
         player_cache_misses.extend(player_key_set);
     }
 
-    log::debug!(
-        "{} player keys must be looked up for {league_key}",
-        player_cache_misses.len()
-    );
+    if !player_cache_misses.is_empty() {
+        log::info!(
+            "{count} player keys must be looked up for {league_key}",
+            count = player_cache_misses.len()
+        );
+    }
 
     let mut player_cache_misses = player_cache_misses.into_iter().collect::<Vec<_>>();
     while !player_cache_misses.is_empty() {
@@ -592,6 +618,8 @@ async fn fetch_yahoo_league_keys_for_user(
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("player cache error: {0}")]
+    PlayerCacheError(#[from] crate::player_cache::Error),
     #[error("sleeper error: {0}")]
     SleeperError(#[from] sleeper::Error),
     #[error("yahoo error: {0}")]
