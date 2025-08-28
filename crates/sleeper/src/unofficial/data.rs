@@ -136,16 +136,17 @@ impl fmt::Display for InjuryStatus {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
 pub enum InjuryNotes {
-    Stinger,
+    Abrasion,
+    Bruise,
+    Dislocated,
+    Fracture,
     Inflammation,
     Ruptured,
-    Fracture,
-    Surgery,
     Soreness,
     Sprain,
-    Dislocated,
     Strain,
-    Abrasion,
+    Stinger,
+    Surgery,
 }
 impl fmt::Display for InjuryNotes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -153,6 +154,7 @@ impl fmt::Display for InjuryNotes {
             f,
             "{s}",
             s = match self {
+                InjuryNotes::Bruise => "Bruise",
                 InjuryNotes::Stinger => "Stinger",
                 InjuryNotes::Inflammation => "Inflammation",
                 InjuryNotes::Ruptured => "Ruptured",
@@ -362,6 +364,7 @@ impl FromStr for Team {
 pub enum PlayerId {
     U32(u32),
     Team(Team),
+    Other(String),
 }
 impl FromStr for PlayerId {
     type Err = String; // Simplified error type for this example
@@ -372,7 +375,7 @@ impl FromStr for PlayerId {
         } else if let Ok(team) = s.parse::<Team>() {
             Ok(PlayerId::Team(team))
         } else {
-            Err(format!("Invalid PlayerId: {s}"))
+            Ok(PlayerId::Other(s.to_string()))
         }
     }
 }
@@ -381,6 +384,7 @@ impl fmt::Display for PlayerId {
         match self {
             PlayerId::U32(id) => write!(f, "{id}"),
             PlayerId::Team(team) => write!(f, "{team}"),
+            PlayerId::Other(other) => write!(f, "{other}"),
         }
     }
 }
@@ -392,6 +396,7 @@ impl Serialize for PlayerId {
         match self {
             PlayerId::U32(id) => serializer.serialize_u32(*id),
             PlayerId::Team(team) => serializer.serialize_str(&team.to_string()),
+            PlayerId::Other(other) => serializer.serialize_str(other),
         }
     }
 }

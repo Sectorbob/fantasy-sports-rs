@@ -40,14 +40,13 @@ impl Client {
     ///
     /// NBA goes back to 2020
     /// NFL goes back to 2018
-    pub async fn projections<T: Into<String>>(
+    pub async fn projections(
         &self,
         sport: &core::Sport,
-        season: T,
-        week: usize,
+        season: i16,
+        week: u8,
         season_type: &core::SeasonType,
     ) -> Result<Vec<core::unofficial::Projection>, reqwest::Error> {
-        let season = season.into();
         let url = format!(
             "{base_url}/projections/{sport}/{season}/{week}",
             base_url = self.base_url
@@ -65,14 +64,13 @@ impl Client {
     ///
     /// NBA goes back to 2020
     /// NFL goes back to 2015
-    pub async fn stats<T: Into<String>>(
+    pub async fn stats(
         &self,
         sport: &core::Sport,
-        season: T,
-        week: usize,
+        season: i16,
+        week: u8,
         season_type: &core::SeasonType,
     ) -> Result<Vec<core::unofficial::Statline>, reqwest::Error> {
-        let season = season.into();
         let url = format!(
             "{base_url}/stats/{sport}/{season}/{week}",
             base_url = self.base_url
@@ -108,7 +106,7 @@ mod tests {
             .mount(&mock_server)
             .await;
         let projections = client
-            .projections(&core::Sport::NFL, "2025", 1, &core::SeasonType::Regular)
+            .projections(&core::Sport::NFL, 2025, 1, &core::SeasonType::Regular)
             .await
             .expect("unable to fetch projections");
         assert!(!projections.is_empty());
@@ -126,11 +124,29 @@ mod tests {
             .mount(&mock_server)
             .await;
         let stats = client
-            .stats(&core::Sport::NFL, "2023", 1, &core::SeasonType::Regular)
+            .stats(&core::Sport::NFL, 2023, 1, &core::SeasonType::Regular)
             .await
             .expect("unable to fetch stats");
         assert!(!stats.is_empty());
     }
+
+    // #[tokio::test]
+    // async fn test_crawl_seasons() {
+    //     let seasons = 2020..2025;
+    //     let weeks = 1..17;
+
+    //     let client = Client::new();
+
+    //     for season in seasons {
+    //         for week in weeks.clone() {
+    //             println!("{season}.{week}:");
+    //             let stats = client
+    //                 .projections(&core::Sport::NFL, season, week, &core::SeasonType::Regular)
+    //                 .await
+    //                 .expect("unable to fetch stats");
+    //         }
+    //     }
+    // }
 
     async fn setup() -> (MockServer, Client) {
         let mock_server = MockServer::start().await;
