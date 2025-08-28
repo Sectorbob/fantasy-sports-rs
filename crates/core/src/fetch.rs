@@ -14,6 +14,8 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
+use tokio::io;
+use walkdir::WalkDir;
 use yahoo_fantasy_rs::{self as yahoo};
 
 pub struct LeagueAccessor {
@@ -147,6 +149,19 @@ impl LeagueAccessor {
             }
             other => Err(Error::new(format!("{other} is not supported"))),
         }
+    }
+
+    pub fn disk_space_used(&self) -> Result<u64, io::Error> {
+        let mut total_size = 0;
+        if let Some(cache_dir) = &self.cache_dir {
+            for entry in WalkDir::new(cache_dir).into_iter().filter_map(|e| e.ok()) {
+                let metadata = entry.metadata()?;
+                if metadata.is_file() {
+                    total_size += metadata.len();
+                }
+            }
+        }
+        Ok(total_size)
     }
 }
 

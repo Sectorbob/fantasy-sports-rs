@@ -13,4 +13,5 @@ sled = "0.34.7"
 sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
 thiserror = "2.0.14"
 tokio = "1.47.1"
+walkdir = "2.5.0"
 yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }
