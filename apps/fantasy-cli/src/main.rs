@@ -38,9 +38,14 @@ async fn main() -> Result<(), core::Error> {
         panic!("BOOM!")
     }
 
+
+    // Cache Dir
+    let cache_dir = config::cache_dir();
+    log::info!("Cache Dir: {cache_dir:?}");
+
     // Setup Core LeagueAccessor
     let mut fantasy_league_accessor =
-        core::LeagueAccessor::new().with_cache_dir(config::cache_dir());
+        core::LeagueAccessor::new().with_cache_dir(cache_dir);
     fantasy_league_accessor
         .init()
         .await
@@ -50,6 +55,9 @@ async fn main() -> Result<(), core::Error> {
         "sleeper not enabled"
     );
     debug_assert!(fantasy_league_accessor.yahoo_enabled(), "yahoo not enabled");
+
+    let cache_dir_space_used = fantasy_league_accessor.disk_space_used().expect("unable to check disk space used by cache");
+    log::info!("Cache Space Used: {cache_dir_space_used} bytes");
 
     let result = match args[1].to_lowercase().as_str() {
         "yahoo" => yahoo_utils::exec(fantasy_league_accessor)
@@ -69,6 +77,7 @@ async fn main() -> Result<(), core::Error> {
     }
 
     logger.flush();
+    // TODO: fantasy_league_accessor.close();
 
     Ok(())
 }
