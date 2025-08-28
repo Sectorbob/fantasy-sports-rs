@@ -1,4 +1,5 @@
 use core::fmt;
+use std::str::FromStr;
 
 use serde::{
     Deserialize, Deserializer,
@@ -72,37 +73,39 @@ impl<'de> Deserialize<'de> for PlayerKey {
         deserialize_player_key(deserializer)
     }
 }
+impl FromStr for PlayerKey {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split('.');
+
+        let game_key_str = parts.next().ok_or_else(|| "missing game_key")?.to_string();
+        let game_key = game_key_str
+            .parse::<u32>()
+            .map_err(|_| "game_key parse error")?;
+
+        // skip the middle "p"
+        let _ = parts.next();
+
+        let player_id_str = parts.next().ok_or_else(|| "missing player_id")?;
+
+        let player_id = player_id_str
+            .parse::<u32>()
+            .map_err(|_| "player_id parse error")?;
+
+        Ok(PlayerKey {
+            game_key: GameKey::Id(game_key),
+            player_id,
+        })
+    }
+}
 
 fn deserialize_player_key<'de, D>(deserializer: D) -> Result<PlayerKey, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let mut parts = s.split('.');
-
-    let game_key_str = parts
-        .next()
-        .ok_or_else(|| de::Error::custom("missing game_key"))?
-        .to_string();
-    let game_key = game_key_str
-        .parse::<u32>()
-        .map_err(|e| de::Error::custom(format!("game_key parse error: {}", e)))?;
-
-    // skip the middle "l"
-    let _ = parts.next();
-
-    let player_id_str = parts
-        .next()
-        .ok_or_else(|| de::Error::custom("missing player_id"))?;
-
-    let player_id = player_id_str
-        .parse::<u32>()
-        .map_err(|e| de::Error::custom(format!("player_id parse error: {}", e)))?;
-
-    Ok(PlayerKey {
-        game_key: GameKey::Id(game_key),
-        player_id,
-    })
+    PlayerKey::from_str(s.as_str()).map_err(|e| de::Error::custom(e))
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
