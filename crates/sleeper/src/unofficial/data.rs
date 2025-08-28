@@ -5,39 +5,53 @@ use std::{collections::HashMap, fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Projection {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<NaiveDate>,
     pub stats: HashMap<StatKey, f64>,
     pub category: Category,
-    #[serde(default, with = "chrono::serde::ts_milliseconds_option")]
-    pub last_modified: Option<DateTime<Utc>>, // epoch millis most likely
+    #[serde(
+        default,
+        with = "chrono::serde::ts_milliseconds_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub last_modified: Option<DateTime<Utc>>,
     pub week: usize,
     pub sport: Sport,
     pub season_type: SeasonType,
-    #[serde(deserialize_with = "deserialize_i16_from_string")]
+    #[serde(with = "i16_from_string")]
     pub season: i16,
     pub player: StatPlayerDetails,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<Team>,
     pub player_id: PlayerId,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub game_id: Option<String>,
     #[serde(default, with = "chrono::serde::ts_milliseconds_option")]
-    pub updated_at: Option<DateTime<Utc>>, // epoch millis most likely
-    pub company: StatSource,    // known values: rotowire
-    pub opponent: Option<Team>, // eg: "NYG"
+    pub updated_at: Option<DateTime<Utc>>,
+    pub company: StatSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opponent: Option<Team>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Statline {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>, // always None in data I've seen
     pub date: NaiveDate,
     pub stats: HashMap<StatKey, f64>,
     pub category: Category,
-    #[serde(default, with = "chrono::serde::ts_milliseconds_option")]
+    #[serde(
+        default,
+        with = "chrono::serde::ts_milliseconds_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub last_modified: Option<DateTime<Utc>>, // epoch millis most likely
     pub week: usize,
     pub sport: Sport,
     pub season_type: SeasonType,
-    #[serde(deserialize_with = "deserialize_i16_from_string")]
+    #[serde(with = "i16_from_string")]
     pub season: i16,
     pub player_id: PlayerId,
     pub player: StatPlayerDetails,
@@ -45,6 +59,7 @@ pub struct Statline {
     pub opponent: Team,
     pub game_id: String,
     #[serde(default, with = "chrono::serde::ts_milliseconds_option")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<DateTime<Utc>>, // epoch millis most likely
     pub company: StatSource, // known values: rotowire
 }
@@ -58,20 +73,171 @@ pub enum Category {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct StatPlayerDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fantasy_positions: Option<Vec<Position>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub first_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<Position>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<Team>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub team_abbr: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub years_exp: Option<u8>,
-    pub injury_body_part: Option<String>,
-    pub injury_notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub injury_body_part: Option<InjuryBodyPart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub injury_notes: Option<InjuryNotes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub injury_start_date: Option<NaiveDate>,
-    pub injury_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub injury_status: Option<InjuryStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    #[serde(
+        with = "chrono::serde::ts_milliseconds_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub news_updated: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
+pub enum InjuryStatus {
+    Doubtful,
+    Sus,
+    DNR,
+    Out,
+    PUP,
+    Questionable,
+    NA,
+    IR,
+}
+impl fmt::Display for InjuryStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{s}",
+            s = match self {
+                InjuryStatus::Doubtful => "Doubtful",
+                InjuryStatus::Sus => "Sus",
+                InjuryStatus::DNR => "DNR",
+                InjuryStatus::Out => "Out",
+                InjuryStatus::PUP => "PUP",
+                InjuryStatus::Questionable => "Questionable",
+                InjuryStatus::NA => "NA",
+                InjuryStatus::IR => "IR",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
+pub enum InjuryNotes {
+    Stinger,
+    Inflammation,
+    Ruptured,
+    Fracture,
+    Surgery,
+    Soreness,
+    Sprain,
+    Dislocated,
+    Strain,
+    Abrasion,
+}
+impl fmt::Display for InjuryNotes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{s}",
+            s = match self {
+                InjuryNotes::Stinger => "Stinger",
+                InjuryNotes::Inflammation => "Inflammation",
+                InjuryNotes::Ruptured => "Ruptured",
+                InjuryNotes::Fracture => "Fracture",
+                InjuryNotes::Surgery => "Surgery",
+                InjuryNotes::Soreness => "Soreness",
+                InjuryNotes::Sprain => "Sprain",
+                InjuryNotes::Dislocated => "Dislocated",
+                InjuryNotes::Strain => "Strain",
+                InjuryNotes::Abrasion => "Abrasion",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
+pub enum InjuryBodyPart {
+    Appendix,
+    Arm,
+    Back,
+    Biceps,
+    Calf,
+    Foot,
+    Hip,
+    Neck,
+    Ribs,
+    Illness,
+    Toe,
+    Eye,
+    Spine,
+    Suspension,
+    Oblique,
+    Shoulder,
+    #[serde(rename = "Knee - ACL")]
+    KneeACL,
+    #[serde(rename = "Knee - MCL")]
+    KneeMCL,
+    #[serde(rename = "Knee - PCL")]
+    KneePCL,
+    #[serde(rename = "Knee - ACL + MCL")]
+    KneeACLMCL,
+    #[serde(rename = "Knee - Meniscus")]
+    KneeMeniscus,
+    Pectoral,
+    Heel,
+    Concussion,
+    Thumb,
+    Head,
+    Finger,
+    #[serde(rename = "Lower Leg")]
+    LowerLeg,
+    #[serde(rename = "Upper Leg")]
+    UpperLeg,
+    #[serde(rename = "Lower Back")]
+    LowerBack,
+    Wrist,
+    Shin,
+    Achilles,
+    Hamstring,
+    Knee,
+    #[serde(rename = "Shoulder - AC Joint")]
+    ShoulderACJoint,
+    #[serde(rename = "Shoulder - Labrum")]
+    ShoulderLabrum,
+    Abdomen,
+    Collarbone,
+    Elbow,
+    Quadriceps,
+    Thigh,
+    Tailbone,
+    Ankle,
+    Forearm,
+    Hand,
+    Groin,
+    Leg,
+    #[serde(rename = "General Soreness")]
+    GeneralSoreness,
+    Undisclosed,
+    Triceps,
+    #[serde(rename = "Lower Body")]
+    LowerBody,
+    Personal,
+    #[serde(rename = "Upper Body")]
+    UpperBody,
+    Chest,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
@@ -265,7 +431,8 @@ impl<'de> Deserialize<'de> for PlayerId {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
 pub enum StatKey {
     adp_dd_ppr,
-    blk_kick,
+    #[serde(rename = "blk_kick")]
+    BlockedKicks,
     bonus_def_int_td_50p,
     bonus_fd_qb,
     bonus_fd_rb,
@@ -275,7 +442,8 @@ pub enum StatKey {
     bonus_rec_te,
     bonus_rec_wr,
     bonus_tkl_10p,
-    cmp_pct,
+    #[serde(rename = "cmp_pct")]
+    CompletionPercentage,
     def_fum_td,
     def_kr_td,
     def_kr_yd,
@@ -431,13 +599,25 @@ pub enum StatSource {
     SportRadar,
 }
 
-// create a deserilize with function that will parse a i32 string to i32
-fn deserialize_i16_from_string<'de, D>(deserializer: D) -> Result<i16, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    s.parse::<i16>().map_err(serde::de::Error::custom)
+pub mod i16_from_string {
+    use serde::Deserialize;
+
+    // create a deserilize with function that will parse a i32 string to i32
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i16, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        s.parse::<i16>().map_err(serde::de::Error::custom)
+    }
+
+    // create a serialize function that will put an i32 to a string
+    pub fn serialize<S>(value: &i16, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(&value.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -471,30 +651,12 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>();
         team_ids_for_week.sort();
+
         debug_assert_eq!(
             33, // HUH?!?!?! I guess OAK and LV are valid team_ids in the data?
             team_ids_for_week.len(),
             "should have 32 different team_ids, week 1 should have all teams active (32 teams, 16 games)"
         );
-        // debug_assert_eq!(
-        //     vec![
-        //         "ARI, "ATL, "BAL, "BUF, "CAR, "CHI, "CIN", "CLE", "DAL", "DEN", "DET", "GB",
-        //         "HOU, "IND, "JAX, "KC, "LAC, "LAR, "LV", "MIA", "MIN", "NE", "NO", "NYG",
-        //         "NYJ, "OAK, "PHI, "PIT, "SEA, "SF, "TB", "TEN", "WAS"
-        //     ],
-        //     team_ids_for_week,
-        //     "should have 32 different team_ids, week 1 should have all teams active (32 teams, 16 games)"
-        // );
-
-        // let stat_keys: HashSet<StatKey> = projections
-        //     .iter()
-        //     .flat_map(|p| p.stats.keys().cloned())
-        //     .collect();
-        // debug_assert_eq!(
-        //     HashSet::new(),
-        //     stat_keys,
-        //     "should have some different stat keys"
-        // );
 
         let statlines_where_team_present_by_opp_is_not_present: Vec<&Projection> = projections
             .iter()
@@ -551,12 +713,21 @@ mod tests {
             .filter_map(|p| p.status.clone())
             .collect();
         debug_assert_eq!(HashSet::new(), statuses, "should have correct statuses");
+
+        // serialized data formats
+        debug_assert_eq!(5019072, data.len(), "original json data length");
+        let reserialized_json = serde_json::to_string(&projections).unwrap();
+        debug_assert_eq!(
+            3533750, // improvements via optional omissions
+            reserialized_json.len(),
+            "reserialized json data length"
+        );
     }
 
     #[test]
     fn deserialize_2023_statlines() {
-        let data = include_str!("../../testdata/unofficial/stats/nfl/2023/1.json");
-        let statlines: Vec<Statline> = serde_json::from_str(data).expect("unable to deserialize");
+        let data = include_bytes!("../../testdata/unofficial/stats/nfl/2023/1.json");
+        let statlines: Vec<Statline> = serde_json::from_slice(data).expect("unable to deserialize");
         assert!(!statlines.is_empty());
         let expected_num_of_statlines = 2273;
         debug_assert_eq!(
