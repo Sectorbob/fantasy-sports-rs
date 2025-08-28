@@ -1,4 +1,5 @@
 use crate as core;
+use reqwest::header::HeaderMap;
 
 const USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:141.0) Gecko/20100101 Firefox/141.0";
@@ -11,9 +12,18 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> Self {
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert("Accept", "application/json".parse().unwrap());
+        default_headers.insert("Accept-Encoding", "gzip".parse().unwrap());
+        default_headers.insert("Connection", "keep-alive".parse().unwrap());
+        default_headers.insert("DNT", "1".parse().unwrap());
+        // If-None-Match: W/"fd83bb01b59c8401063c771a6b341f53"
+        // Priority: u=0, i
         Client {
             cli: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
+                .default_headers(default_headers)
+                // .tcp_keepalive()
                 .gzip(true)
                 .build()
                 .expect("failed to build reqwest client"),
@@ -26,6 +36,10 @@ impl Client {
         self
     }
 
+    /// Get player projections for a given sport, season, week, and season type.
+    ///
+    /// NBA goes back to 2020
+    /// NFL goes back to 2018
     pub async fn projections<T: Into<String>>(
         &self,
         sport: &core::Sport,
@@ -47,6 +61,10 @@ impl Client {
         resp.json().await
     }
 
+    /// Get player stats for a given sport, season, week, and season type.
+    ///
+    /// NBA goes back to 2020
+    /// NFL goes back to 2015
     pub async fn stats<T: Into<String>>(
         &self,
         sport: &core::Sport,
