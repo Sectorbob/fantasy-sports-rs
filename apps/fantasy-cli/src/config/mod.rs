@@ -1,60 +1,50 @@
 use crate::constants::APP_NAME;
 use dirs;
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 mod model;
-pub use model::ConfigModel;
+pub use model::*;
 
 const CONFIG_FILE_NAME: &str = "config.json";
 
-pub fn load_config() -> ConfigModel {
+pub fn load_config() -> Result<ConfigModel> {
     let config_path = config_dir().join(CONFIG_FILE_NAME);
     if config_path.exists() {
-        let config_data = std::fs::read_to_string(&config_path)
-            .unwrap_or_else(|_| panic!("failed to read config file: {:?}", config_path));
-        serde_json::from_str(&config_data)
-            .unwrap_or_else(|_| panic!("failed to parse config file: {:?}", config_path))
+        let config_data = std::fs::read_to_string(&config_path)?;
+        Ok(serde_json::from_str(&config_data)?)
     } else {
-        ConfigModel::default()
+        Ok(ConfigModel::default())
     }
 }
 
-pub async fn load_config_async() -> ConfigModel {
+pub async fn load_config_async() -> Result<ConfigModel> {
     let config_path = config_dir().join(CONFIG_FILE_NAME);
     if config_path.exists() {
-        let config_data = tokio::fs::read_to_string(&config_path)
-            .await
-            .unwrap_or_else(|_| panic!("failed to read config file: {:?}", config_path));
-        serde_json::from_str(&config_data)
-            .unwrap_or_else(|_| panic!("failed to parse config file: {:?}", config_path))
+        let config_data = tokio::fs::read_to_string(&config_path).await?;
+        Ok(serde_json::from_str(&config_data)?)
     } else {
-        ConfigModel::default()
+        let cfg = ConfigModel::default();
+        save_config_async(&cfg).await?;
+        Ok(cfg)
     }
 }
 
-pub fn save_config(config: &ConfigModel) {
+pub fn save_config(config: &ConfigModel) -> Result<()> {
     let config_path = config_dir().join(CONFIG_FILE_NAME);
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)
             .unwrap_or_else(|_| panic!("failed to create config directory: {:?}", parent));
     }
-    let config_data = serde_json::to_string_pretty(config)
-        .unwrap_or_else(|_| panic!("failed to serialize config: {:?}", config));
+    let config_data = serde_json::to_string_pretty(config)?;
     std::fs::write(&config_path, config_data)
-        .unwrap_or_else(|_| panic!("failed to write config file: {:?}", config_path));
 }
 
-pub async fn save_config_async(config: &ConfigModel) {
+pub async fn save_config_async(config: &ConfigModel) -> Result<()> {
     let config_path = config_dir().join(CONFIG_FILE_NAME);
     if let Some(parent) = config_path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .unwrap_or_else(|_| panic!("failed to create config directory: {:?}", parent));
+        tokio::fs::create_dir_all(parent).await?;
     }
-    let config_data = serde_json::to_string_pretty(config)
-        .unwrap_or_else(|_| panic!("failed to serialize config: {:?}", config));
-    tokio::fs::write(&config_path, config_data)
-        .await
-        .unwrap_or_else(|_| panic!("failed to write config file: {:?}", config_path));
+    let config_data = serde_json::to_string_pretty(config)?;
+    tokio::fs::write(&config_path, config_data).await
 }
 
 pub fn cache_dir() -> PathBuf {
@@ -91,3 +81,13 @@ fn get_temp_dir() -> PathBuf {
         PathBuf::from(root.as_os_str())
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("io error")]
+    IoError(#[from] io::Error),
+    #[error("io error")]
+    SerdeError(#[from] serde_json::Error),
+}
+
+pub type Result<T> = std::result::Result<T, io::Error>;

@@ -1,4 +1,4 @@
-use crate::{constants::SEASONS_TO_SCAN, data_fetch, events, pages};
+use crate::{config, constants::SEASONS_TO_SCAN, data_fetch, events, pages};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
@@ -23,6 +23,7 @@ const CHAN_BUF_LEN: usize = 100;
 
 pub async fn exec(
     fantasy_league_accessor: core::LeagueAccessor,
+    cfg: config::ConfigModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal in raw mode
     enable_raw_mode()?;
@@ -30,7 +31,7 @@ pub async fn exec(
     execute!(stdout, EnterAlternateScreen)?;
 
     let handle = tokio::spawn(async move {
-        let _ = do_it(stdout, &Arc::new(fantasy_league_accessor)).await;
+        let _ = do_it(stdout, &Arc::new(fantasy_league_accessor), cfg).await;
     });
 
     match handle.await {
@@ -56,6 +57,7 @@ pub async fn exec(
 async fn do_it(
     stdout: Stdout,
     fantasy_league_accessor: &Arc<core::LeagueAccessor>,
+    cfg: config::ConfigModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (events_tx, mut events_rx) = tokio::sync::mpsc::channel::<events::Event>(CHAN_BUF_LEN);
     let (actions_tx, mut actions_rx) =
@@ -154,7 +156,7 @@ async fn do_it(
         .await?;
 
     // Main loop
-    render_loop(stdout, &mut events_rx, actions_tx).await?;
+    render_loop(stdout, &mut events_rx, actions_tx, cfg).await?;
     backend_action_handler.await?;
 
     Ok(())
@@ -164,10 +166,17 @@ async fn render_loop(
     stdout: Stdout,
     rx: &mut tokio::sync::mpsc::Receiver<events::Event>,
     events_tx: tokio::sync::mpsc::Sender<events::BackendAction>,
+    cfg: config::ConfigModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut page = NaviItem::WelcomePage;
+    let mut page: NaviItem = match cfg.landing_page {
+        config::DefaultLandingPage::WelcomePage => NaviItem::WelcomePage,
+        config::DefaultLandingPage::LeaguesPage => NaviItem::LeaguesPage,
+        config::DefaultLandingPage::LeagueSummary(external_id) => {
+            NaviItem::LeagueSummary(external_id.to_string())
+        }
+    };
     let mut leagues_page = pages::LeaguesPage::new();
     let mut league_history_owner_records_page = pages::LeagueHistoryOwnerRecordsPage::new();
     let league_matchups_page = pages::LeagueMatchupsPage {};
