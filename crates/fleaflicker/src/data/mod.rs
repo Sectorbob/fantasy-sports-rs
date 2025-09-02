@@ -21,7 +21,7 @@ impl Sport {
 }
 impl fmt::Display for Sport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{s}", s = self.as_str())
+        f.write_str(self.as_str())
     }
 }
 
@@ -30,6 +30,7 @@ impl fmt::Display for Sport {
 pub struct LeaguesForUserResponse {
     pub leagues: Vec<League>,
     pub season: u32,
+    #[serde(default)]
     pub can_create_new: bool,
 }
 
@@ -43,10 +44,12 @@ pub struct League {
     pub logo_url: String,
     pub owned_team: OwnedTeam,
     pub active_for_current_season: bool,
-    pub membership_type: String, // known values: MEMBER
+    pub draft_status: Option<String>, // known values: POST_DRAFT
+    pub membership_type: String,      // known values: MEMBER
     pub roster_requirements: RosterRequirements,
     pub waiver_type: String, // knwon values: BLIND_BID
     pub draft_live_time_epoch_milli: String,
+    #[serde(default)]
     pub max_keepers: u8,
     pub default_waiver_budget: u32,
     pub size: u8,
@@ -69,7 +72,7 @@ pub struct OwnedTeam {
     pub points_against: Points,
     pub streak: Points,
     pub waiver_acquisition_budget: Budget,
-    pub draft_position: u8,
+    pub draft_position: Option<u8>,
     pub initials: String,
 }
 
@@ -98,6 +101,7 @@ pub struct RosterRequirements {
     pub roster_size: u8,
     pub starter_count: u8,
     pub bench_count: u8,
+    #[serde(default)]
     pub reserve_count: u8,
     pub eligibility: Vec<String>,
 }

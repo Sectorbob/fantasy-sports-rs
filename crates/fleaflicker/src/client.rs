@@ -66,11 +66,18 @@ impl Client {
     pub async fn get_leagues_for_user<T: Into<String>>(
         &self,
         email: T,
+        sport: Option<Sport>,
+        season: Option<u32>,
     ) -> Result<data::LeaguesForUserResponse, Error> {
-        let email = email.into();
-        return self
-            .get("/FetchUserLeagues", Some(vec![("email", email)]))
-            .await;
+        let mut filters = vec![("email", email.into())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+        if let Some(season) = season {
+            filters.push(("season", season.to_string()));
+        }
+
+        return self.get("/FetchUserLeagues", Some(filters)).await;
     }
 }
 
@@ -88,7 +95,7 @@ mod tests {
     use tokio::fs;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
-        matchers::{method, path},
+        matchers::{method, path, query_param},
     };
 
     #[tokio::test]
@@ -105,11 +112,33 @@ mod tests {
             .await;
 
         let response = client
-            .get_leagues_for_user("user_a271a94dea@example.com")
+            .get_leagues_for_user("user_a271a94dea@example.com", None, None)
             .await
             .expect("request failed");
 
         debug_assert_eq!(2025, response.season, "season is incorrect");
+        debug_assert_eq!(1, response.leagues.len(), "league count incorrect");
+    }
+
+    #[tokio::test]
+    async fn test_get_leagues_for_user_2019() {
+        let body = fs::read_to_string("testdata/leagues_for_user_2019.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchUserLeagues")))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .get_leagues_for_user("user_a271a94dea@example.com", None, None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(2019, response.season, "season is incorrect");
         debug_assert_eq!(1, response.leagues.len(), "league count incorrect");
     }
 
@@ -133,6 +162,30 @@ mod tests {
 
         debug_assert_eq!(7, response.result_total, "result_total is incorrect");
         debug_assert_eq!(7, response.items.len(), "item count incorrect");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_activity_2019() {
+        let league_id = 156377;
+        let body = fs::read_to_string("testdata/league_activity_2019.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueActivity")))
+            .and(query_param("league_id", league_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .fetch_league_activity(&crate::Sport::NFL, league_id, None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(29, response.result_total, "result_total is incorrect");
+        debug_assert_eq!(29, response.items.len(), "item count incorrect");
     }
 
     async fn setup() -> (MockServer, Client) {
