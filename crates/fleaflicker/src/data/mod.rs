@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Sport {
@@ -6,6 +8,21 @@ pub enum Sport {
     MLB,
     NBA,
     NHL,
+}
+impl Sport {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Sport::NFL => "NFL",
+            Sport::MLB => "MLB",
+            Sport::NBA => "NBA",
+            Sport::NHL => "NHL",
+        }
+    }
+}
+impl fmt::Display for Sport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{s}", s = self.as_str())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -95,4 +112,33 @@ pub struct RosterPosition {
     pub max: Option<u8>,
     pub start: Option<u8>,
     pub colors: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LeagueActivityResponse {
+    pub items: Vec<LeagueActivityItem>,
+    pub result_total: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LeagueActivityItem {
+    pub time_epoch_milli: String,
+    pub membership: Option<Membership>,
+    pub draft_time: Option<Value>,
+    pub settings: Option<Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Membership {
+    pub team: MembershipTeam,
+    pub description: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MembershipTeam {
+    pub id: i32,
+    pub name: String,
+    pub initials: String,
 }
