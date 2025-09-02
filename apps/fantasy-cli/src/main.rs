@@ -1,27 +1,22 @@
-use std::env;
-
+use fantasy_core_rs as core;
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
+use std::env;
 
 mod config;
 mod constants;
-mod data;
 mod data_fetch;
-mod draft_picks_widget;
-mod league_matchups_all;
-mod league_summary_page;
-mod leagues_page;
-mod matchups_list_widget;
-mod roster_widget;
-mod settings_list_widget;
-mod sleeper_utils;
+mod events;
+mod helpers;
+mod pages;
 mod tui;
+mod widgets;
 mod yahoo_utils;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Logger::try_with_str("info") // set log level
-        .unwrap()
+async fn main() -> Result<(), core::Error> {
+    let logger = Logger::try_with_str("info")
+        .map_err(|e| core::Error::new(format!("failed to set log level: {e}")))?
         .log_to_file(FileSpec::default().suppress_timestamp())
         .format(flexi_logger::detailed_format)
         // .rotate(
@@ -32,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_mode(WriteMode::BufferAndFlush)
         // .directory("log_files") // optional: log file directory
         .start()
-        .unwrap();
+        .map_err(|e| core::Error::new(format!("failed to start logger: {e}")))?;
 
     info!("Starting the application...");
 
@@ -42,10 +37,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         error!("No arguments provided. Please specify a mode: 'yahoo', 'sleeper', or 'tui'.");
         panic!("BOOM!")
     }
-    match args[1].to_lowercase().as_str() {
-        "yahoo" => yahoo_utils::exec().await,
-        "sleeper" => sleeper_utils::exec().await,
-        "tui" => tui::exec().await,
+
+    // load config file
+    let cfg = config::load_config_async()
+        .await
+        .expect("failed to load config"); // can panic
+
+    // Cache Dir
+    let cache_dir = config::cache_dir();
+    log::info!("Cache Dir: {cache_dir:?}");
+
+    // Setup Core LeagueAccessor
+    let mut fantasy_league_accessor = core::LeagueAccessor::new().with_cache_dir(cache_dir);
+    fantasy_league_accessor
+        .init()
+        .await
+        .expect("failed to initialized");
+    debug_assert!(
+        fantasy_league_accessor.sleeper_enabled(),
+        "sleeper not enabled"
+    );
+    debug_assert!(fantasy_league_accessor.yahoo_enabled(), "yahoo not enabled");
+
+    let cache_dir_space_used = fantasy_league_accessor
+        .disk_space_used()
+        .expect("unable to check disk space used by cache");
+    log::info!("Cache Space Used: {cache_dir_space_used} bytes");
+
+    let result = match args[1].to_lowercase().as_str() {
+        "yahoo" => yahoo_utils::exec(fantasy_league_accessor)
+            .await
+            .map_err(|e| core::Error::YahooError(e)),
+        "sleeper" => core::sleeper_utils::exec()
+            .await
+            .map_err(|e| core::Error::DevError(format!("sleeper cli quit {e:?}"))),
+        "tui" => tui::exec(fantasy_league_accessor, cfg)
+            .await
+            .map_err(|e| core::Error::DevError(format!("tui quit {e:?}"))),
         _ => panic!("BOOM!"),
+    };
+    if let Err(e) = result {
+        log::error!("app quit: {e:?}");
+        eprintln!("app quit: {e:?}");
     }
+
+    logger.flush();
+    // TODO: fantasy_league_accessor.close();
+
+    Ok(())
 }

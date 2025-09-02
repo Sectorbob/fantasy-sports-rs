@@ -1,87 +1,16 @@
+use fantasy_core_rs::LeagueAccessor;
 use log::*;
-use serde_json;
 use std::{
     collections::{HashMap, HashSet},
-    env,
-    error::Error as StdError,
     io::{Error as IOError, ErrorKind},
 };
-use tokio::{
-    fs,
-    io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-};
-
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use yahoo_fantasy_rs::{
     Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
     Team, TeamStandings, Token, Transaction,
 };
 
-use crate::constants::{ENV_YAHOO_CLIENT_ID, ENV_YAHOO_REDIRECT_URI, ENV_YAHOO_TOKEN_FILE};
-
-pub async fn build_client() -> Result<Client, YahooError> {
-    let yahoo_client_id = match env::var(ENV_YAHOO_CLIENT_ID) {
-        Ok(id) => id,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_CLIENT_ID.to_string() + " environment variable not set",
-            ));
-        }
-    };
-    let yahoo_redirect_uri = match env::var(ENV_YAHOO_REDIRECT_URI) {
-        Ok(uri) => uri,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_REDIRECT_URI.to_string() + " environment variable not set",
-            ));
-        }
-    };
-    let yahoo_token_file = match env::var(ENV_YAHOO_TOKEN_FILE) {
-        Ok(file) => file,
-        Err(_) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(
-                ENV_YAHOO_TOKEN_FILE.to_string() + " environment variable not set",
-            ));
-        }
-    };
-    let mut client = Client::new(yahoo_client_id, yahoo_redirect_uri, None);
-
-    debug!("loading token file: {}", yahoo_token_file);
-
-    let token = match load_token_file(&yahoo_token_file).await {
-        Ok(token) => token,
-        // If fails, perform auth flow
-        Err(err) => {
-            return Err(yahoo_fantasy_rs::Error::UnknownError(format!(
-                "Failed to load token file: {}",
-                err
-            )));
-            // println!(
-            //     "No token found or failed to load ({}). Performing OAuth flow...",
-            //     err
-            // );
-            // match perform_oauth_flow(&mut client).await {
-            //     Ok(token) => token,
-            //     Err(_) => {
-            //         println!("Failed to perform OAuth flow. Exiting.");
-            //         return Err(yahoo_fantasy_rs::Error::UnknownError(
-            //             "Failed to perform OAuth flow".to_string(),
-            //         ));
-            //     }
-
-            // }
-        }
-    };
-    client.token = Some(token);
-    debug!("loaded token: {:#?}", client.token);
-    info!("refreshing token");
-    let new_token = client.refresh_token().await?;
-    save_token_file(&yahoo_token_file, new_token)
-        .await
-        .map_err(|err: IOError| YahooError::UnknownError(format!("{:?}", err)))?;
-    Ok(client)
-}
-
-pub async fn exec() -> Result<(), Box<dyn StdError>> {
+pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), yahoo_fantasy_rs::Error> {
     let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
@@ -95,7 +24,11 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     let enable_check_team_in_seasons = true;
 
     debug!("Building Yahoo Fantasy Client...");
-    let client = build_client().await?;
+    let client = league_accessor
+        .yahoo_cli
+        .ok_or(yahoo_fantasy_rs::Error::UnknownError(
+            "no yahoo_cli is set".to_string(),
+        ))?;
     debug!("Yahoo Fantasy Client built");
 
     let public_league_key = LeagueKey::new(GameKey::Id(223), 431);
@@ -117,8 +50,7 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
                 vec![GameCode::NFL],
                 seasons.iter().map(|s| s.as_str()).collect(),
             )
-            .await
-            .unwrap();
+            .await?;
 
         let mut game_codes: HashSet<&GameCode> = HashSet::new();
         for game in games.iter() {
@@ -140,30 +72,30 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     }
 
     if enable_check_game {
-        let game = client.get_game(GameKey::Code(GameCode::NFL)).await.unwrap();
+        let game = client.get_game(GameKey::Code(GameCode::NFL)).await?;
         println!("Game: {:#?}", game);
     }
 
     if enable_check_teams {
-        let teams = client.get_teams_for_user(GameKey::Id(371)).await.unwrap();
+        let teams = client.get_teams_for_user(GameKey::Id(371)).await?;
         println!("Teams: {:#?}", teams);
     }
 
     if enable_check_league {
-        let league = client.get_league(&ecr_2017).await.unwrap();
+        let league = client.get_league(&ecr_2017).await?;
         println!("League: {:#?}", league);
 
         let mut team_standings: HashMap<String, &TeamStandings> = HashMap::new();
 
-        let standings = client.get_league_standings(&ecr_2017).await.unwrap();
+        let standings = client.get_league_standings(&ecr_2017).await?;
 
-        for team in standings.teams() {
+        for team in &standings.teams {
             if let Some(standings) = &team.team_standings {
                 team_standings.insert(team.team_key.to_string(), standings);
             }
         }
 
-        let teams = client.get_teams_in_league(&ecr_2017).await.unwrap();
+        let teams = client.get_teams_in_league(&ecr_2017).await?;
         println!("Teams: {:#?}", teams);
         for team in teams {
             println!(" {}", team.name);
@@ -194,16 +126,14 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     if enable_check_league_scoreboard {
         let scoreboard = client
             .get_league_scoreboard(&public_league_key, None, None)
-            .await
-            .unwrap();
+            .await?;
         println!("Scoreboard: {:#?}", scoreboard);
     }
 
     if enable_check_league_settings {
         let league_settings = client
             .get_league_settings(&LeagueKey::new(GameKey::Id(371), 20028))
-            .await
-            .unwrap();
+            .await?;
         println!("League Settings: {:#?}", league_settings);
     }
 
@@ -212,18 +142,12 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     }
 
     if enable_league_transactions {
-        let transactions = client
-            .get_league_transactions(&public_league_key)
-            .await
-            .unwrap();
+        let transactions = client.get_league_transactions(&public_league_key).await?;
         fancy_navigate_transactions(&transactions);
     }
 
     if enable_check_players {
-        let players = client
-            .get_players_for_league(&ecr_2017, None)
-            .await
-            .unwrap();
+        let players = client.get_players_for_league(&ecr_2017, None).await?;
         info!("got {} yahoo players in response", players.len());
 
         let mut player_statuses: HashSet<String> = HashSet::new();
@@ -257,39 +181,7 @@ pub async fn exec() -> Result<(), Box<dyn StdError>> {
     Ok(())
 }
 
-async fn load_token_file(file: &String) -> Result<Token, IOError> {
-    // Open the file asynchronously
-    let mut f = fs::File::open(file).await?;
-    let mut contents = Vec::new();
-
-    // Read the file contents asynchronously
-    f.read_to_end(&mut contents).await?;
-
-    // Deserialize JSON from the buffer into Token struct
-    let token: Token = serde_json::from_slice(&contents)?;
-
-    Ok(token)
-}
-
-async fn save_token_file(file: &String, token: Token) -> Result<(), IOError> {
-    // Serialize to Vec<u8>
-    let json_bytes = serde_json::to_vec(&token).unwrap();
-
-    // Async file and writer
-    let f = fs::OpenOptions::new()
-        .write(true)
-        .create(true) // creates if not exists or opens
-        .truncate(true)
-        .open(file)
-        .await?;
-    let mut writer = BufWriter::new(f);
-
-    // Write bytes asynchronously
-    writer.write_all(&json_bytes).await?;
-    writer.flush().await?;
-    Ok(())
-}
-
+#[allow(dead_code)]
 async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     let auth_request_url = match client.get_request_auth_url().await {
         Ok(url) => url,
@@ -320,6 +212,7 @@ async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     Ok(token)
 }
 
+#[allow(dead_code)]
 async fn receive_auth_code_from_stdin() -> Result<String, IOError> {
     print!("Please enter the auth code: ");
     io::stdout().flush().await?;
@@ -343,21 +236,10 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
 
     for transaction in transactions {
         match transaction {
-            Transaction::Commish {
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-            } => {
+            Transaction::Commish { .. } => {
                 //println!("Commish({}): {}", transaction_key, transaction_time)
             }
-            Transaction::Add {
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-                players,
-            } => {
+            Transaction::Add { players, .. } => {
                 if let Some(players) = players {
                     for player in players {
                         match &player.display_position {
@@ -438,15 +320,6 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                     }
                 }
             }
-            Transaction::Other {
-                type_name,
-                transaction_key: _,
-                transaction_id: _,
-                status: _,
-                timestamp: _,
-                players: _,
-                rest,
-            } => println!("Other({}): {:#?}", type_name, rest),
         }
         // if let Some(players) = transaction.players {
 

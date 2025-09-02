@@ -1,9 +1,9 @@
-use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
 };
 
+use fantasy_core_rs as core;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
@@ -11,15 +11,17 @@ use tui::{
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
+use crate::constants;
+
 pub struct MatchupsList {
     title_override: Option<String>,
     matchups: Vec<Matchup>,
 }
 impl MatchupsList {
-    pub fn from_sleeper(
+    pub fn from(
         title_override: Option<String>,
-        matchups: &Vec<sleeper_fantasy_rs::custom::FantasyMatchup>,
-        players: &HashMap<String, Player>,
+        matchups: &Vec<core::Matchup>,
+        players: &HashMap<String, core::Player>,
     ) -> Self {
         MatchupsList {
             title_override,
@@ -29,45 +31,40 @@ impl MatchupsList {
                     // team_name: format!("Roster {}", m.roster_id),
                     week: m.week.to_string(),
                     side_1: MatchupSide {
-                        team_name: m.left.owner.team_name().clone(),
-                        team_id: m.left.owner.user_id.clone(),
-                        score: m.left.matchup.points,
+                        team_name: m.left.team_name.clone(),
+                        team_id: m.left.roster_id.clone(),
+                        score: m.left.score,
                         starters: m
                             .left
-                            .starters
+                            .players
                             .iter()
-                            .map(|pid| match players.get(pid) {
-                                Some(player) => player.clone(),
-                                None => Player::missing(pid),
+                            .filter_map(|player| {
+                                players.get(&player.player_id.id).map(core::Player::clone)
                             })
                             .collect(),
                     },
-                    side_2: MatchupSide {
-                        team_name: m.right.owner.team_name().clone(),
-                        team_id: m.right.owner.user_id.clone(),
-                        score: m.right.matchup.points,
-                        starters: m
-                            .left
-                            .starters
-                            .iter()
-                            .map(|pid| match players.get(pid) {
-                                Some(player) => player.clone(),
-                                None => Player::missing(pid),
-                            })
-                            .collect(),
-                    },
+                    side_2: m.right.as_ref().map_or(
+                        MatchupSide {
+                            team_name: String::from(""),
+                            team_id: String::from(""),
+                            score: 0.0,
+                            starters: vec![],
+                        },
+                        |right| MatchupSide {
+                            team_name: right.team_name.clone(),
+                            team_id: right.roster_id.clone(),
+                            score: right.score,
+                            starters: right
+                                .players
+                                .iter()
+                                .filter_map(|player| {
+                                    players.get(&player.player_id.id).map(core::Player::clone)
+                                })
+                                .collect(),
+                        },
+                    ),
                 })
                 .collect(),
-        }
-    }
-    pub fn from_yahoo(
-        title_override: Option<String>,
-        _team: &yahoo_fantasy_rs::Team,
-        _roster: &yahoo_fantasy_rs::Roster,
-    ) -> Self {
-        MatchupsList {
-            title_override,
-            matchups: vec![],
         }
     }
     pub fn draw<'a>(
@@ -87,7 +84,7 @@ impl MatchupsList {
             let mut weeks: Vec<String> = week_set.into_iter().collect();
             weeks.sort();
             if weeks.len() == 1 {
-                format!("Week {}", weeks.first().unwrap())
+                format!("Week {}", weeks.first().unwrap_or(&"/N/A".to_string()))
             } else {
                 format!("Matchup List {}", weeks.join(","))
             }
@@ -96,9 +93,9 @@ impl MatchupsList {
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
             .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            .style(Style::default().bg(constants::COLOR_BACKGROUND));
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);
@@ -238,58 +235,10 @@ pub struct MatchupSide {
     pub team_name: String,
     pub team_id: String,
     pub score: f32,
-    pub starters: Vec<Player>,
+    pub starters: Vec<core::Player>,
 }
 impl MatchupSide {
     pub fn score_str(&self) -> String {
         format!("{:.2}", self.score)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Player {
-    pub _id: String,
-    pub name: String,
-    pub positions: Vec<String>,
-    pub irl_team: Option<String>,
-}
-impl Player {
-    pub fn from_sleeper(sleeper_player: &sleeper_fantasy_rs::Player) -> Self {
-        Player {
-            _id: sleeper_player.player_id.clone(),
-            name: sleeper_player.to_string(),
-            positions: match sleeper_player.position.clone() {
-                Some(position) => vec![position.clone()],
-                None => vec![],
-            },
-            irl_team: sleeper_player.team.clone(),
-        }
-    }
-    pub fn from_yahoo(yahoo_player: &yahoo_fantasy_rs::Player) -> Self {
-        Player {
-            _id: yahoo_player.player_key.to_string(),
-            name: yahoo_player.name.full.to_string(),
-            positions: vec![yahoo_player.display_position.to_string()],
-            irl_team: Some(yahoo_player.editorial_team_abbr.to_string()),
-        }
-    }
-    pub fn missing(id: &String) -> Self {
-        Player {
-            _id: id.clone(),
-            name: format!("Missing Player ({})", id),
-            positions: vec![],
-            irl_team: None,
-        }
-    }
-}
-impl fmt::Display for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}] {} {}",
-            self.positions.join(","),
-            self.name,
-            self.irl_team.clone().unwrap_or("".to_string())
-        )
     }
 }

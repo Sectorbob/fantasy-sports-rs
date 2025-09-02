@@ -1,17 +1,13 @@
-use crate::{
-    constants::SEASONS_TO_SCAN, data::League, data_fetch,
-    league_matchups_all::LeagueMatchupsTilesPage, league_summary_page, leagues_page,
-};
+use crate::{config, constants::SEASONS_TO_SCAN, data_fetch, events, pages};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use league_summary_page::LeagueSummaryPage;
-use leagues_page::LeaguesPage;
-use log::*;
+use fantasy_core_rs::{self as core};
 use std::{
     io::{self, Stdout},
+    sync::Arc,
     time::Duration,
 };
 use tokio::time::sleep;
@@ -23,24 +19,31 @@ use tui::{
     widgets::{Block, Borders},
 };
 
-pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
+const CHAN_BUF_LEN: usize = 100;
+
+pub async fn exec(
+    fantasy_league_accessor: core::LeagueAccessor,
+    cfg: config::ConfigModel,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal in raw mode
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
 
-    let handle = tokio::spawn(async {
-        let _ = do_it(stdout).await;
+    let handle = tokio::spawn(async move {
+        let _ = do_it(stdout, &Arc::new(fantasy_league_accessor), cfg).await;
     });
 
     match handle.await {
         Ok(_) => {}
         Err(err) if err.is_panic() => {
             // Handle panic
+            log::error!("Caught a panic in the future: {err:?}");
             eprintln!("Caught a panic in the future: {}", err);
         }
         Err(err) => {
             // Handle cancellation or other errors
+            log::error!("Future was cancelled or errored: {}", err);
             eprintln!("Future was cancelled or errored: {}", err);
         }
     }
@@ -51,68 +54,167 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn do_it(stdout: Stdout) -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<League>>(100);
+async fn do_it(
+    stdout: Stdout,
+    fantasy_league_accessor: &Arc<core::LeagueAccessor>,
+    cfg: config::ConfigModel,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (events_tx, mut events_rx) = tokio::sync::mpsc::channel::<events::Event>(CHAN_BUF_LEN);
+    let (actions_tx, mut actions_rx) =
+        tokio::sync::mpsc::channel::<events::BackendAction>(CHAN_BUF_LEN);
 
     // let mut errors: Vec<String> = vec![];
 
-    let _handle = tokio::spawn(async move {
-        info!("Fetching leagues...");
+    let league_accessor_clone = Arc::clone(&fantasy_league_accessor);
+    let backend_action_handler = tokio::spawn(async move {
+        loop {
+            if let Some(action) = actions_rx.recv().await {
+                match action {
+                    events::BackendAction::Quit => {
+                        log::warn!(
+                            "Received Quit action, terminating event loop. <not yet implemented>"
+                        );
+                    }
+                    events::BackendAction::RefreshLeague(external_id) => {
+                        let force_update = true;
+                        log::info!("Refreshing league with external_id: {}", external_id);
 
-        match data_fetch::get_all_leagues(
-            SEASONS_TO_SCAN
-                .into_iter()
-                .map(String::from)
-                .collect::<Vec<String>>(),
-        )
-        .await
-        {
-            Ok(leagues) => {
-                if tx.send(leagues).await.is_err() {
-                    eprintln!("Failed to send leagues through channel.");
+                        match league_accessor_clone
+                            .fetch_league_context(&external_id, force_update)
+                            .await
+                        {
+                            Ok(league) => {
+                                if events_tx
+                                    .send(events::Event::LeagueRefreshComplete(league))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send league through channel.");
+                                }
+                            }
+                            Err(err) => {
+                                let error_msg =
+                                    format!("Error refreshing league {external_id}: {err:?}");
+                                log::error!("{error_msg}");
+                                if events_tx
+                                    .send(events::Event::Error(error_msg))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send error through channel.");
+                                }
+                            }
+                        }
+                    }
+                    events::BackendAction::FetchAllLeagues => {
+                        log::info!("Fetching leagues...");
+
+                        match data_fetch::get_all_leagues(
+                            SEASONS_TO_SCAN
+                                .into_iter()
+                                .map(String::from)
+                                .collect::<Vec<String>>(),
+                            &league_accessor_clone,
+                        )
+                        .await
+                        {
+                            Ok(leagues) => {
+                                for league in leagues {
+                                    if events_tx
+                                        .send(events::Event::LeagueRefreshComplete(league))
+                                        .await
+                                        .is_err()
+                                    {
+                                        log::error!("Failed to send leagues through channel.");
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                let error_msg = format!("Error fetching leagues: {:?}", err);
+                                log::error!("{error_msg}");
+                                eprintln!("{error_msg}");
+                                if events_tx
+                                    .send(events::Event::Error(error_msg))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::error!("Failed to send error through channel.");
+                                }
+                            }
+                        };
+                    }
                 }
+            } else {
+                break; // Exit loop if channel is closed
             }
-            Err(err) => {
-                error!("Error fetching leagues: {:?}", err);
-                eprintln!("Error fetching leagues: {:?}", err);
-            }
-        };
+        }
     });
 
+    // load initial data
+    actions_tx
+        .send(events::BackendAction::FetchAllLeagues)
+        .await?;
+
     // Main loop
-    render_loop(stdout, &mut rx).await?;
-    _handle.await?;
+    render_loop(stdout, &mut events_rx, actions_tx, cfg).await?;
+    backend_action_handler.await?;
 
     Ok(())
 }
 
 async fn render_loop(
     stdout: Stdout,
-    rx: &mut tokio::sync::mpsc::Receiver<Vec<League>>,
+    rx: &mut tokio::sync::mpsc::Receiver<events::Event>,
+    events_tx: tokio::sync::mpsc::Sender<events::BackendAction>,
+    cfg: config::ConfigModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).unwrap();
-    let mut page = NaviItem::WelcomePage;
-    let mut leagues_page = LeaguesPage::new();
-    let league_matchups_page = LeagueMatchupsTilesPage {};
+    let mut terminal = Terminal::new(backend)?;
+    let mut page: NaviItem = match cfg.landing_page {
+        config::DefaultLandingPage::WelcomePage => NaviItem::WelcomePage,
+        config::DefaultLandingPage::LeaguesPage => NaviItem::LeaguesPage,
+        config::DefaultLandingPage::LeagueSummary(external_id) => {
+            NaviItem::LeagueSummary(external_id.to_string())
+        }
+    };
+    let mut leagues_page = pages::LeaguesPage::new();
+    let mut league_history_owner_records_page = pages::LeagueHistoryOwnerRecordsPage::new();
+    let league_matchups_page = pages::LeagueMatchupsPage {};
+    // let mut league_transactions_page = TransactionsPage::new();
+    let mut league_transactions_page;
+    let mut league_draft_board_page;
     let mut navi_stack: Vec<NaviItem> = vec![];
 
     loop {
         // Poll channel for new value (non-blocking)
-        while let Ok(Some(new_leagues_state)) =
-            rx.try_recv().map(Some).or::<Option<Vec<League>>>(Ok(None))
+        while let Ok(Some(event)) = rx
+            .try_recv()
+            .map(Some)
+            .or::<Option<events::Event>>(Ok(None))
         {
-            for league in new_leagues_state {
-                leagues_page.add_league(league);
+            match event {
+                // events::Event::Input(_) => todo!(),
+                events::Event::Tick => todo!(),
+                events::Event::LeagueRefreshComplete(league) => {
+                    leagues_page.add_league(league);
+                    league_history_owner_records_page =
+                        pages::LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
+                }
+                events::Event::Error(err) => {
+                    log::warn!("Error event received in render loop: {err}");
+                }
             }
         }
 
         match &page {
             NaviItem::WelcomePage => {
-                draw_blank_screen_with_q_exit(&mut terminal).unwrap();
+                draw_blank_screen_with_q_exit(&mut terminal)
+                    .map_err(|e| core::Error::new(format!("failed to render welcome page: {e}")))?;
             }
             NaviItem::LeaguesPage => {
-                leagues_page.draw(&mut terminal).unwrap();
+                leagues_page.draw(&mut terminal).map_err(|e| {
+                    core::Error::new(format!("failed to render leagues list page: {e}"))
+                })?;
             }
             NaviItem::LeagueSummary(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
@@ -122,9 +224,11 @@ async fn render_loop(
                 } else {
                     leagues_page.select_by_league_id(league_id.clone());
                 }
-                LeagueSummaryPage::new(leagues_page.selected())
+                pages::LeagueSummaryPage::new(leagues_page.selected())
                     .draw(&mut terminal)
-                    .unwrap();
+                    .map_err(|e| {
+                        core::Error::new(format!("failed to render league summary page: {e}"))
+                    })?;
             }
             NaviItem::LeagueMatchups(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
@@ -140,12 +244,74 @@ async fn render_loop(
                             let size = f.size();
                             league_matchups_page.draw(f, &size, selected_league);
                         })
-                        .unwrap();
+                        .map_err(|e| {
+                            core::Error::new(format!("failed to render league matchups page: {e}"))
+                        })?;
                 } else {
                     page = NaviItem::LeaguesPage;
                     // navi_stack.push(NaviItem::LeaguesPage);
                 }
-            } // _ => {}
+            }
+            NaviItem::TransactionsPage(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
+                if let Some(selected_league) = leagues_page.selected() {
+                    league_transactions_page =
+                        pages::TransactionsPage::from_league(selected_league);
+                    terminal
+                        .draw(|f| {
+                            let size = f.size();
+                            league_transactions_page.draw(f, &size);
+                        })
+                        .map_err(|e| {
+                            core::Error::new(format!(
+                                "failed to render league transactions page: {e}"
+                            ))
+                        })?;
+                } else {
+                    page = NaviItem::LeaguesPage;
+                    // navi_stack.push(NaviItem::LeaguesPage);
+                }
+            }
+            NaviItem::LeagueHistoryOwnerRecords => {
+                league_history_owner_records_page
+                    .draw(&mut terminal)
+                    .map_err(|e| {
+                        core::Error::new(format!(
+                            "failed to render league history owners records page: {e}"
+                        ))
+                    })?;
+            }
+            NaviItem::LeagueDraftBoardPage(league_id) => {
+                if let Some(selected) = leagues_page.selected() {
+                    if &selected.id() != league_id {
+                        leagues_page.select_by_league_id(league_id.clone());
+                    }
+                } else {
+                    leagues_page.select_by_league_id(league_id.clone());
+                }
+                if let Some(selected_league) = leagues_page.selected() {
+                    league_draft_board_page = pages::DraftBoardPage::from(selected_league);
+                    terminal
+                        .draw(|f| {
+                            let size = f.size();
+                            league_draft_board_page.draw(f, &size);
+                        })
+                        .map_err(|e| {
+                            core::Error::new(format!(
+                                "failed to render league draftboard page: {e}"
+                            ))
+                        })?;
+                } else {
+                    page = NaviItem::LeaguesPage;
+                    // navi_stack.push(NaviItem::LeaguesPage);
+                }
+            }
         }
 
         // Exit on 'q'
@@ -154,30 +320,63 @@ async fn render_loop(
                 let handled = match page.clone() {
                     NaviItem::WelcomePage => false,
                     NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
-                        leagues_page::KeyHandleResult::NOOP => true,
-                        leagues_page::KeyHandleResult::GoToLeagueSummary => {
+                        pages::KeyHandleResult::NOOP => true,
+                        pages::KeyHandleResult::GoToLeagueSummary => {
                             // info!("Selected league: {:?}", leagues_page.selected().);
                             if let Some(selected_league) = leagues_page.selected() {
                                 // Here you can handle the selected league, e.g., navigate to a summary page
                                 // For example, you might want to set the league in a summary page struct
                                 // league_summary_page.set_league(selected_league.clone());
-                                info!("Navigating to summary for league: {}", selected_league);
+                                log::info!("Navigating to summary for league: {}", selected_league);
 
                                 // Here you can handle the selected league, e.g., navigate to a summary page
                                 navi_stack.push(page);
                                 page = NaviItem::LeagueSummary(selected_league.id());
                             } else {
-                                error!("No league selected.");
+                                log::error!("No league selected.");
                             }
                             // Example: go to a summary page
                             true
                         }
-                        leagues_page::KeyHandleResult::Unhandled => false,
+
+                        pages::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
+                            navi_stack.push(page);
+                            page = NaviItem::LeagueHistoryOwnerRecords;
+                            true
+                        }
+                        pages::KeyHandleResult::Unhandled => false,
                     },
                     NaviItem::LeagueSummary(league_id) => {
                         if key.code == KeyCode::Char('m') {
+                            // go to matchups
                             navi_stack.push(page);
                             page = NaviItem::LeagueMatchups(league_id.to_string());
+                            true
+                        } else if key.code == KeyCode::Char('t') {
+                            // go to transactions
+                            navi_stack.push(page);
+                            page = NaviItem::TransactionsPage(league_id.to_string());
+                            true
+                        } else if key.code == KeyCode::Char('d') {
+                            // go to draftboard
+                            navi_stack.push(page);
+                            page = NaviItem::LeagueDraftBoardPage(league_id.to_string());
+                            true
+                        } else if key.code == KeyCode::Char('r') {
+                            // refresh league
+
+                            // TODO: check to see if a league refresh is already in progress
+
+                            if let Err(err) = events_tx
+                                .send(events::BackendAction::RefreshLeague(core::ExternalId {
+                                    platform: fantasy_core_rs::Platform::Sleeper,
+                                    id: league_id.to_string(),
+                                }))
+                                .await
+                            {
+                                log::error!("Failed to send refresh league action: {err}");
+                            }
+                            // TODO: make sure to mark league as refresh in progress
                             true
                         } else {
                             false
@@ -188,16 +387,20 @@ async fn render_loop(
 
                 if !handled {
                     match key.code {
-                        KeyCode::Char('q') => break,
+                        KeyCode::Char('q') => break, // global quit
                         KeyCode::Char('l') => {
+                            // go to leagues list page
                             navi_stack.push(page);
                             page = NaviItem::LeaguesPage;
                         }
+
                         KeyCode::Char('w') => {
+                            // go to welcome page
                             navi_stack.push(page);
                             page = NaviItem::WelcomePage;
                         }
                         KeyCode::Char('b') => match navi_stack.pop() {
+                            // go back
                             Some(previous) => page = previous,
                             None => {}
                         },
@@ -231,4 +434,7 @@ enum NaviItem {
     LeaguesPage,
     LeagueSummary(String),
     LeagueMatchups(String),
+    LeagueHistoryOwnerRecords,
+    TransactionsPage(String),
+    LeagueDraftBoardPage(String),
 }

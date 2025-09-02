@@ -1,39 +1,50 @@
 use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
+use fantasy_core_rs::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     terminal::CompletedFrame,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
-use crate::data::League;
+use crate::constants;
 
 pub struct LeaguesPage {
-    leagues: Vec<League>,
+    pub leagues: Vec<League>,
     selected: usize,
-    // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
+    _omit_incomplete: bool, //TODO: implement filtering
+                            // terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
 }
 impl<'a> LeaguesPage {
     pub fn new() -> Self {
         LeaguesPage {
             leagues: vec![],
             selected: 0,
-            // terminal: terminal,
+            _omit_incomplete: true, // terminal: terminal,
         }
     }
+
+    // pub fn leagues(&self) -> &Vec<League> {
+    //     &self.leagues
+    //         .iter()
+    //         .filter(|l| !self.omit_incomplete || l.status() != LeagueStatus::InComplete)
+    // }
 
     fn make_list(&self) -> Vec<ListItem<'a>> {
         self.leagues
             .iter()
+            // .filter(|l| !self.omit_incomplete || l.status() != LeagueStatus::InComplete)
             .map(|league| ListItem::new(league.to_string()))
             .collect()
     }
 
     pub fn select_by_league_id(&mut self, league_id: String) {
-        self.selected = self.leagues.iter().position(|l| l.id() == league_id).unwrap()
+        if let Some(index) = self.leagues.iter().position(|l| l.id() == league_id) {
+            self.selected = index
+        }
     }
 
     pub fn selected(&self) -> Option<&League> {
@@ -56,17 +67,31 @@ impl<'a> LeaguesPage {
                 let size = f.size();
                 let paragraph =
                     Paragraph::new("You do not have any leagues loaded.\n\nPress c to configure.")
-                        .block(Block::default().title(title).borders(Borders::ALL));
+                        .block(
+                            Block::default()
+                                .title(title)
+                                .borders(Borders::ALL)
+                                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                                .border_type(BorderType::Rounded)
+                                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                        );
                 f.render_widget(paragraph, size);
             })
         } else {
             terminal.draw(|f| {
                 let size = f.size();
                 let list = List::new(self.make_list())
-                    .block(Block::default().title(title).borders(Borders::ALL))
+                    .block(
+                        Block::default()
+                            .title(title)
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(constants::COLOR_BORDER))
+                            .border_type(BorderType::Rounded)
+                            .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                    )
                     .highlight_style(
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(constants::COLOR_HIGHLIGHT)
                             .add_modifier(Modifier::BOLD),
                     )
                     .highlight_symbol(">> ");
@@ -84,6 +109,7 @@ impl<'a> LeaguesPage {
 
     pub fn handle_key(&mut self, key_code: &KeyCode) -> KeyHandleResult {
         match key_code {
+            KeyCode::Char('r') => KeyHandleResult::GoToLeagueHistoryOwnerRecords,
             KeyCode::Down => {
                 if self.selected < self.leagues.len() - 1 {
                     self.selected += 1;
@@ -110,4 +136,5 @@ pub enum KeyHandleResult {
     Unhandled,
     NOOP,
     GoToLeagueSummary,
+    GoToLeagueHistoryOwnerRecords,
 }

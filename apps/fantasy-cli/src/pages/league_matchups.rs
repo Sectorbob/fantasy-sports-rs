@@ -1,17 +1,18 @@
 use std::io::Stdout;
 
+use fantasy_core_rs::League;
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::{data::League, matchups_list_widget::MatchupsList};
+use crate::{constants, widgets};
 
-pub struct LeagueMatchupsTilesPage {}
-impl LeagueMatchupsTilesPage {
+pub struct LeagueMatchupsPage {}
+impl LeagueMatchupsPage {
     pub fn draw<'a>(
         &self,
         f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>,
@@ -19,22 +20,26 @@ impl LeagueMatchupsTilesPage {
         league: &League,
     ) {
         let block = Block::default()
-            .title("League Matchups")
+            .title(format!(
+                "{name} ({season}) - Matchups",
+                name = league.name(),
+                season = league.season()
+            ))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
+            .border_style(Style::default().fg(constants::COLOR_BORDER))
             .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            .style(Style::default().bg(constants::COLOR_BACKGROUND));
         f.render_widget(block.clone(), *rect);
 
         let area = block.inner(*rect);
-        let rows_needed_in_each_tile = league
-            .matchups()
+        let scoreboards = league.scoreboards();
+        let rows_needed_in_each_tile = scoreboards
             .iter()
-            .map(|(_, m)| m.len())
+            .map(|s| s.matchups.len())
             .max()
             .unwrap_or(6);
         let min_tile_height = rows_needed_in_each_tile + 2;
-        let weeks = league.matchups().len();
+        let weeks = scoreboards.len();
         let rows = area.height as usize / min_tile_height;
         let cols = weeks / rows + (if weeks % rows > 0 { 1 } else { 0 });
 
@@ -62,17 +67,28 @@ impl LeagueMatchupsTilesPage {
 
             for (i, row) in rows.iter().enumerate() {
                 let week: usize = i * cols + j + 1;
-                match league.matchups().get(&week) {
-                    Some(matchups) => {
-                        let matchup_widget =
-                            MatchupsList::from_sleeper(None, matchups, &league.players());
+                match scoreboards
+                    .iter()
+                    .find(|s| s.matchups[0].week as usize == week)
+                {
+                    Some(scoreboard) => {
+                        let matchup_widget = widgets::MatchupsList::from(
+                            None,
+                            &scoreboard.matchups,
+                            &league.players(),
+                        );
                         matchup_widget.draw(f, row, None);
                     }
                     None => {
                         // Render empty paragraph in other cells
                         let text = Text::from(format!("No matchups found for week {}", week));
-                        let paragraph =
-                            Paragraph::new(text).block(Block::default().borders(Borders::ALL));
+                        let paragraph = Paragraph::new(text).block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .border_style(Style::default().fg(constants::COLOR_BORDER))
+                                .border_type(BorderType::Rounded)
+                                .style(Style::default().bg(constants::COLOR_BACKGROUND)),
+                        );
                         f.render_widget(paragraph, *row);
                     }
                 };
