@@ -1,6 +1,20 @@
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt;
+mod league_activity;
+pub use league_activity::*;
+mod player;
+pub use player::*;
+mod transaction;
+pub use transaction::*;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseList<T> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+    pub items: Vec<T>,
+    pub result_offset_next: Option<u32>,
+    pub result_total: Option<u32>,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Sport {
@@ -41,13 +55,13 @@ pub struct League {
     pub name: String,
     pub initials: String,
     pub sport: Option<Sport>,
-    pub logo_url: String,
-    pub owned_team: OwnedTeam,
+    pub logo_url: Option<String>,
+    pub owned_team: Team,
     pub active_for_current_season: bool,
     pub draft_status: Option<String>, // known values: POST_DRAFT
     pub membership_type: String,      // known values: MEMBER
     pub roster_requirements: RosterRequirements,
-    pub waiver_type: String, // knwon values: BLIND_BID
+    pub waiver_type: WaiverResolutionType,
     pub draft_live_time_epoch_milli: String,
     #[serde(default)]
     pub max_keepers: u8,
@@ -62,36 +76,49 @@ pub struct League {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct OwnedTeam {
+pub struct Team {
     pub id: i32,
     pub name: String,
-    pub record_overall: Record,
-    pub record_division: Record,
-    pub record_postseason: Record,
-    pub points_for: Points,
-    pub points_against: Points,
-    pub streak: Points,
-    pub waiver_acquisition_budget: Budget,
-    pub draft_position: Option<u8>,
+    pub sport: Option<Sport>,
+    pub logo_url: Option<String>,
+    pub record_overall: TeamRecord,
+    pub record_division: TeamRecord,
+    pub record_postseason: TeamRecord,
+    pub points_for: FormattedDecimal,
+    pub points_against: FormattedDecimal,
+    pub streak: FormattedDecimal,
+    pub waiver_position: Option<i32>,
+    pub waiver_acquisition_budget: FormattedDecimal,
+    pub draft_position: Option<i32>,
+    pub roto: Option<TeamRotoCategories>,
+    pub owners: Option<Vec<String>>,
+    pub new_item_counts: Option<NewItemCounts>,
     pub initials: String,
+    pub chat_channel: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Points {
-    pub formatted: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Budget {
-    pub value: f64,
+pub struct FormattedDecimal {
+    pub value: Option<f64>,
     pub formatted: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Record {
-    pub win_percentage: Points,
+pub struct TeamRecord {
+    pub win: Option<i32>,
+    pub losses: Option<i32>,
+    pub ties: Option<i32>,
+    pub win_percentage: FormattedDecimal,
+    pub rank: Option<i32>,
     pub formatted: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TeamRotoCategories {
+    pub overall_rank: i32,
+    pub points: FormattedDecimal,
+    pub stat_values: Vec<RotoStatValue>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -119,30 +146,6 @@ pub struct RosterPosition {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct LeagueActivityResponse {
-    pub items: Vec<LeagueActivityItem>,
-    pub result_total: u32,
-}
-
+pub struct RotoStatValue {}
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct LeagueActivityItem {
-    pub time_epoch_milli: String,
-    pub membership: Option<Membership>,
-    pub draft_time: Option<Value>,
-    pub settings: Option<Value>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Membership {
-    pub team: MembershipTeam,
-    pub description: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MembershipTeam {
-    pub id: i32,
-    pub name: String,
-    pub initials: String,
-}
+pub struct NewItemCounts {}

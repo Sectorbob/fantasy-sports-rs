@@ -1,4 +1,4 @@
-use crate::{Sport, data};
+use crate::{LeagueActivityItem, LeaguesForUserResponse, ResponseList, Sport};
 use serde::de::DeserializeOwned;
 
 const DEFAULT_BASE_URL: &str = "https://www.fleaflicker.com/api";
@@ -51,7 +51,7 @@ impl Client {
         sport: &Sport,
         league_id: i32,
         result_offset: Option<i32>,
-    ) -> Result<data::LeagueActivityResponse, Error> {
+    ) -> Result<ResponseList<LeagueActivityItem>, Error> {
         let mut filters = vec![
             ("sport", sport.to_string()),
             ("league_id", league_id.to_string()),
@@ -68,7 +68,7 @@ impl Client {
         email: T,
         sport: Option<Sport>,
         season: Option<u32>,
-    ) -> Result<data::LeaguesForUserResponse, Error> {
+    ) -> Result<LeaguesForUserResponse, Error> {
         let mut filters = vec![("email", email.into())];
         if let Some(sport) = sport {
             filters.push(("sport", sport.to_string()));
@@ -78,6 +78,27 @@ impl Client {
         }
 
         return self.get("/FetchUserLeagues", Some(filters)).await;
+    }
+
+    pub async fn get_transaction_history(
+        &self,
+        league_id: i32,
+        sport: Option<Sport>,
+        team_id: Option<i32>,
+        result_offset: Option<i32>,
+    ) -> Result<ResponseList<LeagueActivityItem>, Error> {
+        let mut filters = vec![("league_id", league_id.to_string())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+        if let Some(team_id) = team_id {
+            filters.push(("team_id", team_id.to_string()));
+        }
+        if let Some(result_offset) = result_offset {
+            filters.push(("result_offset", result_offset.to_string()));
+        }
+
+        return self.get("/FetchLeagueTransactions", Some(filters)).await;
     }
 }
 
@@ -160,7 +181,7 @@ mod tests {
             .await
             .expect("request failed");
 
-        debug_assert_eq!(7, response.result_total, "result_total is incorrect");
+        debug_assert_eq!(Some(7), response.result_total, "result_total is incorrect");
         debug_assert_eq!(7, response.items.len(), "item count incorrect");
     }
 
@@ -184,7 +205,30 @@ mod tests {
             .await
             .expect("request failed");
 
-        debug_assert_eq!(29, response.result_total, "result_total is incorrect");
+        debug_assert_eq!(Some(29), response.result_total, "result_total is incorrect");
+        debug_assert_eq!(29, response.items.len(), "item count incorrect");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_transactions_page_1() {
+        let league_id = 156377;
+        let body = fs::read_to_string("testdata/league_transactions_page_1.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueTransactions")))
+            .and(query_param("league_id", league_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .get_transaction_history(league_id, None, None, None)
+            .await
+            .expect("request failed");
+        println!("{response:#?}");
         debug_assert_eq!(29, response.items.len(), "item count incorrect");
     }
 
