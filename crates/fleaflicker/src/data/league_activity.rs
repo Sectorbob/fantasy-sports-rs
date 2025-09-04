@@ -86,10 +86,10 @@ pub enum LeagueActivityItemDetails {
     Transaction {
         r#type: Option<TransactionType>,
         player: LeaguePlayer,
-        draft_pick: Option<FutureDraftPick>,
         team: Team,
         #[serde(default)]
         commish_powers: bool,
+        draft_pick: Option<FutureDraftPick>,
         bid_amount: Option<i32>,
         trade_id: Option<i32>,
         drafted_at_slot: Option<DraftSlot>,
