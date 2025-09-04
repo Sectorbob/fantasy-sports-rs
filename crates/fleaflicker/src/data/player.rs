@@ -10,7 +10,7 @@ pub struct LeaguePlayer {
     pub viewing_projected_points: Option<FormattedDecimal>,
     pub viewing_actual_stats: Option<Vec<Value>>,
     pub viewing_projected_stats: Option<Vec<Value>>,
-    pub transaction_status: Value,
+    pub transaction_status: Option<Value>,
     pub requested_games_period: Value,
     pub viewing_format: StatFormat,
     pub viewing_range: Value,
@@ -60,7 +60,7 @@ pub struct ProTeam {
 pub struct RequestedGame {
     pub game: Value,
     pub stats: Vec<Value>,
-    pub stats_projected: Vec<Value>,
+    pub stats_projected: Option<Vec<Value>>,
     pub participant: Option<String>, // known values: HOME
     pub period: Period,
     pub ranks: Ranks,

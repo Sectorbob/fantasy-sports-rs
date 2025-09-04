@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt;
+mod boxscore;
+pub use boxscore::*;
 mod league_activity;
 pub use league_activity::*;
 mod player;
@@ -144,10 +146,13 @@ pub struct RosterPosition {
     pub min: Option<u8>,
     pub max: Option<u8>,
     pub start: Option<u8>,
-    pub colors: Option<Vec<String>>,
+    pub colors: Option<Vec<DraftBoardCellColor>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RotoStatValue {}
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct NewItemCounts {}
+pub struct NewItemCounts {
+    #[serde(default)]
+    pub messages_unread: u32,
+}
