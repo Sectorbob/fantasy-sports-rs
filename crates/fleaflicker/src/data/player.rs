@@ -1,4 +1,4 @@
-use crate::{FormattedDecimal, Team};
+use crate::{FormattedDecimal, Sport, Team};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -6,13 +6,13 @@ use serde_json::Value;
 #[serde(rename_all = "camelCase")]
 pub struct LeaguePlayer {
     pub pro_player: ProPlayer,
-    pub requested_games: Vec<RequestedGame>,
-    pub viewing_projected_points: FormattedDecimal,
-    pub viewing_actual_stats: Vec<Value>,
-    pub viewing_projected_stats: Vec<Value>,
+    pub requested_games: Option<Vec<RequestedGame>>,
+    pub viewing_projected_points: Option<FormattedDecimal>,
+    pub viewing_actual_stats: Option<Vec<Value>>,
+    pub viewing_projected_stats: Option<Vec<Value>>,
     pub transaction_status: Value,
     pub requested_games_period: Value,
-    pub viewing_format: String, // known values: TOTAL
+    pub viewing_format: StatFormat,
     pub viewing_range: Value,
     pub owner: Option<Team>,
     pub display_group: String, // known values: RECEIVER
@@ -22,26 +22,37 @@ pub struct LeaguePlayer {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProPlayer {
+    pub sport: Option<Sport>,
     pub id: i32,
     pub name_full: String,
     pub name_short: String,
-    pub pro_team_abbreviation: String,
-    pub position: String,
-    pub headshot_url: Option<String>,
-    pub nfl_bye_week: i32,
     pub name_first: String,
     pub name_last: String,
+    pub pro_team_abbreviation: String,
+    pub pro_team: ProTeam,
+    pub position: String,
+    pub headshot_url: Option<String>,
+    pub nfl_bye_week: Option<i32>,
+    pub injury: Option<Value>,
+    pub news: Option<Vec<PlayerNews>>,
+    #[serde(default)]
+    pub is_rookie: bool,
+    pub premium_content_auth_safe: Option<Value>,
     #[serde(default)]
     pub has_locked_premium_content: bool,
-    pub pro_team: ProTeam,
+    pub premium_content: Option<Value>,
     pub position_eligibility: Vec<String>,
+    pub external_ids: Option<Vec<Value>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ProTeam {
     pub abbreviation: String,
     pub location: String,
     pub name: String,
+    #[serde(default)]
+    pub is_free_agent: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -69,4 +80,14 @@ pub struct Ranks {
     pub position: String,
     pub categories: Vec<Value>,
     pub default_points: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerNews {}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum StatFormat {
+    AVERAGE,
+    TOTAL,
 }

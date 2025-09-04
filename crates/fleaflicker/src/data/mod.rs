@@ -4,6 +4,8 @@ mod league_activity;
 pub use league_activity::*;
 mod player;
 pub use player::*;
+mod roster;
+pub use roster::*;
 mod transaction;
 pub use transaction::*;
 

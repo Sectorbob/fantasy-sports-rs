@@ -1,4 +1,6 @@
-use crate::{LeagueActivityItem, LeaguesForUserResponse, ResponseList, Sport};
+use crate::{
+    FetchRostersResponse, LeagueActivityItem, LeaguesForUserResponse, ResponseList, Sport,
+};
 use serde::de::DeserializeOwned;
 
 const DEFAULT_BASE_URL: &str = "https://www.fleaflicker.com/api";
@@ -28,6 +30,7 @@ impl Client {
         let req = self
             .build_get_json_request(path.into(), filters)
             .expect("failed to build request");
+        log::debug!("GET {url}", url = req.url());
         Ok(self.cli.execute(req).await?.json().await?)
     }
 
@@ -99,6 +102,33 @@ impl Client {
         }
 
         return self.get("/FetchLeagueTransactions", Some(filters)).await;
+    }
+
+    pub async fn fetch_league_rosters(
+        &self,
+        league_id: i32,
+        sport: Option<Sport>,
+        season: Option<i32>,
+        scoring_period: Option<i32>,
+        external_id_type: Option<Vec<String>>,
+    ) -> Result<FetchRostersResponse, Error> {
+        let mut filters = vec![("league_id", league_id.to_string())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+        if let Some(season) = season {
+            filters.push(("season", season.to_string()));
+        }
+        if let Some(scoring_period) = scoring_period {
+            filters.push(("scoring_period", scoring_period.to_string()));
+        }
+        if let Some(external_id_type) = external_id_type {
+            for entry in external_id_type {
+                filters.push(("external_id_type", entry));
+            }
+        }
+
+        return self.get("/FetchLeagueRosters", Some(filters)).await;
     }
 }
 
@@ -236,6 +266,37 @@ mod tests {
             "result_offset_next incorrect"
         );
         debug_assert_eq!(30, response.items.len(), "item count incorrect");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_roster_2025() {
+        let league_id = 348896;
+        let body = fs::read_to_string("testdata/league_rosters.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueRosters")))
+            .and(query_param("league_id", league_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .fetch_league_rosters(league_id, None, None, None, None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(12, response.rosters.len(), "should be 12 rosters");
+
+        for (index, roster) in response.rosters.iter().enumerate() {
+            println!("Roster: {:?}", roster.team.name);
+            debug_assert!(
+                roster.players.len() > 40,
+                "roster {index} does not have at least 40 players"
+            );
+        }
     }
 
     async fn setup() -> (MockServer, Client) {
