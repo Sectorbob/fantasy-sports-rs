@@ -1,14 +1,7 @@
-use crate::{LeaguePlayer, Team, serde_epoch_millis};
+use crate::{serde_epoch_millis, DraftSlot, LeaguePlayer, Team};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct DraftSlot {
-    pub round: i32,
-    pub slot: i32,
-    pub overall: i32,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FutureDraftPick {

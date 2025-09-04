@@ -1,6 +1,6 @@
 use crate::{
-    BoxScore, FetchRostersResponse, LeagueActivityItem, LeagueRules, LeaguesForUserResponse,
-    ResponseList, Sport,
+    BoxScore, Draftboard, FetchRostersResponse, LeagueActivityItem, LeagueRules,
+    LeaguesForUserResponse, ResponseList, Sport,
 };
 use serde::de::DeserializeOwned;
 
@@ -151,6 +151,33 @@ impl Client {
         }
 
         return self.get("/FetchLeagueBoxscore", Some(filters)).await;
+    }
+
+    pub async fn fetch_league_draftboard(
+        &self,
+        league_id: i32,
+        sport: Option<Sport>,
+        season: Option<i32>,
+        draft_number: Option<u8>,
+        external_id_type: Option<Vec<String>>,
+    ) -> Result<Draftboard, Error> {
+        let mut filters = vec![("league_id", league_id.to_string())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+        if let Some(season) = season {
+            filters.push(("season", season.to_string()));
+        }
+        if let Some(draft_number) = draft_number {
+            filters.push(("draft_number", draft_number.to_string()));
+        }
+        if let Some(external_id_type) = external_id_type {
+            for entry in external_id_type {
+                filters.push(("external_id_type", entry));
+            }
+        }
+
+        return self.get("/FetchLeagueDraftBoard", Some(filters)).await;
     }
 
     pub async fn fetch_league_rules(
@@ -389,6 +416,66 @@ mod tests {
         debug_assert_eq!(22, rules.num_starters, "expected num_starters");
         debug_assert_eq!(45, rules.max_active, "expected max_active");
         debug_assert_eq!(60, rules.max_roster_size, "expected max_roster_size");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_draftboard_2025_0() {
+        let league_id = 348896;
+        let draft_number = 0;
+        let body = fs::read_to_string("testdata/fetch_league_draftboard_0.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueDraftBoard")))
+            .and(query_param("league_id", league_id.to_string()))
+            .and(query_param("draft_number", draft_number.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let draftboard = client
+            .fetch_league_draftboard(league_id, None, None, Some(draft_number), None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(draft_number, draftboard.draft_index, "expected draft index");
+        debug_assert_eq!(
+            480,
+            draftboard.ordered_selections.len(),
+            "expected x draft selections"
+        )
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_draftboard_2025_1() {
+        let league_id = 348896;
+        let draft_number = 1;
+        let body = fs::read_to_string("testdata/fetch_league_draftboard_1.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueDraftBoard")))
+            .and(query_param("league_id", league_id.to_string()))
+            .and(query_param("draft_number", draft_number.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let draftboard = client
+            .fetch_league_draftboard(league_id, None, None, Some(draft_number), None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(draft_number, draftboard.draft_index, "expected draft index");
+        debug_assert_eq!(
+            56,
+            draftboard.ordered_selections.len(),
+            "expected x draft selections"
+        )
     }
 
     async fn setup() -> (MockServer, Client) {

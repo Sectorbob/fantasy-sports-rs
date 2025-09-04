@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt;
 mod boxscore;
 pub use boxscore::*;
+mod draftboard;
+pub use draftboard::*;
 mod league_activity;
 pub use league_activity::*;
 mod player;
