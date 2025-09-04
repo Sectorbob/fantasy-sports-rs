@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt;
 mod boxscore;
@@ -10,6 +11,8 @@ mod player;
 pub use player::*;
 mod roster;
 pub use roster::*;
+mod standings;
+pub use standings::*;
 mod transaction;
 pub use transaction::*;
 mod rules;
@@ -57,23 +60,29 @@ pub struct LeaguesForUserResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct League {
     pub id: i32,
     pub name: String,
     pub initials: String,
     pub sport: Option<Sport>,
     pub logo_url: Option<String>,
-    pub owned_team: Team,
+    pub owned_team: Option<Team>,
+    pub owned_team_current_game: Option<FantasyGame>,
     pub active_for_current_season: bool,
     pub draft_status: Option<String>, // known values: POST_DRAFT
     pub membership_type: String,      // known values: MEMBER
     pub roster_requirements: RosterRequirements,
-    pub waiver_type: WaiverResolutionType,
-    pub draft_live_time_epoch_milli: String,
+    pub waiver_type: Option<WaiverResolutionType>,
+    #[serde(
+        default,
+        rename = "draftLiveTimeEpochMilli",
+        with = "crate::serde_epoch_millis_opt"
+    )]
+    pub draft_live_time: Option<DateTime<Utc>>,
     #[serde(default)]
     pub max_keepers: u8,
-    pub default_waiver_budget: u32,
+    pub default_waiver_budget: Option<u32>,
     pub size: u8,
     pub capacity: u8,
     pub description: String,
@@ -83,7 +92,7 @@ pub struct League {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Team {
     pub id: Option<i32>,
     pub name: Option<String>,
@@ -99,10 +108,21 @@ pub struct Team {
     pub waiver_acquisition_budget: Option<FormattedDecimal>,
     pub draft_position: Option<i32>,
     pub roto: Option<TeamRotoCategories>,
-    pub owners: Option<Vec<String>>,
+    pub owners: Option<Vec<Owner>>,
     pub new_item_counts: Option<NewItemCounts>,
     pub initials: Option<String>,
     pub chat_channel: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Owner {
+    pub id: i32,
+    pub display_name: String,
+    #[serde(with = "serde_epoch_millis")]
+    pub last_seen: DateTime<Utc>,
+    pub initials: String,
+    pub last_seen_iso: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -130,7 +150,7 @@ pub struct TeamRotoCategories {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RosterRequirements {
     pub positions: Vec<RosterPosition>,
     pub roster_size: u8,

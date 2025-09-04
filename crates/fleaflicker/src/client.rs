@@ -1,5 +1,5 @@
 use crate::{
-    BoxScore, Draftboard, FetchRostersResponse, LeagueActivityItem, LeagueRules,
+    BoxScore, Draftboard, FetchRostersResponse, LeagueActivityItem, LeagueRules, LeagueStandings,
     LeaguesForUserResponse, ResponseList, Sport,
 };
 use serde::de::DeserializeOwned;
@@ -191,6 +191,23 @@ impl Client {
         }
 
         return self.get("/FetchLeagueRules", Some(filters)).await;
+    }
+
+    pub async fn fetch_league_standings(
+        &self,
+        league_id: i32,
+        sport: Option<Sport>,
+        season: Option<i32>,
+    ) -> Result<LeagueStandings, Error> {
+        let mut filters = vec![("league_id", league_id.to_string())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+        if let Some(season) = season {
+            filters.push(("season", season.to_string()));
+        }
+
+        return self.get("/FetchLeagueStandings", Some(filters)).await;
     }
 }
 
@@ -476,6 +493,29 @@ mod tests {
             draftboard.ordered_selections.len(),
             "expected x draft selections"
         )
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_standings_2025() {
+        let league_id = 348896;
+        let body = fs::read_to_string("testdata/fetch_league_standings_pre.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueStandings")))
+            .and(query_param("league_id", league_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let league_standings = client
+            .fetch_league_standings(league_id, None, None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(2025, league_standings.season, "expected league season");
     }
 
     async fn setup() -> (MockServer, Client) {

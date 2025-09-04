@@ -36,6 +36,7 @@ impl fmt::Display for ClaimType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CommishNote {
     pub contents_markdown: String,
     pub contents_text: String,
@@ -82,5 +83,33 @@ pub(crate) mod serde_epoch_millis {
             Unexpected::Str(s.as_str()),
             &"a string \"int64\" within the epoch range",
         ))
+    }
+}
+
+pub(crate) mod serde_epoch_millis_opt {
+    use crate::serde_epoch_millis;
+    use chrono::{DateTime, Utc};
+    use serde::{Deserializer, Serializer};
+
+    // Custom serialization function for DateTime<Utc> to epoch milliseconds string
+    pub fn serialize<S>(
+        datetime_opt: &Option<DateTime<Utc>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match datetime_opt {
+            Some(datetime) => serde_epoch_millis::serialize(datetime, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    // Custom deserialization function for DateTime<Utc> from epoch milliseconds string
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Some(serde_epoch_millis::deserialize(deserializer)?))
     }
 }

@@ -22,9 +22,18 @@ pub struct FantasyGame {
     pub id: String,
     pub away: Team,
     pub home: Team,
-    pub away_score: GameResult,
-    pub home_score: GameResult,
+    pub away_score: Option<GameResult>,
+    pub home_score: Option<GameResult>,
+    #[serde(default)]
     pub is_divisional: bool,
+    pub home_result: Option<String>, //"WIN",
+    pub away_result: Option<String>, //"LOSE",
+    #[serde(default)]
+    pub is_final_score: bool,
+    #[serde(default)]
+    pub is_playoffs: bool,
+    #[serde(default)]
+    pub is_championship_game: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
