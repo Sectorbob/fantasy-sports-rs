@@ -1,4 +1,4 @@
-use crate::{Team, serde_epoch_millis};
+use crate::{LeaguePlayer, Team, serde_epoch_millis};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -58,8 +58,56 @@ pub struct LeagueActivityItem {
     pub ts: DateTime<Utc>,
     #[serde(default, rename = "isNew")]
     pub is_new: bool,
-    // #[serde(flatten)]
-    // pub details: LeagueActivityItemDetails,
+    #[serde(flatten)]
+    pub details: LeagueActivityItemDetails,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum LeagueActivityItemDetails {
+    Trade {
+        trade_id: i32,
+        r#type: TradeType,
+        team: Team,
+        description: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Settings {
+        commish: Option<Team>,
+        description: String,
+        trade_id: Option<i32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    DraftTime {
+        commish: Team,
+        draft_time_epoch_milli: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Transaction {
+        r#type: Option<TransactionType>,
+        player: LeaguePlayer,
+        draft_pick: Option<FutureDraftPick>,
+        team: Team,
+        #[serde(default)]
+        commish_powers: bool,
+        bid_amount: Option<i32>,
+        trade_id: Option<i32>,
+        drafted_at_slot: Option<DraftSlot>,
+        waiver_resolution_teams: Option<Vec<WaiverResolutionTeam>>,
+    },
+    TradeBlock {
+        blerp: String,
+    },
+    ReserveChange {
+        blargg: String,
+    },
+    Membership {
+        team: Team,
+        description: String,
+    },
+    CommishPowers {
+        pooooooooasdf: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -88,13 +136,6 @@ impl fmt::Display for TransactionType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MembershipTeam {
-    pub id: i32,
-    pub name: String,
-    pub initials: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

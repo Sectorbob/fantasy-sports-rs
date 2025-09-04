@@ -77,23 +77,23 @@ pub struct League {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Team {
-    pub id: i32,
-    pub name: String,
+    pub id: Option<i32>,
+    pub name: Option<String>,
     pub sport: Option<Sport>,
     pub logo_url: Option<String>,
-    pub record_overall: TeamRecord,
-    pub record_division: TeamRecord,
-    pub record_postseason: TeamRecord,
-    pub points_for: FormattedDecimal,
-    pub points_against: FormattedDecimal,
-    pub streak: FormattedDecimal,
+    pub record_overall: Option<TeamRecord>,
+    pub record_division: Option<TeamRecord>,
+    pub record_postseason: Option<TeamRecord>,
+    pub points_for: Option<FormattedDecimal>,
+    pub points_against: Option<FormattedDecimal>,
+    pub streak: Option<FormattedDecimal>,
     pub waiver_position: Option<i32>,
-    pub waiver_acquisition_budget: FormattedDecimal,
+    pub waiver_acquisition_budget: Option<FormattedDecimal>,
     pub draft_position: Option<i32>,
     pub roto: Option<TeamRotoCategories>,
     pub owners: Option<Vec<String>>,
     pub new_item_counts: Option<NewItemCounts>,
-    pub initials: String,
+    pub initials: Option<String>,
     pub chat_channel: Option<String>,
 }
 

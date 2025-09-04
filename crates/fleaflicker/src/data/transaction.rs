@@ -56,21 +56,8 @@ pub(crate) mod serde_epoch_millis {
     use chrono::{DateTime, Utc};
     use serde::{
         Deserialize, Deserializer, Serializer,
-        de::{self, DeserializeSeed, Unexpected},
+        de::{self, Unexpected},
     };
-
-    pub struct Seed {}
-
-    impl<'de> DeserializeSeed<'de> for Seed {
-        type Value = DateTime<Utc>;
-
-        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: de::Deserializer<'de>,
-        {
-            deserialize(deserializer)
-        }
-    }
 
     // Custom serialization function for DateTime<Utc> to epoch milliseconds string
     pub fn serialize<S>(datetime: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>

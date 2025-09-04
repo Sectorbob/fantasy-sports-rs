@@ -228,8 +228,14 @@ mod tests {
             .get_transaction_history(league_id, None, None, None)
             .await
             .expect("request failed");
-        println!("{response:#?}");
-        debug_assert_eq!(29, response.items.len(), "item count incorrect");
+        // println!("{response:#?}");
+        debug_assert_eq!(None, response.result_total, "result_total incorrect");
+        debug_assert_eq!(
+            Some(30),
+            response.result_offset_next,
+            "result_offset_next incorrect"
+        );
+        debug_assert_eq!(30, response.items.len(), "item count incorrect");
     }
 
     async fn setup() -> (MockServer, Client) {
