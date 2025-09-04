@@ -1,5 +1,6 @@
 use crate::{
-    BoxScore, FetchRostersResponse, LeagueActivityItem, LeaguesForUserResponse, ResponseList, Sport,
+    BoxScore, FetchRostersResponse, LeagueActivityItem, LeagueRules, LeaguesForUserResponse,
+    ResponseList, Sport,
 };
 use serde::de::DeserializeOwned;
 
@@ -150,6 +151,19 @@ impl Client {
         }
 
         return self.get("/FetchLeagueBoxscore", Some(filters)).await;
+    }
+
+    pub async fn fetch_league_rules(
+        &self,
+        league_id: i32,
+        sport: Option<Sport>,
+    ) -> Result<LeagueRules, Error> {
+        let mut filters = vec![("league_id", league_id.to_string())];
+        if let Some(sport) = sport {
+            filters.push(("sport", sport.to_string()));
+        }
+
+        return self.get("/FetchLeagueRules", Some(filters)).await;
     }
 }
 
@@ -350,6 +364,31 @@ mod tests {
 
         // println!("{boxscore:#?}");
         // assert!(false);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_league_rules_2025() {
+        let league_id = 348896;
+        let body = fs::read_to_string("testdata/fetch_league_rules.json")
+            .await
+            .expect("failed to load test data");
+
+        let (mock_server, client) = setup().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/FetchLeagueRules")))
+            .and(query_param("league_id", league_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&mock_server)
+            .await;
+
+        let rules = client
+            .fetch_league_rules(league_id, None)
+            .await
+            .expect("request failed");
+
+        debug_assert_eq!(22, rules.num_starters, "expected num_starters");
+        debug_assert_eq!(45, rules.max_active, "expected max_active");
+        debug_assert_eq!(60, rules.max_roster_size, "expected max_roster_size");
     }
 
     async fn setup() -> (MockServer, Client) {

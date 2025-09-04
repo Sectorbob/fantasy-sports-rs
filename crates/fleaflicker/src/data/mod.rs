@@ -10,6 +10,8 @@ mod roster;
 pub use roster::*;
 mod transaction;
 pub use transaction::*;
+mod rules;
+pub use rules::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
