@@ -1,5 +1,6 @@
 use std::{fmt, str::FromStr};
 
+use fleaflicker_fantasy_rs as fleaflicker;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, Visitor},
@@ -94,6 +95,22 @@ impl TryFrom<String> for ExternalId {
     type Error = ParseExternalIdError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         ExternalId::parse(value)
+    }
+}
+impl From<fleaflicker_fantasy_rs::League> for ExternalId {
+    fn from(value: fleaflicker::League) -> Self {
+        ExternalId {
+            platform: Platform::FleaFlicker,
+            id: value.id.to_string(),
+        }
+    }
+}
+impl From<&fleaflicker::League> for ExternalId {
+    fn from(value: &fleaflicker::League) -> Self {
+        ExternalId {
+            platform: Platform::FleaFlicker,
+            id: value.id.to_string(),
+        }
     }
 }
 impl From<sleeper::League> for ExternalId {
@@ -198,6 +215,7 @@ impl fmt::Display for ParseExternalIdError {
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     Discord,
+    FleaFlicker,
     Sleeper,
     Twitter,
     Yahoo,
@@ -209,6 +227,7 @@ impl FromStr for Platform {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "discord" => Ok(Platform::Discord),
+            "fleaflicker" => Ok(Platform::FleaFlicker),
             "twitter" => Ok(Platform::Twitter),
             "youtube" => Ok(Platform::Youtube),
             "sleeper" => Ok(Platform::Sleeper),
@@ -221,6 +240,7 @@ impl fmt::Display for Platform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Platform::Discord => write!(f, "discord"),
+            Platform::FleaFlicker => write!(f, "fleaflicker"),
             Platform::Twitter => write!(f, "twitter"),
             Platform::Youtube => write!(f, "youtube"),
             Platform::Sleeper => write!(f, "sleeper"),
@@ -232,6 +252,7 @@ impl AsRef<[u8]> for Platform {
     fn as_ref(&self) -> &[u8] {
         match self {
             Platform::Discord => b"discord",
+            Platform::FleaFlicker => b"fleaflicker",
             Platform::Twitter => b"twitter",
             Platform::Youtube => b"youtube",
             Platform::Sleeper => b"sleeper",

@@ -2,6 +2,7 @@ use crate::{
     Draft, DraftPick, ExternalId, LeagueSettings, Player, Roster, Standings, StandingsEntry, Team,
     Transaction, data::Scoreboard,
 };
+use fleaflicker_fantasy_rs as fleaflicker;
 use serde_json::Number;
 use sleeper_fantasy_rs as sleeper;
 use std::{collections::HashMap, fmt};
@@ -11,6 +12,14 @@ const N_A: &str = "N/A";
 
 #[derive(Debug, Clone)]
 pub enum League {
+    FleaFlicker {
+        league: fleaflicker::League,
+        rules: fleaflicker::LeagueRules,
+        rosters: Vec<fleaflicker::Roster>,
+        standings: fleaflicker::LeagueStandings,
+        transactions: Vec<fleaflicker::LeagueActivityItem>,
+        team: Option<fleaflicker::Team>,
+    },
     Sleeper {
         draft: Option<sleeper::Draft>,
         draft_picks: Vec<sleeper::DraftPick>,
@@ -40,6 +49,24 @@ pub enum League {
 impl League {
     pub fn with_owner_id(self, id: ExternalId) -> Self {
         match self {
+            League::FleaFlicker {
+                league,
+                rules,
+                rosters,
+                standings,
+                team: _,
+                transactions,
+            } => League::FleaFlicker {
+                league,
+                rules,
+                team: rosters
+                    .iter()
+                    .find(|r| r.team.id.clone().map(|id| id.to_string()) == Some(id.id.clone()))
+                    .map(|r| r.team.clone()),
+                rosters,
+                standings,
+                transactions,
+            },
             League::Sleeper {
                 draft,
                 draft_picks,
@@ -95,6 +122,9 @@ impl League {
     }
     pub fn selected_owner_id(&self) -> Option<String> {
         match self {
+            League::FleaFlicker { team, .. } => {
+                team.as_ref().map(|t| t.id.map(|i| i.to_string())).flatten()
+            }
             League::Sleeper { user_id, .. } => user_id.as_ref().map(String::clone),
             League::Yahoo { team, .. } => team
                 .as_ref()
@@ -104,36 +134,81 @@ impl League {
     }
     pub fn status(&self) -> LeagueStatus {
         match self {
+            League::FleaFlicker { league, .. } => {
+                LeagueStatus::PreDraft
+                // LeagueStatus::from(league)
+            }
             League::Sleeper { league, .. } => LeagueStatus::from(league),
             League::Yahoo { league, .. } => LeagueStatus::from(league),
         }
     }
     pub fn id(&self) -> String {
         match self {
+            League::FleaFlicker { league, .. } => league.id.to_string(),
             League::Sleeper { league, .. } => league.league_id.clone(),
             League::Yahoo { league, .. } => league.league_key.to_string(),
         }
     }
     pub fn name(&self) -> String {
         match self {
+            League::FleaFlicker { league, .. } => league.name.clone(),
             League::Sleeper { league, .. } => league.name.clone(),
             League::Yahoo { league, .. } => league.name.clone(),
         }
     }
     pub fn platform(&self) -> String {
         match self {
+            League::FleaFlicker { .. } => String::from("FleaFlicker"),
             League::Sleeper { .. } => String::from("Sleeper"),
             League::Yahoo { .. } => String::from("Yahoo"),
         }
     }
     pub fn season(&self) -> String {
         match self {
+            League::FleaFlicker { standings, .. } => standings.season.to_string(),
             League::Sleeper { league, .. } => league.season.clone(),
             League::Yahoo { league, .. } => league.season.clone(),
         }
     }
     pub fn standings(&self) -> Standings {
         match self {
+            League::FleaFlicker { standings, .. } => Standings {
+                entries: standings
+                    .divisions
+                    .iter()
+                    .flat_map(|division| {
+                        division
+                            .teams
+                            .iter()
+                            .map(|team| {
+                                // TODO: theree are alot of panicable things here
+                                let owner = team.owners.as_ref().unwrap().first().unwrap();
+                                let wins = team
+                                    .record_overall
+                                    .as_ref()
+                                    .map_or(0, |r| r.win.map_or(0, |v| v.try_into().unwrap()));
+                                let losses = team
+                                    .record_overall
+                                    .as_ref()
+                                    .map_or(0, |r| r.losses.map_or(0, |v| v.try_into().unwrap()));
+                                let ties = team
+                                    .record_overall
+                                    .as_ref()
+                                    .map_or(0, |r| r.ties.map_or(0, |v| v.try_into().unwrap()));
+                                StandingsEntry {
+                                    roster_id: team.id.clone().unwrap().to_string(),
+                                    team_name: team.name.clone().unwrap().to_string(),
+                                    owner_name: owner.display_name.clone(),
+                                    owner_id: owner.id.to_string(),
+                                    wins,
+                                    losses,
+                                    ties,
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>(),
+            },
             League::Sleeper {
                 rosters, owners, ..
             } => Standings {
@@ -216,6 +291,7 @@ impl League {
             .map(|t| (t.id.clone(), t))
             .collect::<HashMap<_, _>>();
         match self {
+            League::FleaFlicker { .. } => None,
             League::Sleeper {
                 winners_bracket,
                 losers_bracket: _,
@@ -274,9 +350,26 @@ impl League {
             }
         }
     }
-
     pub fn teams(&self) -> Vec<Team> {
         match self {
+            League::FleaFlicker { rosters, .. } => rosters
+                .iter()
+                .map(|roster| {
+                    let owner = roster
+                        .team
+                        .owners
+                        .as_ref()
+                        .map(|owners| owners.first())
+                        .flatten();
+                    Team {
+                        id: roster.team.id.clone().unwrap().to_string(),
+                        roster_id: roster.team.id.clone().unwrap().to_string(),
+                        team_name: roster.team.name.clone().unwrap(),
+                        owner_id: owner.map(|o| o.id.to_string()),
+                        owner_name: owner.map(|o| o.display_name.clone()),
+                    }
+                })
+                .collect(),
             League::Sleeper {
                 owners, rosters, ..
             } => rosters
@@ -293,6 +386,13 @@ impl League {
     }
     pub fn record_for_roster(&self, roster_id: String) -> String {
         match self {
+            League::FleaFlicker {
+                league,
+                rules,
+                rosters,
+                team,
+                ..
+            } => String::from("0-0-0"),
             League::Sleeper { rosters, .. } => match rosters
                 .iter()
                 .find(|(_, r)| r.roster_id.to_string() == roster_id)
@@ -355,6 +455,13 @@ impl League {
     }
     pub fn total_points(&self) -> f64 {
         match self {
+            League::FleaFlicker {
+                league,
+                rules,
+                rosters,
+                team,
+                ..
+            } => 0.0,
             League::Sleeper {
                 rosters, user_id, ..
             } => match rosters
@@ -385,6 +492,23 @@ impl League {
     }
     pub fn settings(&self) -> LeagueSettings {
         match self {
+            League::FleaFlicker { league, rules, .. } => LeagueSettings {
+                has_playoffs: true,
+                playoff_start_week: 1,
+                num_playoff_teams: 0,
+                divisions: vec![],
+                league_type: super::LeagueType::Keeper,
+                draft_type: crate::DraftType::Snake,
+                draft_rounds: 0,
+                scoring: None,
+                has_pick_trading: false,
+                waiver_type: crate::WaiverType::FAAB,
+                max_keepers: league.max_keepers as usize,
+                trade_deadline: crate::TradeDeadline::None,
+                start_week: 0,
+                trade_ratify_type: crate::TradeRatifyType::Other("N/A".to_string()),
+                roster_spots: vec![],
+            },
             League::Sleeper { league, draft, .. } => LeagueSettings::from_sleeper(&league, draft),
             League::Yahoo { settings, .. } => LeagueSettings::from_yahoo(settings),
         }
@@ -392,12 +516,17 @@ impl League {
     #[allow(dead_code)]
     pub fn raw(&self) -> String {
         match self {
+            League::FleaFlicker { rules, .. } => format!("Raw: {:#?}", rules),
             League::Sleeper { league, .. } => format!("Raw: {:#?}", league.settings),
             League::Yahoo { settings, .. } => format!("Raw: {:#?}", settings),
         }
     }
     pub fn scoreboards(&self) -> Vec<Scoreboard> {
         match self {
+            League::FleaFlicker { standings, .. } => {
+                vec![]
+                // TODO:
+            }
             League::Sleeper {
                 matchups,
                 owners,
@@ -414,6 +543,16 @@ impl League {
     }
     pub fn players(&self) -> HashMap<String, Player> {
         match self {
+            League::FleaFlicker {
+                league,
+                rules,
+                rosters,
+                team,
+                ..
+            } => {
+                HashMap::new()
+                //TODO:
+            }
             League::Sleeper { players, .. } => players
                 .iter()
                 .map(|(id, p)| (id.clone(), Player::from(p)))
@@ -426,6 +565,13 @@ impl League {
     }
     pub fn draft(&self) -> Option<Draft> {
         match self {
+            League::FleaFlicker {
+                league,
+                rules,
+                rosters,
+                team,
+                ..
+            } => None,
             League::Sleeper {
                 draft,
                 draft_picks,
@@ -496,6 +642,7 @@ impl League {
     }
     pub fn rosters(&self) -> Vec<Roster> {
         match self {
+            League::FleaFlicker { rosters, .. } => rosters.iter().map(Roster::from).collect(),
             League::Sleeper {
                 rosters, owners, ..
             } => rosters
@@ -511,6 +658,10 @@ impl League {
     }
     pub fn transactions(&self) -> Vec<Transaction> {
         match self {
+            League::FleaFlicker { transactions, .. } => {
+                vec![]
+                // transactions.iter().map(Transaction::from).collect()
+            }
             League::Sleeper { transactions, .. } => {
                 transactions.iter().map(Transaction::from).collect()
             }
@@ -567,6 +718,11 @@ impl fmt::Display for LeagueStatus {
             LeagueStatus::Complete => write!(f, "Complete"),
             LeagueStatus::InComplete => write!(f, "Incomplete"),
         }
+    }
+}
+impl From<&fleaflicker::League> for LeagueStatus {
+    fn from(value: &fleaflicker::League) -> Self {
+        todo!()
     }
 }
 impl From<&sleeper::League> for LeagueStatus {

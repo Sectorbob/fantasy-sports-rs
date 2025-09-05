@@ -1,5 +1,6 @@
 use crate::{ExternalId, Player, PlayerPosition};
 use chrono::{DateTime, Utc};
+use fleaflicker_fantasy_rs as fleaflicker;
 use sleeper_fantasy_rs as sleeper;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -120,6 +121,27 @@ pub struct Roster {
     pub owner_name: String,
     pub player_ids: Vec<String>,
 }
+impl From<&fleaflicker::Roster> for Roster {
+    fn from(value: &fleaflicker::Roster) -> Self {
+        let owner = value
+            .team
+            .owners
+            .as_ref()
+            .map(|owners| owners.first())
+            .flatten();
+        Roster {
+            id: value.team.id.clone().unwrap().to_string(),
+            team_name: value.team.name.clone().unwrap(),
+            owner_name: owner.unwrap().display_name.clone(),
+            player_ids: value
+                .players
+                .iter()
+                .map(|p| p.pro_player.id.to_string())
+                .collect(),
+        }
+    }
+}
+
 impl From<(&sleeper::Roster, &HashMap<String, sleeper::User>)> for Roster {
     fn from((roster, owners): (&sleeper::Roster, &HashMap<String, sleeper::User>)) -> Self {
         let roster_id = &roster.roster_id;
@@ -405,6 +427,11 @@ impl From<sleeper::Transaction> for Transaction {
                 draft_pick_moves,
             },
         }
+    }
+}
+impl From<&fleaflicker::LeagueActivityItem> for Transaction {
+    fn from(value: &fleaflicker::LeagueActivityItem) -> Self {
+        todo!()
     }
 }
 impl From<&sleeper::Transaction> for Transaction {

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
+fleaflicker-fantasy-rs = { version = "0.1.0", path = "../fleaflicker-fantasy-rs" }
 futures = "0.3.31"
 log = "0.4.27"
 serde = "1.0.219"

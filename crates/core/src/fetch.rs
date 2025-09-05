@@ -2,8 +2,9 @@ use crate::{
     ExternalId, Platform,
     data::{self as core},
     player_cache::PlayerCache,
-    sleeper_utils,
+    sleeper_utils::{self, get_league_transactions},
 };
+use fleaflicker_fantasy_rs as fleaflicker;
 use futures::{
     StreamExt, TryStreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -19,6 +20,7 @@ use walkdir::WalkDir;
 use yahoo_fantasy_rs::{self as yahoo};
 
 pub struct LeagueAccessor {
+    pub fleaflicker_cli: Option<fleaflicker::Client>,
     pub sleeper_cli: Option<sleeper::Client>,
     players_cache: Option<PlayerCache>,
     pub yahoo_cli: Option<yahoo::Client>,
@@ -27,6 +29,7 @@ pub struct LeagueAccessor {
 impl LeagueAccessor {
     pub fn new() -> Self {
         LeagueAccessor {
+            fleaflicker_cli: None,
             sleeper_cli: None,
             players_cache: None,
             yahoo_cli: None,
@@ -40,20 +43,29 @@ impl LeagueAccessor {
     }
 
     pub async fn init(&mut self) -> Result<(), Error> {
-        let (sleeper_cache_dir, yahoo_cache_dir, player_cache) = match &self.cache_dir {
-            Some(cache_dir) => (
-                Some(cache_dir.join("sleeper")),
-                Some(cache_dir.join("yahoo")),
-                Some(cache_dir.join("players")),
-            ),
-            None => (None, None, None),
-        };
+        let (fleaflicker_cache_dir, sleeper_cache_dir, yahoo_cache_dir, player_cache) =
+            match &self.cache_dir {
+                Some(cache_dir) => (
+                    Some(cache_dir.join("fleaflicker")),
+                    Some(cache_dir.join("sleeper")),
+                    Some(cache_dir.join("yahoo")),
+                    Some(cache_dir.join("players")),
+                ),
+                None => (None, None, None, None),
+            };
         let player_cache = player_cache
             .map(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok())
             .flatten();
         if let Some(player_cache) = &player_cache {
             player_cache.init().await?;
         }
+
+        let fleaflicker_cli = match fleaflicker_cache_dir {
+            Some(fleaflicker_cache_dir) => {
+                fleaflicker::Client::new().with_cache(fleaflicker_cache_dir)
+            }
+            None => fleaflicker::Client::new(),
+        };
 
         let sleeper_cli = match sleeper_cache_dir {
             Some(sleeper_cache_dir) => sleeper::Client::new().with_cache(sleeper_cache_dir),
@@ -75,9 +87,14 @@ impl LeagueAccessor {
             }
         }
         self.players_cache = player_cache;
+        self.fleaflicker_cli = Some(fleaflicker_cli);
         self.sleeper_cli = Some(sleeper_cli);
         self.yahoo_cli = yahoo_cli;
         Ok(())
+    }
+
+    pub fn fleaflicker_enabled(&self) -> bool {
+        self.fleaflicker_cli.is_some()
     }
 
     pub fn sleeper_enabled(&self) -> bool {
@@ -95,6 +112,19 @@ impl LeagueAccessor {
         sport: &Sport,
     ) -> Result<Vec<ExternalId>, Error> {
         match &user_id.platform {
+            Platform::FleaFlicker => {
+                if let Some(cli) = &self.fleaflicker_cli {
+                    fetch_fleaflicker_leagues_for_user(
+                        cli,
+                        &seasons,
+                        &user_id.id,
+                        &sport.to_fleaflicker_sport(),
+                    )
+                    .await
+                } else {
+                    Err(Error::new("fleaflicker cli not configured"))
+                }
+            }
             Platform::Sleeper => {
                 if let Some(cli) = &self.sleeper_cli {
                     fetch_sleeper_league_ids_for_user(cli, &seasons, &user_id.id, &sport.to_sport())
@@ -120,6 +150,19 @@ impl LeagueAccessor {
         force_update: bool,
     ) -> Result<crate::model::League, Error> {
         match &id.platform {
+            Platform::FleaFlicker => {
+                if let Some(cli) = &self.fleaflicker_cli {
+                    fetch_fleaflicker_league_context(
+                        cli,
+                        &self.players_cache,
+                        id.id.clone(),
+                        force_update,
+                    )
+                    .await
+                } else {
+                    Err(Error::new("fleaflicker cli not configured"))
+                }
+            }
             Platform::Sleeper => {
                 if let Some(cli) = &self.sleeper_cli {
                     fetch_sleeper_league_context_by_id(
@@ -163,6 +206,91 @@ impl LeagueAccessor {
         }
         Ok(total_size)
     }
+}
+
+pub(crate) async fn fetch_fleaflicker_leagues_for_user(
+    fleaflicker_client: &fleaflicker::Client,
+    seasons: &Vec<String>,
+    fleaflicker_email: &String,
+    sport: &fleaflicker::Sport,
+) -> Result<Vec<ExternalId>, Error> {
+    let mut fleaflicker_leagues_for_season_tasks: FuturesUnordered<_> = seasons
+        .iter()
+        .map(|season| {
+            fleaflicker_client.get_leagues_for_user(
+                fleaflicker_email,
+                Some(sport.clone()),
+                Some(season.as_str().parse().unwrap()),
+            )
+        })
+        .collect();
+
+    let mut leagues: Vec<fleaflicker::League> = vec![];
+    loop {
+        match fleaflicker_leagues_for_season_tasks.try_next().await {
+            Ok(Some(resp)) => {
+                for league in resp.leagues {
+                    leagues.push(league);
+                }
+            }
+            Ok(None) => {
+                break;
+            } // exit loop as all tasks are done
+            Err(e) => {
+                log::error!("Error fetching FleaFlicker leagues: {:?}", e);
+                // panic!("Error fetching FleaFlicker leagues: {:?}", e); //TDOO handle this gracefully
+                // return Err(Box::new(e));
+            }
+        }
+    }
+
+    Ok(leagues.into_iter().map(ExternalId::from).collect())
+}
+
+pub(crate) async fn fetch_fleaflicker_league_context(
+    cli: &fleaflicker::Client,
+    optional_player_cache: &Option<PlayerCache>,
+    fleaflicker_league_id: String,
+    force_update: bool,
+) -> Result<crate::League, Error> {
+    let league_standings = cli
+        .fetch_league_standings(fleaflicker_league_id.parse().unwrap(), None, None)
+        .await?;
+    let fleaflicker_league = league_standings.league.clone(); // this needs to come as a param
+
+    // TODO: result offset
+    let transaction_history_future = cli.get_transaction_history(
+        fleaflicker_league.id,
+        fleaflicker_league.sport.clone(),
+        None,
+        None,
+    );
+
+    let league_rosters_future = cli.fetch_league_rosters(
+        fleaflicker_league.id,
+        fleaflicker_league.sport.clone(),
+        None,
+        None,
+        None,
+    );
+
+    let league_rules_future =
+        cli.fetch_league_rules(fleaflicker_league.id, fleaflicker_league.sport.clone());
+
+    let league_standings_future = cli.fetch_league_standings(
+        fleaflicker_league.id,
+        fleaflicker_league.sport.clone(),
+        None,
+    );
+
+    Ok(crate::League::FleaFlicker {
+        league: fleaflicker_league.clone(),
+        rules: league_rules_future.await?,
+        rosters: league_rosters_future.await?.rosters,
+        standings: league_standings_future.await?,
+        transactions: transaction_history_future.await?.items,
+        team: fleaflicker_league.owned_team.clone(),
+    })
 }
 
 pub(crate) async fn fetch_sleeper_league_context_by_id<T: Into<String>>(
@@ -601,6 +729,11 @@ impl Sport {
             Sport::NFL => sleeper::Sport::NFL,
         }
     }
+    pub fn to_fleaflicker_sport(&self) -> fleaflicker::Sport {
+        match self {
+            Sport::NFL => fleaflicker::Sport::NFL,
+        }
+    }
 }
 
 async fn fetch_yahoo_league_keys_for_user(
@@ -635,6 +768,8 @@ async fn fetch_yahoo_league_keys_for_user(
 pub enum Error {
     #[error("player cache error: {0}")]
     PlayerCacheError(#[from] crate::player_cache::Error),
+    #[error("fleaflicker error: {0}")]
+    FleaFlickerError(#[from] fleaflicker::Error),
     #[error("sleeper error: {0}")]
     SleeperError(#[from] sleeper::Error),
     #[error("yahoo error: {0}")]
