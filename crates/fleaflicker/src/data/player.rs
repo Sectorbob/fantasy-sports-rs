@@ -18,6 +18,17 @@ pub struct LeaguePlayer {
     pub display_group: String, // known values: RECEIVER
     pub last_x: Vec<Value>,
 }
+impl LeaguePlayer {
+    pub fn id(&self) -> i32 {
+        self.pro_player.id
+    }
+    pub fn name(&self) -> &str {
+        &self.pro_player.name_full.as_str()
+    }
+    pub fn irl_team(&self) -> &str {
+        &self.pro_player.pro_team_abbreviation.as_str()
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

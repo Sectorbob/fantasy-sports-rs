@@ -1,20 +1,26 @@
 use crate::{
     BoxScore, Draftboard, FetchRostersResponse, LeagueActivityItem, LeagueRules, LeagueStandings,
     LeaguesForUserResponse, ResponseList, Sport,
+    cache::{Cacheable, FileSystemCacher},
 };
 use serde::de::DeserializeOwned;
+use std::{path::PathBuf, sync::atomic::AtomicU64};
 
 const DEFAULT_BASE_URL: &str = "https://www.fleaflicker.com/api";
 
 pub struct Client {
     cli: reqwest::Client,
     base_url: String,
+    cache: Option<Box<dyn Cacheable + Send + Sync>>,
+    outgoing_request_count: AtomicU64,
 }
 impl Client {
     pub fn new() -> Self {
         Client {
             cli: reqwest::Client::new(),
             base_url: DEFAULT_BASE_URL.to_string(),
+            cache: None,
+            outgoing_request_count: AtomicU64::new(0),
         }
     }
 
@@ -23,15 +29,41 @@ impl Client {
         self
     }
 
+    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
+        self.cache = Some(Box::new(FileSystemCacher::new(cache_dir)));
+        self
+    }
+
     pub async fn get<P: Into<String>, T: DeserializeOwned>(
         &self,
         path: P,
         filters: Option<Vec<(&'static str, String)>>,
+        force_update: bool,
     ) -> Result<T, Error> {
         let req = self
             .build_get_json_request(path.into(), filters)
             .expect("failed to build request");
-        log::debug!("GET {url}", url = req.url());
+
+        let url = req.url().to_string();
+        log::debug!("GET {url}");
+
+        // check cache if exists (TODO: some time-based logic)
+        if force_update {
+            log::info!("GET {url} force skip cache");
+        } else if let Some(cacher) = &self.cache {
+            if let Some(body_text) = cacher.load_cache(url.as_str()).await {
+                log::debug!("GET {} cache hit", url);
+                return Ok(serde_json::from_str(&body_text)?);
+            } else {
+                log::info!("GET {} cache miss", url);
+            }
+        }
+
+        self.outgoing_request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        // TODO: save cache file
+
         Ok(self.cli.execute(req).await?.json().await?)
     }
 
@@ -64,7 +96,7 @@ impl Client {
             filters.push(("result_offset", result_offset.to_string()));
         }
 
-        return self.get("/FetchLeagueActivity", Some(filters)).await;
+        return self.get("/FetchLeagueActivity", Some(filters), false).await;
     }
 
     pub async fn get_leagues_for_user<T: Into<String>>(
@@ -81,7 +113,7 @@ impl Client {
             filters.push(("season", season.to_string()));
         }
 
-        return self.get("/FetchUserLeagues", Some(filters)).await;
+        return self.get("/FetchUserLeagues", Some(filters), false).await;
     }
 
     pub async fn get_transaction_history(
@@ -102,7 +134,9 @@ impl Client {
             filters.push(("result_offset", result_offset.to_string()));
         }
 
-        return self.get("/FetchLeagueTransactions", Some(filters)).await;
+        return self
+            .get("/FetchLeagueTransactions", Some(filters), false)
+            .await;
     }
 
     pub async fn fetch_league_rosters(
@@ -129,7 +163,7 @@ impl Client {
             }
         }
 
-        return self.get("/FetchLeagueRosters", Some(filters)).await;
+        return self.get("/FetchLeagueRosters", Some(filters), false).await;
     }
 
     pub async fn fetch_league_boxscore(
@@ -150,7 +184,7 @@ impl Client {
             filters.push(("scoring_period", scoring_period.to_string()));
         }
 
-        return self.get("/FetchLeagueBoxscore", Some(filters)).await;
+        return self.get("/FetchLeagueBoxscore", Some(filters), false).await;
     }
 
     pub async fn fetch_league_draftboard(
@@ -177,7 +211,9 @@ impl Client {
             }
         }
 
-        return self.get("/FetchLeagueDraftBoard", Some(filters)).await;
+        return self
+            .get("/FetchLeagueDraftBoard", Some(filters), false)
+            .await;
     }
 
     pub async fn fetch_league_rules(
@@ -190,7 +226,7 @@ impl Client {
             filters.push(("sport", sport.to_string()));
         }
 
-        return self.get("/FetchLeagueRules", Some(filters)).await;
+        return self.get("/FetchLeagueRules", Some(filters), false).await;
     }
 
     pub async fn fetch_league_standings(
@@ -207,7 +243,9 @@ impl Client {
             filters.push(("season", season.to_string()));
         }
 
-        return self.get("/FetchLeagueStandings", Some(filters)).await;
+        return self
+            .get("/FetchLeagueStandings", Some(filters), false)
+            .await;
     }
 }
 
