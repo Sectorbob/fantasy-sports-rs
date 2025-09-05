@@ -1,4 +1,4 @@
-use crate::{serde_epoch_millis, DraftSlot, LeaguePlayer, Team};
+use crate::{DraftSlot, LeaguePlayer, Team, serde_epoch_millis};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -11,10 +11,11 @@ pub struct FutureDraftPick {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WaiverResolutionTeam {
     pub team: Team,
-    pub waiver_position: i32,
-    pub bid: i32,
-    pub invalidation_reason: String,
-    pub tiebreaker_reason: String,
+    pub waiver_position: Option<i32>,
+    pub bid: Option<i32>,
+    pub invalidation_reason: Option<String>,
+    pub tiebreaker_reason: Option<String>,
+    #[serde(default)]
     pub loser: bool,
 }
 

@@ -74,7 +74,7 @@ pub struct RequestedGame {
     pub stats_projected: Option<Vec<Value>>,
     pub participant: Option<String>, // known values: HOME
     pub period: Period,
-    pub ranks: Ranks,
+    pub ranks: Option<Ranks>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

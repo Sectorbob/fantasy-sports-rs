@@ -25,6 +25,8 @@ pub struct FantasyGame {
     pub away_score: Option<GameResult>,
     pub home_score: Option<GameResult>,
     #[serde(default)]
+    pub is_in_progress: bool,
+    #[serde(default)]
     pub is_divisional: bool,
     pub home_result: Option<String>, //"WIN",
     pub away_result: Option<String>, //"LOSE",
@@ -85,9 +87,13 @@ pub struct ScoringPeriod {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GameResult {
     pub yet_to_play: i32,
+    #[serde(default)]
+    pub already_played: i32,
     pub score: FormattedDecimal,
     pub yet_to_play_positions: Vec<String>,
-    pub projected: FormattedDecimal,
+    #[serde(default)]
+    pub already_played_positions: Vec<String>,
+    pub projected: Option<FormattedDecimal>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
