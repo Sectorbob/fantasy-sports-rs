@@ -1,7 +1,10 @@
 use crate::{FileSystemCacher, Request, RequestContext, cache::Cacheable};
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, de::DeserializeOwned};
 use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 
+/// Client provides base functionality for a REST-ful GET client that can check
+/// a local cache dir. Right now there is no cache-ttl implemented, but a cache
+/// skip can be performed with a force_update flag
 pub struct Client {
     pub(crate) http_client: reqwest::Client,
     base_url: String,
@@ -9,6 +12,7 @@ pub struct Client {
     outgoing_request_count: AtomicU64,
 }
 impl Client {
+    /// Instantiates a new instance of the client
     pub fn new<T: Into<String>>(base_url: T) -> Self {
         Client {
             http_client: reqwest::Client::new(),
@@ -18,21 +22,30 @@ impl Client {
         }
     }
 
+    /// Builder function that updates the base_url on the client to the value
+    /// provided.
     pub fn with_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
         self.base_url = base_url.into();
         self
     }
 
+    /// with_cache creates/opens a file_system cache using the root file path
+    /// provided with cache_dir
     pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
         self.cache = Some(Box::new(FileSystemCacher::new(cache_dir)));
         self
     }
 
+    /// with_http_client is a builder method that will update the reqwest http
+    /// client with custom functionality. THis can be done to add default
+    /// headers, and other reqwest client builder settings.
     pub fn with_http_client(mut self, http_client: reqwest::Client) -> Self {
         self.http_client = http_client;
         self
     }
 
+    /// Default behavior to build the http request and requires the expected
+    /// response body type.
     pub fn build_request<'a, T: DeserializeOwned>(
         &'a self,
         ctx: RequestContext<'a>,
@@ -49,22 +62,25 @@ impl Client {
         }
     }
 
+    /// Executes the request.exec and does the proper cache check, if a remote
+    /// is hit and receives a 2XX level error then this will cache the
+    /// response.
     pub async fn get<T: DeserializeOwned>(
         &self,
         req: reqwest::Request,
         force_update: bool,
-    ) -> Result<T, Error> {
+    ) -> Result<T> {
         let url = req.url().to_string();
 
         // check cache if exists (TODO: some time-based logic)
         if force_update {
             log::info!("GET {url} force skip cache");
         } else if let Some(cacher) = &self.cache {
-            if let Some(body_text) = cacher.load_cache(url.as_str()).await {
-                log::debug!("GET {} cache hit", url);
-                return Ok(serde_json::from_str(&body_text)?);
+            if let Some(bytes) = cacher.load_cache(url.as_str()).await {
+                log::debug!("GET {url} cache hit");
+                return self.deserialize_slice(&bytes);
             } else {
-                log::info!("GET {} cache miss", url);
+                log::info!("GET {url} cache miss");
             }
         }
 
@@ -75,17 +91,12 @@ impl Client {
 
         match resp.status() {
             reqwest::StatusCode::OK => {
-                if let Some(cacher) = &self.cache {
-                    // load to memory buffer then save to file and return deserialized struct
-                    let resp_text = resp.text().await?;
-                    let cache_result = cacher.save_cache(&url, resp_text.as_str()).await; // TODO: handle error case
-                    if let Err(err) = cache_result {
-                        // log it
-                        log::error!("unable to cache sleeper GET response for {url}: {:?}", err);
-                    }
-                    return Ok(serde_json::from_str(&resp_text)?);
+                if self.cache.is_some() {
+                    self.cache_resp_body(url, resp).await
                 } else {
-                    resp.json::<Option<T>>().await?.ok_or(Error::NotFound(url))
+                    let b = resp.bytes().await?;
+                    self.deserialize_slice::<Option<T>>(&b)?
+                        .ok_or(Error::NotFound(url))
                 }
             }
             reqwest::StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
@@ -93,12 +104,39 @@ impl Client {
         }
     }
 
+    pub async fn cache_resp_body<T: DeserializeOwned>(
+        &self,
+        url: String,
+        resp: reqwest::Response,
+    ) -> Result<T> {
+        // load to memory buffer then save to file and return deserialized struct
+        let resp_bytes = resp.bytes().await?;
+        if let Some(cacher) = &self.cache {
+            let cache_result = cacher.save_cache(&url, &resp_bytes).await; // TODO: handle error case
+            if let Err(err) = cache_result {
+                // log it
+                log::error!("unable to cache sleeper GET response for {url}: {err:?}");
+            }
+            self.deserialize_slice(&resp_bytes)
+        } else {
+            Err(Error::dev_error("cacher not enabled"))
+        }
+    }
+
+    pub fn deserialize_slice<'a, T: for<'de> Deserialize<'de>>(&self, b: &'a [u8]) -> Result<T> {
+        serde_json::from_slice(b).map_err(|err| Error::SerdeError(SerdeError::from(err)))
+    }
+
+    /// Retrieve the count of the outgoing http requests
     pub fn request_count(&self) -> u64 {
         self.outgoing_request_count
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error is custom
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("client error: {0}")]
@@ -109,8 +147,8 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
     #[error("not found: {0}")]
     NotFound(String),
-    #[error("json deserialization error: {0}")]
-    SerdeError(#[from] serde_json::Error),
+    #[error("serde error: {0}")]
+    SerdeError(#[from] SerdeError),
 }
 impl Error {
     pub fn dev_error<T: Into<String>>(msg: T) -> Self {
@@ -121,6 +159,14 @@ impl From<reqwest::StatusCode> for Error {
     fn from(value: reqwest::StatusCode) -> Self {
         Error::ClientError(value)
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SerdeError {
+    #[error("json deserialization error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    // #[error("xml deserialization error: {0}")]
+    // XMLError(#[from] serde_json::Error),
 }
 
 #[cfg(test)]

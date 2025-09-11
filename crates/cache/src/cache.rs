@@ -21,16 +21,16 @@ pub trait Cacheable {
     }
 
     /// Try to load a cached string value for a key.
-    async fn load_cache(&self, key: &str) -> Option<String> {
+    async fn load_cache(&self, key: &str) -> Option<Vec<u8>> {
         let path = self.cache_file_path(key);
         let mut f = fs::File::open(path).await.ok()?;
-        let mut s = String::new();
-        f.read_to_string(&mut s).await.ok()?;
-        Some(s)
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).await.ok()?;
+        Some(buf)
     }
 
     /// Save a string value to the cache for a key.
-    async fn save_cache(&self, key: &str, value: &str) -> Result<(), Error> {
+    async fn save_cache<'a>(&self, key: &str, value: &'a [u8]) -> Result<(), Error> {
         let path = self.cache_file_path(key);
         info!("caching {key} to {:?}", path);
 
@@ -38,7 +38,7 @@ pub trait Cacheable {
             fs::create_dir_all(parent).await?;
         }
         if let Ok(mut f) = fs::File::create(path).await {
-            f.write_all(value.as_bytes()).await?;
+            f.write_all(value).await?;
         }
         Ok(())
     }
