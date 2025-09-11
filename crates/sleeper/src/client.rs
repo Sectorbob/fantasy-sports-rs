@@ -1,164 +1,50 @@
-use std::{
-    collections::HashMap, fmt::Display, marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64,
-};
-
-use log::{debug, error, info};
-use reqwest;
-use serde::de::DeserializeOwned;
-
 use crate::{
     Draft, DraftPickMove, SportState,
-    cache::{Cacheable, FileSystemCacher},
     data::{
         Bracket, DraftPick, League, Matchup, Player, PlayoffBracketEntry, Roster, Sport,
         Transaction, TrendType, TrendingPlayer, User,
     },
 };
-use thiserror;
+use cached_client_rs::Request;
+use reqwest;
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 // const SLEEPER_API_BASE_URL_UNPUBLISHED: &str = "https://api.sleeper.app";
 const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
 
 pub struct Client {
-    base_url: String,
-    client: reqwest::Client,
-    cache: Option<Box<dyn Cacheable + Send + Sync>>,
-    outgoing_request_count: AtomicU64,
+    client: cached_client_rs::Client,
 }
 impl Client {
     pub fn new() -> Self {
         Client {
-            base_url: SLEEPER_API_BASE_URL.to_string(),
-            client: reqwest::ClientBuilder::new()
-                .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
-                // .default_headers(headers)
-                .build()
-                .expect("dev error while building http client"),
-            cache: None,
-            outgoing_request_count: AtomicU64::new(0),
+            client: cached_client_rs::Client::new(SLEEPER_API_BASE_URL.to_string())
+                .with_http_client(
+                    reqwest::ClientBuilder::new()
+                        .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
+                        // .default_headers(headers)
+                        .build()
+                        .expect("dev error while building http client"),
+                ),
         }
     }
 
     pub fn with_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
-        self.base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url);
         self
     }
 
-    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
-        self.cache = Some(Box::new(FileSystemCacher::new(cache_dir)));
-        self
-    }
-
-    pub(crate) fn build_get_json_request(
-        &self,
-        path: String,
-        filters: Option<Vec<(&str, String)>>,
-    ) -> Result<reqwest::Request, reqwest::Error> {
-        let url = format!("{}{}", self.base_url, path);
-
-        let mut request_builder = self.client.get(&url).header("Accept", "application/json");
-
-        if let Some(filters) = filters {
-            request_builder = request_builder.query(&filters)
-        }
-        request_builder.build()
-    }
-
-    pub(crate) async fn get_json<T: DeserializeOwned>(
-        &self,
-        path: String,
-        filters: Option<Vec<(&str, String)>>,
-        force_update: bool,
-    ) -> Result<T, Error> {
-        let req = match self.build_get_json_request(path, filters) {
-            Ok(req) => req,
-            Err(err) => {
-                return Err(Error::UnknownError(format!(
-                    "failed to build request: {:?}",
-                    err
-                )));
-            }
-        };
-        let url = req.url().to_string();
-
-        // check cache if exists (TODO: some time-based logic)
-        if force_update {
-            info!("GET {url} force skip cache");
-        } else if let Some(cacher) = &self.cache {
-            if let Some(body_text) = cacher.load_cache(url.as_str()).await {
-                debug!("GET {} cache hit", url);
-                return match serde_json::from_str(&body_text) {
-                    Ok(obj) => Ok(obj),
-                    Err(err) => Err(Error::ResponseDeserializationError {
-                        message: format!("{:?}", err),
-                        url,
-                    }),
-                };
-            } else {
-                info!("GET {} cache miss", url);
-            }
-        }
-
-        self.outgoing_request_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        match self.client.execute(req).await {
-            Ok(resp) => match resp.status() {
-                reqwest::StatusCode::OK => {
-                    if let Some(cacher) = &self.cache {
-                        // load to memory buffer then save to file and return deserialized struct
-                        match resp.text().await {
-                            Ok(resp_text) => {
-                                let cache_result =
-                                    cacher.save_cache(&url, resp_text.as_str()).await; // TODO: handle error case
-                                if let Err(err) = cache_result {
-                                    // log it
-                                    error!(
-                                        "unable to cache sleeper GET response for {url}: {:?}",
-                                        err
-                                    );
-                                }
-                                match serde_json::from_str(&resp_text) {
-                                    Ok(obj) => Ok(obj),
-                                    Err(err) => Err(Error::ResponseDeserializationError {
-                                        message: format!("{:?}", err),
-                                        url,
-                                    }),
-                                }
-                            }
-                            Err(err) => Err(Error::UnknownError(format!(
-                                "failed to read response body: {:?}",
-                                err
-                            ))),
-                        }
-                    } else {
-                        match resp.json::<Option<T>>().await {
-                            Ok(opt_t) => match opt_t {
-                                Some(t) => Ok(t),
-                                None => Err(Error::NotFound(url)),
-                            },
-                            Err(err) => Err(Error::ResponseDeserializationError {
-                                message: format!("{:?}", err),
-                                url,
-                            }),
-                        }
-                    }
-                }
-                reqwest::StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
-                code => Err(Error::UnknownError(format!("unexpected status: {}", code))),
-            },
-            // Err(error) if error.is_connect() => Err(Error::ConnectError(error)),
-            Err(error) => Err(Error::UnknownError(format!(
-                "failed to send request: {:?}",
-                error
-            ))),
-        }
+    pub fn with_cache<T: Into<PathBuf>>(
+        mut self,
+        cache_dir: T,
+    ) -> Result<Self, cached_client_rs::Error> {
+        self.client = self.client.with_cache(cache_dir)?;
+        Ok(self)
     }
 
     pub fn request_count(&self) -> u64 {
-        self.outgoing_request_count
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.client.request_count()
     }
 
     /// Since rosters and draft picks contain Player IDs which look like
@@ -170,7 +56,10 @@ impl Client {
     /// intended to be called every time you need to look up players due to the
     /// filesize being close to 5MB in size. You do not need to call this
     /// endpoint more than once per day.
-    pub async fn fetch_all_players(&self, sport: &Sport) -> Result<HashMap<String, Player>, Error> {
+    pub async fn fetch_all_players(
+        &self,
+        sport: &Sport,
+    ) -> Result<HashMap<String, Player>, cached_client_rs::Error> {
         self.fetch_all_players_request(sport).send().await
     }
 
@@ -182,7 +71,7 @@ impl Client {
         r#type: TrendType,
         lookback_hours: Option<u32>,
         limit: Option<u32>,
-    ) -> Result<Vec<TrendingPlayer>, Error> {
+    ) -> Result<Vec<TrendingPlayer>, cached_client_rs::Error> {
         self.get_trending_players_request(sport, &r#type, &lookback_hours, &limit)
             .send()
             .await
@@ -193,7 +82,7 @@ impl Client {
     ///
     /// Via the user resource, you can GET the user object by either providing
     /// the username or user_id of the user.
-    pub async fn get_user<T: Id>(&self, user: T) -> Result<User, Error> {
+    pub async fn get_user<T: Id>(&self, user: T) -> Result<User, cached_client_rs::Error> {
         let user: String = user.to_string();
         self.get_user_request(user.as_str()).send().await
     }
@@ -205,7 +94,7 @@ impl Client {
         user_id: T,
         sport: &Sport,
         season: T,
-    ) -> Result<Vec<League>, Error> {
+    ) -> Result<Vec<League>, cached_client_rs::Error> {
         let user_id = user_id.to_string();
         let season = season.to_string();
         self.get_leagues_for_user_request(user_id.as_str(), sport, season.as_str())
@@ -214,13 +103,16 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific league.
-    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, Error> {
+    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, cached_client_rs::Error> {
         let league_id: String = league_id.to_string();
         self.get_league_request(league_id.as_str()).send().await
     }
 
     /// This endpoint retrieves all rosters in a league.
-    pub async fn get_rosters_in_league<T: Id>(&self, league_id: T) -> Result<Vec<Roster>, Error> {
+    pub async fn get_rosters_in_league<T: Id>(
+        &self,
+        league_id: T,
+    ) -> Result<Vec<Roster>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_rosters_in_league_request(league_id.as_str())
             .send()
@@ -231,7 +123,10 @@ impl Client {
     ///
     /// This also includes each user's display_name, avatar, and their metadata
     /// which sometimes includes a nickname they gave their team.
-    pub async fn get_users_for_league<T: Id>(&self, league_id: T) -> Result<Vec<User>, Error> {
+    pub async fn get_users_for_league<T: Id>(
+        &self,
+        league_id: T,
+    ) -> Result<Vec<User>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_users_for_league_request(league_id.as_str())
             .send()
@@ -250,7 +145,7 @@ impl Client {
         &self,
         league_id: T,
         week: usize,
-    ) -> Result<Vec<Matchup>, Error> {
+    ) -> Result<Vec<Matchup>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_matchups_request(league_id.as_str(), week)
             .send()
@@ -262,7 +157,7 @@ impl Client {
         &self,
         league_id: T,
         week: usize,
-    ) -> Result<Vec<Transaction>, Error> {
+    ) -> Result<Vec<Transaction>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_transactions_request(league_id.as_str(), week)
             .send()
@@ -274,7 +169,7 @@ impl Client {
     pub async fn get_traded_picks_in_league<T: Id>(
         &self,
         league_id: T,
-    ) -> Result<Vec<DraftPickMove>, Error> {
+    ) -> Result<Vec<DraftPickMove>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_traded_picks_in_league_request(league_id.as_str())
             .send()
@@ -282,7 +177,10 @@ impl Client {
     }
 
     /// This endpoint returns information about the current state for any sport.
-    pub async fn get_sport_state(&self, sport: &Sport) -> Result<SportState, Error> {
+    pub async fn get_sport_state(
+        &self,
+        sport: &Sport,
+    ) -> Result<SportState, cached_client_rs::Error> {
         self.get_sport_state_request(sport).send().await
     }
 
@@ -292,7 +190,7 @@ impl Client {
         user_id: T,
         sport: &Sport,
         season: T,
-    ) -> Result<Vec<Draft>, Error> {
+    ) -> Result<Vec<Draft>, cached_client_rs::Error> {
         let user_id = user_id.to_string();
         let season = season.to_string();
         self.get_drafts_for_user_request(user_id.as_str(), sport, season.as_str())
@@ -305,7 +203,10 @@ impl Client {
     ///
     /// Drafts are sorted by most recent to earliest. Most leagues should only
     /// have one draft.
-    pub async fn get_drafts_for_league<T: Id>(&self, league_id: T) -> Result<Vec<Draft>, Error> {
+    pub async fn get_drafts_for_league<T: Id>(
+        &self,
+        league_id: T,
+    ) -> Result<Vec<Draft>, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         self.get_drafts_for_league_request(league_id.as_str())
             .send()
@@ -313,13 +214,16 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific draft.
-    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, Error> {
+    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, cached_client_rs::Error> {
         let draft_id = draft_id.to_string();
         self.get_draft_request(draft_id.as_str()).send().await
     }
 
     /// This endpoint retrieves all picks in a draft.
-    pub async fn get_draft_picks<T: Id>(&self, draft_id: T) -> Result<Vec<DraftPick>, Error> {
+    pub async fn get_draft_picks<T: Id>(
+        &self,
+        draft_id: T,
+    ) -> Result<Vec<DraftPick>, cached_client_rs::Error> {
         let draft_id = draft_id.to_string();
         self.get_draft_picks_request(draft_id.as_str()).send().await
     }
@@ -332,7 +236,7 @@ impl Client {
         &self,
         league_id: T,
         is_losers_bracket: bool,
-    ) -> Result<Bracket, Error> {
+    ) -> Result<Bracket, cached_client_rs::Error> {
         let league_id = league_id.to_string();
         let bracket_matchups: Vec<PlayoffBracketEntry> = self
             .get_playoff_bracket_request(league_id.as_str(), is_losers_bracket)
@@ -345,23 +249,28 @@ impl Client {
     }
 
     pub fn get_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a, League> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetLeague { league_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
+
     pub fn fetch_all_players_request<'a>(
         &'a self,
         sport: &'a Sport,
     ) -> Request<'a, HashMap<String, Player>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::FetchAllPlayers { sport },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/players/{sport}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
     pub fn get_trending_players_request<'a>(
         &'a self,
@@ -370,25 +279,39 @@ impl Client {
         lookback_hours: &'a Option<u32>, //TODO: implement this filter
         limit: &'a Option<u32>,
     ) -> Request<'a, Vec<TrendingPlayer>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetTrendingPlayers {
-                sport,
-                r#type,
-                lookback_hours,
-                limit,
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/players/{sport}/trending/{}", r#type),
+                filters: {
+                    let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
+                        .into_iter()
+                        .filter_map(|(k, v)| match v {
+                            Some(0) => None,
+                            Some(value) => Some((k, value.to_string())),
+                            None => None,
+                        })
+                        .collect::<Vec<(&str, String)>>();
+                    if filters_vec.is_empty() {
+                        None
+                    } else {
+                        Some(filters_vec)
+                    }
+                },
             },
-            phantom: PhantomData,
-        }
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
+
     pub fn get_user_request<'a>(&'a self, user: &'a str) -> Request<'a, User> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetUser { user },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/user/{user}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_leagues_for_user_request<'a>(
@@ -397,40 +320,42 @@ impl Client {
         sport: &'a Sport,
         season: &'a str,
     ) -> Request<'a, Vec<League>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetLeaguesForUser {
-                user_id,
-                sport,
-                season,
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/user/{user_id}/leagues/{sport}/{season}"),
+                filters: None,
             },
-            phantom: PhantomData,
-        }
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_rosters_in_league_request<'a>(
         &'a self,
         league_id: &'a str,
     ) -> Request<'a, Vec<Roster>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetRostersInLeague { league_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/rosters"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_users_for_league_request<'a>(
         &'a self,
         league_id: &'a str,
     ) -> Request<'a, Vec<User>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetUsersForLeague { league_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/users"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_matchups_request<'a>(
@@ -438,12 +363,14 @@ impl Client {
         league_id: &'a str,
         week: usize,
     ) -> Request<'a, Vec<Matchup>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetMatchups { league_id, week },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/matchups/{week}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_transactions_request<'a>(
@@ -451,33 +378,39 @@ impl Client {
         league_id: &'a str,
         week: usize,
     ) -> Request<'a, Vec<Transaction>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetTransactions { league_id, week },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/transactions/{week}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_traded_picks_in_league_request<'a>(
         &'a self,
         league_id: &'a str,
     ) -> Request<'a, Vec<DraftPickMove>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetTradedPicksInLeague { league_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/traded_picks"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_sport_state_request<'a>(&'a self, sport: &'a Sport) -> Request<'a, SportState> {
-        Request {
-            cli: self,
-            force_update: true, // don't rely on cache for this request
-            ctx: RequestContext::GetSportState { sport },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/state/{sport}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_drafts_for_user_request<'a>(
@@ -486,62 +419,72 @@ impl Client {
         sport: &'a Sport,
         season: &'a str,
     ) -> Request<'a, Vec<Draft>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetDraftsForUser {
-                user_id,
-                sport,
-                season,
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/user/{user_id}/drafts/{sport}/{season}"),
+                filters: None,
             },
-            phantom: PhantomData,
-        }
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_drafts_for_league_request<'a>(
         &'a self,
         league_id: &'a str,
     ) -> Request<'a, Vec<Draft>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetDraftsForLeague { league_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/league/{league_id}/drafts"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_draft_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Draft> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetDraft { draft_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/draft/{draft_id}"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_draft_picks_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Vec<DraftPick>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetDraftPicks { draft_id },
-            phantom: PhantomData,
-        }
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!("/draft/{draft_id}/picks"),
+                filters: None,
+            },
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     pub fn get_playoff_bracket_request<'a>(
         &'a self,
         league_id: &'a str,
         is_losers_bracket: bool,
-    ) -> Request<'a, Vec<PlayoffBracketEntry>> {
-        Request {
-            cli: self,
-            force_update: false,
-            ctx: RequestContext::GetPlayoffBracket {
-                league_id,
-                is_losers_bracket,
+    ) -> cached_client_rs::Request<'a, Vec<PlayoffBracketEntry>> {
+        self.client.build_request(
+            cached_client_rs::RequestContext {
+                url: format!(
+                    "/league/{league_id}/{bracket_name}",
+                    bracket_name = if is_losers_bracket {
+                        "losers_bracket"
+                    } else {
+                        "winners_bracket"
+                    }
+                ),
+                filters: None,
             },
-            phantom: PhantomData,
-        }
+            false,
+            Some(cached_client_rs::ResponseBodyFormat::JSON),
+        )
     }
 
     // user with basketball league: ManagerSilent58
@@ -570,182 +513,6 @@ pub fn avatar_url(avatar_id: String) -> String {
 
 pub fn avatar_thumbnail_url(avatar_id: String) -> String {
     format!("{SLEEPER_CDN_BASE_URL}/avatars/thumbs/{avatar_id}")
-}
-
-pub struct Request<'a, T: DeserializeOwned> {
-    cli: &'a Client,
-    force_update: bool,
-    ctx: RequestContext<'a>,
-    phantom: PhantomData<&'a T>,
-}
-impl<'a, T: DeserializeOwned> Request<'a, T> {
-    pub fn force_update(mut self) -> Self {
-        self.force_update = true;
-        self
-    }
-
-    pub fn with_force_update(mut self, force_update: &bool) -> Self {
-        self.force_update = *force_update;
-        self
-    }
-
-    pub async fn send(self) -> Result<T, Error> {
-        self.cli
-            .get_json(self.ctx.url(), self.ctx.filters(), self.force_update)
-            .await
-    }
-}
-
-pub enum RequestContext<'a> {
-    GetLeague {
-        league_id: &'a str,
-    },
-    FetchAllPlayers {
-        sport: &'a Sport,
-    },
-    GetTrendingPlayers {
-        sport: &'a Sport,
-        r#type: &'a TrendType,
-        lookback_hours: &'a Option<u32>,
-        limit: &'a Option<u32>,
-    },
-    GetUser {
-        user: &'a str,
-    },
-    GetLeaguesForUser {
-        user_id: &'a str,
-        sport: &'a Sport,
-        season: &'a str,
-    },
-    GetRostersInLeague {
-        league_id: &'a str,
-    },
-    GetUsersForLeague {
-        league_id: &'a str,
-    },
-    GetMatchups {
-        league_id: &'a str,
-        week: usize,
-    },
-    GetTransactions {
-        league_id: &'a str,
-        week: usize,
-    },
-    GetTradedPicksInLeague {
-        league_id: &'a str,
-    },
-    GetSportState {
-        sport: &'a Sport,
-    },
-    GetDraftsForUser {
-        user_id: &'a str,
-        sport: &'a Sport,
-        season: &'a str,
-    },
-    GetDraftsForLeague {
-        league_id: &'a str,
-    },
-    GetDraft {
-        draft_id: &'a str,
-    },
-    GetDraftPicks {
-        draft_id: &'a str,
-    },
-
-    GetPlayoffBracket {
-        league_id: &'a str,
-        is_losers_bracket: bool,
-    },
-}
-impl<'a> RequestContext<'a> {
-    pub fn url(&self) -> String {
-        match self {
-            RequestContext::GetLeague { league_id } => format!("/league/{league_id}"),
-            RequestContext::FetchAllPlayers { sport } => format!("/players/{sport}"),
-            RequestContext::GetTrendingPlayers { sport, r#type, .. } => {
-                format!("/players/{sport}/trending/{}", r#type)
-            }
-            RequestContext::GetUser { user } => format!("/user/{user}"),
-            RequestContext::GetLeaguesForUser {
-                user_id,
-                sport,
-                season,
-            } => format!("/user/{user_id}/leagues/{sport}/{season}"),
-            RequestContext::GetRostersInLeague { league_id } => {
-                format!("/league/{league_id}/rosters")
-            }
-            RequestContext::GetUsersForLeague { league_id } => format!("/league/{league_id}/users"),
-            RequestContext::GetMatchups { league_id, week } => {
-                format!("/league/{league_id}/matchups/{week}")
-            }
-            RequestContext::GetTransactions { league_id, week } => {
-                format!("/league/{league_id}/transactions/{week}")
-            }
-            RequestContext::GetTradedPicksInLeague { league_id } => {
-                format!("/league/{league_id}/traded_picks")
-            }
-            RequestContext::GetSportState { sport } => format!("/state/{sport}"),
-            RequestContext::GetDraftsForUser {
-                user_id,
-                sport,
-                season,
-            } => format!("/user/{user_id}/drafts/{sport}/{season}"),
-            RequestContext::GetDraftsForLeague { league_id } => {
-                format!("/league/{league_id}/drafts")
-            }
-            RequestContext::GetDraft { draft_id } => format!("/draft/{draft_id}"),
-            RequestContext::GetDraftPicks { draft_id } => format!("/draft/{draft_id}/picks"),
-            RequestContext::GetPlayoffBracket {
-                league_id,
-                is_losers_bracket,
-            } => format!(
-                "/league/{league_id}/{bracket_name}",
-                bracket_name = if *is_losers_bracket {
-                    "losers_bracket"
-                } else {
-                    "winners_bracket"
-                }
-            ),
-        }
-    }
-    pub fn filters(&self) -> Option<Vec<(&str, String)>> {
-        match self {
-            RequestContext::GetLeague { .. } => None,
-            RequestContext::FetchAllPlayers { .. } => None,
-            RequestContext::GetTrendingPlayers {
-                lookback_hours,
-                limit,
-                ..
-            } => {
-                let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
-                    .into_iter()
-                    .filter_map(|(k, v)| match v {
-                        Some(0) => None,
-                        Some(value) => Some((k, value.to_string())),
-                        None => None,
-                    })
-                    .collect::<Vec<(&str, String)>>();
-                if filters_vec.is_empty() {
-                    None
-                } else {
-                    Some(filters_vec)
-                }
-            }
-            RequestContext::GetUser { .. } => None,
-            RequestContext::GetLeaguesForUser { .. } => None,
-            RequestContext::GetRostersInLeague { .. } => None,
-            RequestContext::GetUsersForLeague { .. } => None,
-            RequestContext::GetMatchups { .. } => None,
-            RequestContext::GetTransactions { .. } => None,
-            RequestContext::GetTradedPicksInLeague { .. } => None,
-            RequestContext::GetSportState { .. } => None,
-            RequestContext::GetDraftsForUser { .. } => None,
-            RequestContext::GetDraftsForLeague { .. } => None,
-            RequestContext::GetDraft { .. } => None,
-            RequestContext::GetDraftPicks { .. } => None,
-            RequestContext::GetPlayoffBracket { .. } => None,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -973,46 +740,6 @@ mod client_tests {
             .await
             .unwrap();
         assert_eq!(0, players.len());
-
-        let request_with_lookback = client
-            .build_get_json_request(
-                format!("/players/{}/trending/{}", sport, trending_type),
-                Some(vec![("lookback_hours", "6".to_string())]),
-            )
-            .expect("should work fine");
-        assert_eq!(
-            format!(
-                "{}/players/nfl/trending/drop?lookback_hours=6",
-                mock_server.uri()
-            ),
-            request_with_lookback.url().to_string()
-        );
-        let request_with_limit = client
-            .build_get_json_request(
-                format!("/players/{}/trending/{}", sport, trending_type),
-                Some(vec![("limit", "100".to_string())]),
-            )
-            .expect("should work fine");
-        assert_eq!(
-            format!("{}/players/nfl/trending/drop?limit=100", mock_server.uri()),
-            request_with_limit.url().to_string()
-        );
-        let request_with_limit_and_lookback = client
-            .build_get_json_request(
-                format!("/players/{}/trending/{}", sport, trending_type),
-                Some(vec![
-                    ("lookback_hours", "10".to_string()),
-                    ("limit", "100".to_string()),
-                ]),
-            )
-            .expect("should work fine");
-        assert_eq!(
-            format!(
-                "{}/players/nfl/trending/drop?lookback_hours=10&limit=100",
-                mock_server.uri()
-            ),
-            request_with_limit_and_lookback.url().to_string()
-        );
     }
 
     #[tokio::test]
@@ -1438,21 +1165,9 @@ mod client_tests {
     }
 }
 
-#[derive(Debug, thiserror::Error, PartialEq)]
-pub enum Error {
-    // #[error("Request error: {0}")]
-    // RequestError(#[from] reqwest::Error),
-    #[error("Response Deserialization error: {message} url: {url}")]
-    ResponseDeserializationError { message: String, url: String },
-    #[error("resource not found: {0}")]
-    NotFound(String),
-    #[error("unknown error: {0}")]
-    UnknownError(String),
-}
-
 pub trait Id: Display {}
 
-impl Id for usize {} 
+impl Id for usize {}
 impl Id for &usize {}
 impl Id for &str {}
 impl Id for String {}

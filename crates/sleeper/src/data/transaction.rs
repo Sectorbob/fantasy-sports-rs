@@ -31,22 +31,13 @@ pub struct Transaction {
 }
 impl Transaction {
     pub fn is_free_agent(&self) -> bool {
-        match self._type {
-            TransactionType::FreeAgent => true,
-            _ => false,
-        }
+        matches!(self._type, TransactionType::FreeAgent)
     }
     pub fn is_trade(&self) -> bool {
-        match self._type {
-            TransactionType::Trade => true,
-            _ => false,
-        }
+        matches!(self._type, TransactionType::Trade)
     }
     pub fn is_waiver(&self) -> bool {
-        match self._type {
-            TransactionType::Waiver => true,
-            _ => false,
-        }
+        matches!(self._type, TransactionType::Waiver)
     }
 }
 

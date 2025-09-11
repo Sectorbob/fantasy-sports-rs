@@ -1,7 +1,8 @@
 use crate::{
-    Client, Error, PlayoffBracketEntry,
+    Client, PlayoffBracketEntry,
     data::{LeagueSettings, Matchup, Player, Roster, User},
 };
+use cached_client_rs::Error;
 use rand::{rng, seq::SliceRandom as _};
 use std::collections::{HashMap, HashSet};
 

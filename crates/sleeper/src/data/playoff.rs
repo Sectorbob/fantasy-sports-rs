@@ -95,15 +95,15 @@ impl Bracket {
         let mut rosters = self.rosters();
         for m in self.matchups.iter() {
             if m.team_1_from.is_none() && m.team_2_from.is_none() {
-                if let Some(rid) = m.team_1_roster_id {
-                    if let Some(i) = rosters.iter().position(|i| *i == rid) {
-                        rosters.remove(i);
-                    }
+                if let Some(rid) = m.team_1_roster_id
+                    && let Some(i) = rosters.iter().position(|i| *i == rid)
+                {
+                    rosters.remove(i);
                 }
-                if let Some(rid) = m.team_2_roster_id {
-                    if let Some(i) = rosters.iter().position(|i| *i == rid) {
-                        rosters.remove(i);
-                    }
+                if let Some(rid) = m.team_2_roster_id
+                    && let Some(i) = rosters.iter().position(|i| *i == rid)
+                {
+                    rosters.remove(i);
                 }
             }
         }
@@ -156,15 +156,15 @@ impl Bracket {
         let semi_final_match_ids = [semi_final_match_1, semi_final_match_2];
         let third_place_match_round = championship_match.round;
         self.matchups.iter().find(|m| {
-            if let Some(s) = &m.team_1_from {
-                if !semi_final_match_ids.contains(&s.source_matchup_id()) {
-                    return false;
-                }
+            if let Some(s) = &m.team_1_from
+                && !semi_final_match_ids.contains(&s.source_matchup_id())
+            {
+                return false;
             }
-            if let Some(s) = &m.team_2_from {
-                if !semi_final_match_ids.contains(&s.source_matchup_id()) {
-                    return false;
-                }
+            if let Some(s) = &m.team_2_from
+                && !semi_final_match_ids.contains(&s.source_matchup_id())
+            {
+                return false;
             }
             m.round == third_place_match_round && m.matchup_id != championship_match.matchup_id
         })
