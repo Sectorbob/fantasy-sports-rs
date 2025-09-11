@@ -1,5 +1,5 @@
 use crate::{FileSystemCacher, Request, RequestContext, ResponseBodyFormat, cache::Cacheable};
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 
@@ -75,7 +75,7 @@ impl Client {
         force_update: bool,
     ) -> Result<T> {
         let url = req.url().to_string();
-        let mime = Client::check_content_mime_type(req.headers())?;
+        let req_accept_mime = Client::check_accept_mime_type(req.headers())?;
 
         // check cache if exists (TODO: some time-based logic)
         if force_update {
@@ -83,7 +83,7 @@ impl Client {
         } else if let Some(cacher) = &self.cache {
             if let Some(bytes) = cacher.load_cache(url.as_str()).await {
                 log::debug!("GET {url} cache hit");
-                return self.deserialize_slice(mime, &bytes);
+                return self.deserialize_slice(req_accept_mime, &bytes);
             } else {
                 log::info!("GET {url} cache miss");
             }
@@ -99,7 +99,8 @@ impl Client {
                 if self.cache.is_some() {
                     self.cache_resp_body(url, resp).await
                 } else {
-                    let mime = Client::check_content_mime_type(resp.headers())?;
+                    let mime =
+                        Client::check_content_mime_type(resp.headers()).unwrap_or(req_accept_mime);
                     let b = resp.bytes().await?;
                     self.deserialize_slice::<Option<T>>(mime, &b)?
                         .ok_or(Error::NotFound(url))
@@ -144,6 +145,27 @@ impl Client {
         }
     }
 
+    pub fn check_accept_mime_type(
+        headers: &reqwest::header::HeaderMap,
+    ) -> Result<ResponseBodyFormat> {
+        match headers.get(ACCEPT) {
+            Some(mime) => match mime.to_str() {
+                Ok(mime) => match mime {
+                    "application/json" => Ok(ResponseBodyFormat::JSON),
+                    "application/xml" => Ok(ResponseBodyFormat::XML),
+                    other => Err(Error::DevError(format!(
+                        "{CONTENT_TYPE}: {other} is not supported"
+                    ))),
+                },
+                Err(header_value_err) => Err(Error::DevError(format!(
+                    "{CONTENT_TYPE} header value is invalid: {header_value_err}"
+                ))),
+            },
+            None => Err(Error::DevError(format!(
+                "no {CONTENT_TYPE} provided by response"
+            ))),
+        }
+    }
     pub fn check_content_mime_type(
         headers: &reqwest::header::HeaderMap,
     ) -> Result<ResponseBodyFormat> {
