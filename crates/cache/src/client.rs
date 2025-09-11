@@ -1,4 +1,5 @@
-use crate::{FileSystemCacher, Request, RequestContext, cache::Cacheable};
+use crate::{FileSystemCacher, Request, RequestContext, ResponseBodyFormat, cache::Cacheable};
+use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 
@@ -8,7 +9,7 @@ use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 pub struct Client {
     pub(crate) http_client: reqwest::Client,
     base_url: String,
-    cache: Option<Box<dyn Cacheable + Send + Sync>>,
+    cache: Option<Box<dyn Cacheable>>,
     outgoing_request_count: AtomicU64,
 }
 impl Client {
@@ -31,9 +32,10 @@ impl Client {
 
     /// with_cache creates/opens a file_system cache using the root file path
     /// provided with cache_dir
-    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
-        self.cache = Some(Box::new(FileSystemCacher::new(cache_dir)));
-        self
+    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Result<Self> {
+        let cache = FileSystemCacher::open_sync(cache_dir).map_err(Error::cache_error)?;
+        self.cache = Some(Box::new(cache));
+        Ok(self)
     }
 
     /// with_http_client is a builder method that will update the reqwest http
@@ -50,6 +52,7 @@ impl Client {
         &'a self,
         ctx: RequestContext<'a>,
         force_update: bool,
+        response_data_format: Option<ResponseBodyFormat>,
     ) -> Request<'a, T> {
         let url = format!("{base_url}{path}", base_url = self.base_url, path = ctx.url);
 
@@ -59,6 +62,7 @@ impl Client {
             url,
             filters: ctx.filters,
             phantom: PhantomData,
+            response_body_format: response_data_format.map_or(ResponseBodyFormat::default(), |v| v),
         }
     }
 
@@ -71,6 +75,7 @@ impl Client {
         force_update: bool,
     ) -> Result<T> {
         let url = req.url().to_string();
+        let mime = Client::check_content_mime_type(req.headers())?;
 
         // check cache if exists (TODO: some time-based logic)
         if force_update {
@@ -78,7 +83,7 @@ impl Client {
         } else if let Some(cacher) = &self.cache {
             if let Some(bytes) = cacher.load_cache(url.as_str()).await {
                 log::debug!("GET {url} cache hit");
-                return self.deserialize_slice(&bytes);
+                return self.deserialize_slice(mime, &bytes);
             } else {
                 log::info!("GET {url} cache miss");
             }
@@ -94,8 +99,9 @@ impl Client {
                 if self.cache.is_some() {
                     self.cache_resp_body(url, resp).await
                 } else {
+                    let mime = Client::check_content_mime_type(resp.headers())?;
                     let b = resp.bytes().await?;
-                    self.deserialize_slice::<Option<T>>(&b)?
+                    self.deserialize_slice::<Option<T>>(mime, &b)?
                         .ok_or(Error::NotFound(url))
                 }
             }
@@ -110,6 +116,7 @@ impl Client {
         resp: reqwest::Response,
     ) -> Result<T> {
         // load to memory buffer then save to file and return deserialized struct
+        let mime = Client::check_content_mime_type(resp.headers())?;
         let resp_bytes = resp.bytes().await?;
         if let Some(cacher) = &self.cache {
             let cache_result = cacher.save_cache(&url, &resp_bytes).await; // TODO: handle error case
@@ -117,14 +124,46 @@ impl Client {
                 // log it
                 log::error!("unable to cache sleeper GET response for {url}: {err:?}");
             }
-            self.deserialize_slice(&resp_bytes)
+            self.deserialize_slice(mime, &resp_bytes)
         } else {
             Err(Error::dev_error("cacher not enabled"))
         }
     }
 
-    pub fn deserialize_slice<'a, T: for<'de> Deserialize<'de>>(&self, b: &'a [u8]) -> Result<T> {
-        serde_json::from_slice(b).map_err(|err| Error::SerdeError(SerdeError::from(err)))
+    pub fn deserialize_slice<'a, T: for<'de> Deserialize<'de>>(
+        &self,
+        fmt: ResponseBodyFormat,
+        b: &'a [u8],
+    ) -> Result<T> {
+        match fmt {
+            ResponseBodyFormat::JSON => {
+                serde_json::from_slice(b).map_err(|err| Error::SerdeError(SerdeError::from(err)))
+            }
+            ResponseBodyFormat::XML => quick_xml::de::from_reader(b)
+                .map_err(|err| Error::SerdeError(SerdeError::from(err))),
+        }
+    }
+
+    pub fn check_content_mime_type(
+        headers: &reqwest::header::HeaderMap,
+    ) -> Result<ResponseBodyFormat> {
+        match headers.get(CONTENT_TYPE) {
+            Some(mime) => match mime.to_str() {
+                Ok(mime) => match mime {
+                    "application/json" => Ok(ResponseBodyFormat::JSON),
+                    "application/xml" => Ok(ResponseBodyFormat::XML),
+                    other => Err(Error::DevError(format!(
+                        "{CONTENT_TYPE}: {other} is not supported"
+                    ))),
+                },
+                Err(header_value_err) => Err(Error::DevError(format!(
+                    "{CONTENT_TYPE} header value is invalid: {header_value_err}"
+                ))),
+            },
+            None => Err(Error::DevError(format!(
+                "no {CONTENT_TYPE} provided by response"
+            ))),
+        }
     }
 
     /// Retrieve the count of the outgoing http requests
@@ -139,6 +178,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error is custom
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("cache error: {0}")]
+    CacheError(std::io::Error),
     #[error("client error: {0}")]
     ClientError(reqwest::StatusCode),
     #[error("dev error: {0}")]
@@ -154,6 +195,9 @@ impl Error {
     pub fn dev_error<T: Into<String>>(msg: T) -> Self {
         Error::DevError(msg.into())
     }
+    pub fn cache_error(err: std::io::Error) -> Self {
+        Error::CacheError(err)
+    }
 }
 impl From<reqwest::StatusCode> for Error {
     fn from(value: reqwest::StatusCode) -> Self {
@@ -165,8 +209,8 @@ impl From<reqwest::StatusCode> for Error {
 pub enum SerdeError {
     #[error("json deserialization error: {0}")]
     JsonError(#[from] serde_json::Error),
-    // #[error("xml deserialization error: {0}")]
-    // XMLError(#[from] serde_json::Error),
+    #[error("xml deserialization error: {0}")]
+    XMLError(#[from] quick_xml::DeError),
 }
 
 #[cfg(test)]
@@ -185,6 +229,7 @@ mod tests {
                     filters: Some(vec![("lookback_hours", "6".to_string())]),
                 },
                 false,
+                None,
             )
             .build_http_request()
             .expect("failed to build request");
@@ -199,6 +244,7 @@ mod tests {
                     filters: Some(vec![("limit", "100".to_string())]),
                 },
                 false,
+                None,
             )
             .build_http_request()
             .expect("failed to build request");
@@ -216,6 +262,7 @@ mod tests {
                     ]),
                 },
                 false,
+                None,
             )
             .build_http_request()
             .expect("failed to build request");

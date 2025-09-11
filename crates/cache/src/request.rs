@@ -13,6 +13,7 @@ pub struct Request<'a, T: DeserializeOwned> {
     pub(crate) url: String,
     pub(crate) filters: Option<Vec<(&'a str, String)>>,
     pub(crate) phantom: PhantomData<&'a T>,
+    pub(crate) response_body_format: ResponseBodyFormat,
 }
 impl<'a, T: DeserializeOwned> Request<'a, T> {
     pub fn force_update(mut self) -> Self {
@@ -30,7 +31,7 @@ impl<'a, T: DeserializeOwned> Request<'a, T> {
             .cli
             .http_client
             .get(&self.url)
-            .header("Accept", "application/json");
+            .header("Accept", self.response_body_format.as_mime_str());
 
         if let Some(filters) = &self.filters {
             request_builder = request_builder.query(&filters)
@@ -41,5 +42,20 @@ impl<'a, T: DeserializeOwned> Request<'a, T> {
     pub async fn send(self) -> Result<T, Error> {
         let req = self.build_http_request()?;
         self.cli.get(req, self.force_update).await
+    }
+}
+
+#[derive(Default)]
+pub enum ResponseBodyFormat {
+    #[default]
+    JSON,
+    XML,
+}
+impl ResponseBodyFormat {
+    pub fn as_mime_str(&self) -> &'static str {
+        match self {
+            ResponseBodyFormat::JSON => "application/json",
+            ResponseBodyFormat::XML => "application/xml",
+        }
     }
 }
