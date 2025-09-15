@@ -8,7 +8,7 @@ mod team;
 mod transaction;
 mod user;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -55,7 +55,7 @@ impl Error {
 pub struct Token {
     pub access_token: String,
     pub token_type: String,
-    pub expires_in: u64,
+    pub expires_in: i64,
     pub refresh_token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
@@ -64,6 +64,19 @@ pub struct Token {
         with = "chrono::serde::ts_milliseconds_option"
     )]
     pub ts: Option<DateTime<Utc>>,
+}
+impl Token {
+    pub fn is_expired(&self) -> bool {
+        if let Some(ts) = &self.ts {
+            if let Some(expiry_ts) = ts.checked_add_signed(TimeDelta::seconds(self.expires_in)) {
+                expiry_ts < Utc::now()
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -230,5 +243,36 @@ impl fmt::Display for TransactionSourceType {
             TransactionSourceType::Waivers => write!(f, "waivers"),
             TransactionSourceType::FreeAgents => write!(f, "freeagents"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeDelta, Utc};
+
+    use crate::Token;
+
+    #[test]
+    fn test_token_is_expired() {
+        let mut token = Token::default();
+        token.expires_in = 3600;
+        token.ts = Some(
+            Utc::now()
+                .checked_sub_signed(TimeDelta::seconds(3700))
+                .unwrap(),
+        );
+        debug_assert!(token.is_expired(), "token should be expired")
+    }
+
+    #[test]
+    fn test_token_is_not_expired() {
+        let mut token = Token::default();
+        token.expires_in = 3600;
+        token.ts = Some(
+            Utc::now()
+                .checked_sub_signed(TimeDelta::seconds(3500))
+                .unwrap(),
+        );
+        debug_assert!(!token.is_expired(), "token should not be expired")
     }
 }
