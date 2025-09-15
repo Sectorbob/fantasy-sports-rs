@@ -1,12 +1,25 @@
-use std::io;
+use std::io::{self, ErrorKind};
 
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::Token;
 
 pub async fn load_token_file(token_file: &String) -> Result<Token, Error> {
-    let file_contents = fs::read(token_file).await?;
-    let token = serde_json::from_slice(&file_contents)?;
+    let file_contents = match fs::read(token_file).await {
+        Ok(contents) => contents,
+        Err(err) => {
+            if matches!(err.kind(), ErrorKind::NotFound) {
+                return Ok(Token::default());
+            }
+            return Err(Error::FileError(err));
+        }
+    };
+    let mut token: Token = serde_json::from_slice(&file_contents)?;
+    if token.ts.is_some() {
+        let metadata = tokio::fs::metadata(token_file).await?;
+        let modified = metadata.modified()?;
+        token.ts = Some(modified.into())
+    }
     Ok(token)
 }
 

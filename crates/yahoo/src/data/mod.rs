@@ -8,6 +8,7 @@ mod team;
 mod transaction;
 mod user;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -50,7 +51,7 @@ impl Error {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Token {
     pub access_token: String,
     pub token_type: String,
@@ -58,7 +59,13 @@ pub struct Token {
     pub refresh_token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "chrono::serde::ts_milliseconds_option"
+    )]
+    pub ts: Option<DateTime<Utc>>,
 }
+
 #[derive(Deserialize, Debug)]
 pub(crate) struct FantasyContentWrapper {
     #[serde(rename = "$value")]

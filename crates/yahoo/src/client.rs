@@ -8,7 +8,7 @@ use crate::{
     token,
 };
 use cached_client_rs::{Request, RequestContext, ResponseBodyFormat};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use core::str;
 use itertools::join;
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
@@ -86,12 +86,12 @@ impl Client {
         self
     }
 
-    pub fn with_cache_dir<D: Into<PathBuf>>(mut self, cache_dir: D) -> Self {
-        self.cached_client = self
-            .cached_client
-            .with_cache(cache_dir)
-            .expect("failed to setup yahoo client cache");
-        self
+    pub async fn with_cache_dir<D: Into<PathBuf>>(
+        mut self,
+        cache_dir: D,
+    ) -> Result<Self, cached_client_rs::Error> {
+        self.cached_client = self.cached_client.with_cache(cache_dir).await?;
+        Ok(self)
     }
 
     pub fn with_token(mut self, token: Token) -> Self {
@@ -216,12 +216,14 @@ impl Client {
                 resp.status()
             )));
         }
+        let token_ts = Utc::now();
 
         // TODO: unset the codeverifier
 
-        let token = resp.json::<Token>().await.map_err(|err| {
+        let mut token = resp.json::<Token>().await.map_err(|err| {
             Error::UnknownError(format!("Failed to parse response body as Token: {}", err))
         })?;
+        token.ts = Some(token_ts);
 
         let mut token_arc = self.token.lock().await;
         let _ = token_arc.insert(token.clone());
@@ -283,10 +285,12 @@ impl Client {
                 status
             )));
         }
+        let token_ts = Utc::now();
 
-        let token = resp.json::<Token>().await.map_err(|err| {
+        let mut token = resp.json::<Token>().await.map_err(|err| {
             Error::UnknownError(format!("Failed to parse response body as Token: {}", err))
         })?;
+        token.ts = Some(token_ts);
 
         // update arc mutex
         let _ = token_lock.insert(token.clone());
@@ -658,17 +662,18 @@ impl Client {
     ) -> Result<Vec<Player>, Error> {
         let mut url = format!("/league/{league_key}/players");
         if let Some(player_keys) = player_keys_to_filter
-            && !player_keys.is_empty() {
-                url.push_str(";player_keys=");
-                url.push_str(
-                    player_keys
-                        .iter()
-                        .map(PlayerKey::to_string)
-                        .collect::<Vec<String>>()
-                        .join(",")
-                        .as_str(),
-                );
-            }
+            && !player_keys.is_empty()
+        {
+            url.push_str(";player_keys=");
+            url.push_str(
+                player_keys
+                    .iter()
+                    .map(PlayerKey::to_string)
+                    .collect::<Vec<String>>()
+                    .join(",")
+                    .as_str(),
+            );
+        }
         let request_context = RequestContext { url, filters: None };
 
         match self.get(request_context).await {
@@ -810,7 +815,7 @@ mod tests {
     use std::fs;
 
     use crate::{Client, GameCode, GameKey, LeagueKey, TeamKey, Token, data::DraftStatus};
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, Utc};
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path},
@@ -855,6 +860,7 @@ mod tests {
                 expires_in: 3600,
                 refresh_token: "bar".to_string(),
                 scope: None,
+                ts: Some(Utc::now()),
             });
 
         (fixture, mock_server)
@@ -897,6 +903,7 @@ mod tests {
                 expires_in: 3600,
                 refresh_token: "bar".to_string(),
                 scope: None,
+                ts: Some(Utc::now()),
             });
         (fixture, mock_server)
     }
