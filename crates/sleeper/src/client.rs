@@ -256,6 +256,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -270,6 +271,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
     pub fn get_trending_players_request<'a>(
@@ -300,6 +302,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -311,6 +314,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -327,6 +331,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -341,6 +346,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -355,6 +361,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -370,6 +377,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -385,6 +393,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -399,6 +408,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -410,6 +420,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -426,6 +437,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -440,6 +452,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -451,6 +464,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -462,6 +476,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
@@ -484,6 +499,7 @@ impl Client {
             },
             false,
             Some(cached_client_rs::ResponseBodyFormat::JSON),
+            None,
         )
     }
 
