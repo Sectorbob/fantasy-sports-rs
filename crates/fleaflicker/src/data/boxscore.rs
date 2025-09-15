@@ -86,11 +86,11 @@ pub struct ScoringPeriod {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GameResult {
-    pub yet_to_play: i32,
+    pub yet_to_play: Option<i32>,
     #[serde(default)]
     pub already_played: i32,
     pub score: FormattedDecimal,
-    pub yet_to_play_positions: Vec<String>,
+    pub yet_to_play_positions: Option<Vec<String>>,
     #[serde(default)]
     pub already_played_positions: Vec<String>,
     pub projected: Option<FormattedDecimal>,
