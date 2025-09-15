@@ -29,5 +29,5 @@ pub enum Error {
     #[error("failed to perform file op: {0}")]
     FileError(#[from] io::Error),
     #[error("token filename is required")]
-    FilenameRequired
+    FilenameRequired,
 }

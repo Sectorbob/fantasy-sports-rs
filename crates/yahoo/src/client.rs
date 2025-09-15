@@ -1,6 +1,5 @@
 use crate::{
     PlayerKey,
-    cache::{Cacheable, FileSystemCacher},
     data::{
         DraftResult, FantasyContent, FantasyContentWrapper, Game, GameCode, GameKey, League,
         LeagueKey, Player, Roster, Scoreboard, Settings, Standings, Team, TeamKey, Token,
@@ -8,11 +7,11 @@ use crate::{
     },
     token,
 };
+use cached_client_rs::{Request, RequestContext, ResponseBodyFormat};
 use chrono::NaiveDate;
 use core::str;
 use itertools::join;
-use log::{debug, error, info};
-use quick_xml::de::from_str;
+use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::{
     env::{self, VarError},
     error::Error as _,
@@ -21,24 +20,25 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+const HEADER_XML: &str = "application/xml";
 const YAHOO_CLIENT_ID: &str = "YAHOO_CLIENT_ID";
 const YAHOO_REDIRECT_URI: &str = "YAHOO_REDIRECT_URI";
 const YAHOO_TOKEN_FILE: &str = "YAHOO_TOKEN_FILE";
 const USER_AGENT: &str = "reqwest";
-
 const YAHOO_API_AUTH_BASE_URL: &str = "https://api.login.yahoo.com/oauth2";
 const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fantasy/v2";
 
 pub struct Client {
     base_url: String,
-    client: reqwest::Client,
+    auth_token_client: reqwest::Client,
+    cached_client: cached_client_rs::Client,
+    /// this client is responsible for generating the oauth request token url
     client_no_redirects: reqwest::Client,
     pub client_id: String,
     pub redirect_uri: String,
     code_verifier: Arc<Mutex<Option<String>>>,
     pub token_file: Option<String>,
     token: Arc<Mutex<Option<Token>>>,
-    cache: Option<Box<dyn Cacheable + Send + Sync>>,
     outgoing_request_count: AtomicU64,
 }
 impl Client {
@@ -49,12 +49,23 @@ impl Client {
     }
 
     pub fn new<C: Into<String>, R: Into<String>>(client_id: C, redirect_uri: R) -> Self {
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(ACCEPT, HeaderValue::from_static(HEADER_XML));
+
         Client {
             base_url: YAHOO_FANTASY_API_BASE_URL.to_string(),
-            client: reqwest::Client::builder()
+            auth_token_client: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
                 .build()
-                .expect("dev error creating http client for yahoo client"),
+                .expect("dev error creating auth url http client for yahoo client"),
+            cached_client: cached_client_rs::Client::new(YAHOO_FANTASY_API_BASE_URL.to_string())
+                .with_http_client(
+                    reqwest::Client::builder()
+                        .user_agent(USER_AGENT)
+                        .default_headers(default_headers)
+                        .build()
+                        .expect("dev error creating http client for yahoo client"),
+                ),
             client_no_redirects: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
                 .redirect(reqwest::redirect::Policy::none())
@@ -65,25 +76,21 @@ impl Client {
             code_verifier: Arc::new(Mutex::new(None)),
             token_file: None,
             token: Arc::new(Mutex::new(None)),
-            cache: None,
             outgoing_request_count: AtomicU64::new(0),
         }
     }
 
     pub fn with_base_url<U: Into<String>>(mut self, url: U) -> Self {
         self.base_url = url.into();
-        self
-    }
-
-    pub fn with_cache(mut self, cache: Box<dyn Cacheable + Send + Sync>) -> Self {
-        self.cache = Some(cache);
+        self.cached_client = self.cached_client.with_base_url(self.base_url.clone());
         self
     }
 
     pub fn with_cache_dir<D: Into<PathBuf>>(mut self, cache_dir: D) -> Self {
-        self.cache =
-            Some(Box::new(FileSystemCacher::new(cache_dir.into()))
-                as Box<dyn Cacheable + Send + Sync>);
+        self.cached_client = self
+            .cached_client
+            .with_cache(cache_dir)
+            .expect("failed to setup yahoo client cache");
         self
     }
 
@@ -117,7 +124,7 @@ impl Client {
         let req = match self
             .client_no_redirects
             .get(format!("{}/request_auth", YAHOO_API_AUTH_BASE_URL).as_str())
-            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .query(&[
                 ("client_id", self.client_id.as_str()),
                 ("redirect_uri", self.redirect_uri.as_str()),
@@ -178,9 +185,9 @@ impl Client {
             ("redirect_uri", "oob"),
         ];
         let req = match self
-            .client
+            .auth_token_client
             .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
-            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .form(&form)
             .build()
         {
@@ -194,7 +201,7 @@ impl Client {
         };
         self.outgoing_request_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let resp = match self.client.execute(req).await {
+        let resp = match self.auth_token_client.execute(req).await {
             Ok(response) => response,
             Err(err) => {
                 return Err(Error::UnknownError(format!(
@@ -237,17 +244,16 @@ impl Client {
             |t| Ok(t),
         )?;
 
-        let form = [
-            ("client_id", self.client_id.as_str()),
-            ("refresh_token", token.refresh_token.as_str()),
-            ("grant_type", "refresh_token"),
-            ("redirect_uri", "oob"),
-        ];
         let req = match self
-            .client
+            .auth_token_client
             .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .form(&form)
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .form(&[
+                ("client_id", self.client_id.as_str()),
+                ("refresh_token", token.refresh_token.as_str()),
+                ("grant_type", "refresh_token"),
+                ("redirect_uri", "oob"),
+            ])
             .build()
         {
             Ok(request) => request,
@@ -260,7 +266,7 @@ impl Client {
         };
         self.outgoing_request_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let resp = match self.client.execute(req).await {
+        let resp = match self.auth_token_client.execute(req).await {
             Ok(response) => response,
             Err(err) => {
                 return Err(Error::UnknownError(format!(
@@ -307,156 +313,91 @@ impl Client {
             .map_or(Ok(None), |t| Ok(Some(t.clone())))
     }
 
-    pub(crate) async fn get(&self, url: &str) -> Result<FantasyContentWrapper, Error> {
-        // check cache
-        if let Some(cacher) = &self.cache {
-            if let Some(body_text) = cacher.load_cache(url).await {
-                debug!("GET {} cache hit", url);
-                return match quick_xml::de::from_str(&body_text) {
-                    Ok(obj) => Ok(obj),
-                    Err(err) => Err(Error::UnknownError(format!(
-                        "can't parse cached file({url}): {:?}",
-                        err
-                    ))),
-                };
-            } else {
-                info!("GET {} cache miss", url);
-            }
-        }
-        debug!("GET {}", url);
-
+    pub(crate) async fn get(
+        &self,
+        request_ctx: RequestContext<'_>,
+    ) -> Result<FantasyContentWrapper, Error> {
         let token = self
             .token()
             .await? // should never return an err
             .ok_or(Error::UnknownError(String::from("no token available")))?;
-
-        let req = match self
-            .client
-            .get(url)
-            .header("Accept", "application/xml")
-            .header("Authorization", format!("Bearer {}", token.access_token))
-            .build()
-        {
-            Ok(req) => req,
-            Err(err) => {
-                return Err(Error::UnknownError(format!(
-                    "Failed to build GET request for URL: {}. Err: {}",
-                    url, err,
-                )));
-            }
-        };
-        self.outgoing_request_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let resp = match self.client.execute(req).await {
-            Ok(resp) => resp,
-            Err(err) => {
-                return Err(Error::UnknownError(format!(
-                    "Failed to execute GET request for URL: {}. Err: {}",
-                    url, err,
-                )));
-            }
-        };
-
-        if resp.status().is_client_error() {
-            let code = resp.status().as_u16();
-            let body = match resp.text().await {
-                Ok(text) => text,
-                Err(err) => {
-                    return Err(Error::UnknownError(format!(
-                        "resp code: {}; failed to read response body: {}",
-                        code, err
-                    )));
+        let req: Request<'_, FantasyContentWrapper> = self.cached_client.build_request(
+            request_ctx,
+            false,
+            Some(ResponseBodyFormat::XML),
+            Some(format!("Bearer {token}", token = token.access_token)),
+        );
+        req.send().await.map_err(|err| {
+            match err {
+                cached_client_rs::Error::CacheError(error) => {
+                    Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
-            };
-            log::debug!("Status:   {code}");
-            log::debug!("Raw Body: {body}");
 
-            match serde_xml_rs::from_str::<crate::data::Error>(body.as_str()) {
-                Ok(yahoo_error) => {
-                    log::debug!("Yahoo Error: {yahoo_error:?}");
-
-                    if code == 401
-                        && yahoo_error
-                            .description()
-                            .contains("oauth_problem=\"token_expired\"")
-                    {
-                        // This is a special case where the token has expired.
-                        // We should refresh the token and try again.
-                        // log::info!("Token expired, refreshing...");
-                        // match self.refresh_token().await {
-                        //     Ok(new_token) => {
-                        //         log::info!("New token: {:?}", new_token);
-                        //         // Update the token in the client
-                        //         self.token = Some(new_token);
-                        //         // Retry the request with the new token
-                        //         return self.get(url).await; // ooooh rescursions
-                        //     }
-                        //     Err(e) => {
-                        //         return Err(Error::UnknownError(format!(
-                        //             "Failed to refresh token: {}",
-                        //             e
-                        //         )));
-                        //     }
-                        // }
-                        return Err(Error::TokenExpired);
-                    } else if code == 401
-                        && yahoo_error
-                            .description()
-                            .contains("oauth_problem=\"unable_to_determine_oauth_type\"")
-                    {
-                        return Err(Error::OAuthError(
-                            "unable_to_determine_oauth_type".to_string(),
-                        ));
+                cached_client_rs::Error::ClientError(status_code, body) => {
+                    let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>(body.as_str())
+                        .inspect_err(|err| {
+                            log::warn!(
+                                "got http error {status_code} and failed to parse body: {err}"
+                            )
+                        })
+                        .ok();
+                    if status_code == 401 {
+                        if let Some(yahoo_error) = &yahoo_error
+                            && yahoo_error
+                                .description()
+                                .contains("oauth_problem=\"token_expired\"")
+                        {
+                            // This is a special case where the token has expired.
+                            // We should refresh the token and try again.
+                            // log::info!("Token expired, refreshing...");
+                            // match self.refresh_token().await {
+                            //     Ok(new_token) => {
+                            //         log::info!("New token: {:?}", new_token);
+                            //         // Update the token in the client
+                            //         self.token = Some(new_token);
+                            //         // Retry the request with the new token
+                            //         return self.get(url).await; // ooooh rescursions
+                            //     }
+                            //     Err(e) => {
+                            //         return Err(Error::UnknownError(format!(
+                            //             "Failed to refresh token: {}",
+                            //             e
+                            //         )));
+                            //     }
+                            // }
+                            return Error::TokenExpired;
+                        }
+                        if let Some(yahoo_error) = &yahoo_error
+                            && yahoo_error
+                                .description()
+                                .contains("oauth_problem=\"unable_to_determine_oauth_type\"")
+                        {
+                            return Error::OAuthError("unable_to_determine_oauth_type".to_string());
+                        }
+                    }
+                    if let Some(yahoo_error) = &yahoo_error {
+                        Error::UnknownError(format!(
+                            "Got client error ({status_code}): {}",
+                            yahoo_error.description()
+                        ))
                     } else {
-                        // OAuth oauth_problem="token_expired", realm="yahooapis.com"
-                        return Err(Error::UnknownError(format!(
-                            "Got client error ({}): {}",
-                            code,
-                            yahoo_error.description(),
-                        )));
+                        Error::UnknownError(format!("Got client error ({status_code}): {body}"))
                     }
                 }
-                Err(_) => {
-                    return Err(Error::UnknownError(format!(
-                        "status code ({}): {}",
-                        code, body
-                    )));
+                cached_client_rs::Error::DevError(dev_err) => {
+                    Error::UnknownError(format!("got dev error from cached_client: {dev_err}"))
                 }
-            }
-        } else if resp.status().is_server_error() {
-            let code = resp.status().as_u16();
-            let body = resp.text().await.expect("couldn't read response body");
-            return Err(Error::UnknownError(format!(
-                "Got server error ({}): {}",
-                code, body
-            )));
-        }
 
-        let body_text = match resp.text().await {
-            Ok(text) => text,
-            Err(err) => {
-                return Err(Error::UnknownError(format!(
-                    "Failed to read response body: {}",
-                    err
-                )));
-            }
-        };
-        log::debug!("Body: {body_text}");
+                cached_client_rs::Error::ReqwestError(error) => {
+                    Error::UnknownError(format!("failed got reqwest error: {error:?}"))
+                }
 
-        // cache it
-        if let Some(cacher) = &self.cache {
-            if let Err(err) = cacher.save_cache(url, body_text.as_str()).await {
-                error!("unable to cachee yahoo GET response: {:?}", err);
+                cached_client_rs::Error::NotFound(_) => Error::NotFound,
+                cached_client_rs::Error::SerdeError(serde_error) => Error::UnknownError(format!(
+                    "failed to deserialize response body: {serde_error:?}"
+                )),
             }
-        }
-
-        return match from_str(body_text.as_str()) {
-            Ok(content) => Ok(content),
-            Err(err) => Err(Error::UnknownError(format!(
-                "unable to deserialize xml: {}",
-                err
-            ))),
-        };
+        })
     }
 
     /// This fetches the scorebaord for the league. It defaults to the final week or day.
@@ -469,20 +410,20 @@ impl Client {
         week: Option<i32>,
         date: Option<NaiveDate>,
     ) -> Result<Scoreboard, Error> {
-        let url = format!(
-            "{}/league/{}/scoreboard{}",
-            self.base_url,
-            league_key,
-            if let Some(week) = week {
-                format!(";week={}", week)
-            } else if let Some(date) = date {
-                format!(";date={}", date)
-            } else {
-                String::from("")
-            }
-        );
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!(
+                "/league/{league_key}/scoreboard{}",
+                if let Some(week) = week {
+                    format!(";week={}", week)
+                } else if let Some(date) = date {
+                    format!(";date={}", date)
+                } else {
+                    String::from("")
+                }
+            ),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.scoreboard {
                     Some(scoreboard) => Ok(scoreboard),
@@ -501,9 +442,11 @@ impl Client {
     }
 
     pub async fn get_league_settings(&self, league_key: &LeagueKey) -> Result<Settings, Error> {
-        let url = format!("{}/league/{}/settings", self.base_url, league_key);
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}/settings"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.settings {
                     Some(settings) => Ok(settings),
@@ -522,9 +465,11 @@ impl Client {
     }
 
     pub async fn get_league_standings(&self, league_key: &LeagueKey) -> Result<Standings, Error> {
-        let url = format!("{}/league/{}/standings", self.base_url, league_key);
-
-        return match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}/standings"),
+            filters: None,
+        };
+        return match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => match league.standings {
                     Some(standings) => Ok(standings),
@@ -543,9 +488,11 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Vec<Transaction>, Error> {
-        let url = format!("{}/league/{}/transactions", self.base_url, league_key);
-
-        return match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}/transactions"),
+            filters: None,
+        };
+        return match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => Ok(league.transactions),
                 other => Err(Error::UnexpectedContentVariant(format!(
@@ -561,10 +508,13 @@ impl Client {
     }
 
     pub async fn get_game(&self, game_key: GameKey) -> Result<Game, Error> {
-        let url = format!("{}/game/{}", self.base_url, game_key.to_string());
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/game/{game_key}"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
-                FantasyContent::Game(game) => return Ok(game),
+                FantasyContent::Game(game) => Ok(game),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Game, got: {:?}",
                     other
@@ -593,11 +543,14 @@ impl Client {
             filter.push_str(seasons.join(",").as_str());
         }
 
-        let url = format!("{}/games{}", self.base_url, filter);
+        let request_context = RequestContext {
+            url: format!("/games{filter}"),
+            filters: None,
+        };
 
-        match self.get(url.as_str()).await {
+        match self.get(request_context).await {
             Ok(content) => match content.content {
-                FantasyContent::Games(games) => return Ok(games),
+                FantasyContent::Games(games) => Ok(games),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Games, got: {:?}",
                     other
@@ -613,11 +566,13 @@ impl Client {
             query = ";use_login=1";
         }
 
-        let url = format!("{}/users{}", self.base_url, query);
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/users{query}"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
-                FantasyContent::Users(users) => return Ok(users),
+                FantasyContent::Users(users) => Ok(users),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::Users, got: {:?}",
                     other
@@ -633,11 +588,13 @@ impl Client {
     ///
     /// This function will return an error if .
     pub async fn get_league(&self, league_key: &LeagueKey) -> Result<Option<League>, Error> {
-        let url = format!("{}/league/{}", self.base_url, league_key.to_string());
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
-                FantasyContent::League(league) => return Ok(Some(league)),
+                FantasyContent::League(league) => Ok(Some(league)),
                 other => Err(Error::UnexpectedContentVariant(format!(
                     "expected FantasyContent::League, got: {:?}",
                     other
@@ -648,13 +605,12 @@ impl Client {
     }
 
     pub async fn get_teams_for_user(&self, game_key: GameKey) -> Result<Vec<Team>, Error> {
-        let url = format!(
-            "{}/users;use_login=1/games;game_keys={}/teams",
-            self.base_url,
-            game_key.to_string()
-        );
+        let request_context = RequestContext {
+            url: format!("/users;use_login=1/games;game_keys={game_key}/teams",),
+            filters: None,
+        };
 
-        let content = self.get(url.as_str()).await?;
+        let content = self.get(request_context).await?;
 
         let mut return_me: Vec<Team> = vec![];
 
@@ -677,9 +633,12 @@ impl Client {
     }
 
     pub async fn get_teams_in_league(&self, league_key: &LeagueKey) -> Result<Vec<Team>, Error> {
-        let url = format!("{}/league/{}/teams", self.base_url, league_key,);
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}/teams"),
+            filters: None,
+        };
 
-        match self.get(url.as_str()).await {
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => Ok(league.teams),
                 other => Err(Error::UnexpectedContentVariant(format!(
@@ -698,7 +657,7 @@ impl Client {
         league_key: &LeagueKey,
         player_keys_to_filter: Option<&Vec<PlayerKey>>,
     ) -> Result<Vec<Player>, Error> {
-        let mut url = format!("{}/league/{}/players", self.base_url, league_key);
+        let mut url = format!("/league/{league_key}/players");
         if let Some(player_keys) = player_keys_to_filter {
             if !player_keys.is_empty() {
                 url.push_str(";player_keys=");
@@ -712,8 +671,9 @@ impl Client {
                 );
             }
         }
+        let request_context = RequestContext { url, filters: None };
 
-        match self.get(url.as_str()).await {
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => Ok(league.players),
                 other => Err(Error::UnexpectedContentVariant(format!(
@@ -731,12 +691,10 @@ impl Client {
     ) -> Result<Vec<League>, Error> {
         let league_keys_str = join(league_keys, ",");
 
-        let url = format!(
-            "{}/leagues;league_keys={}/players",
-            self.base_url, league_keys_str,
-        );
+        let url = format!("/leagues;league_keys={league_keys_str}/players");
+        let request_context = RequestContext { url, filters: None };
 
-        match self.get(url.as_str()).await {
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::Leagues(leagues) => Ok(leagues),
                 other => Err(Error::UnexpectedContentVariant(format!(
@@ -756,8 +714,11 @@ impl Client {
     /// For MLB, NHL, or NBA, you can specify a date parameter to retrieve a specific date – otherwise it will default to today’s roster.
     /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
     pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, Error> {
-        let url = format!("{}/team/{}/roster", self.base_url, team_key,);
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/team/{team_key}/roster"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::Team(team) => match team.roster {
                     Some(roster) => Ok(roster),
@@ -773,10 +734,11 @@ impl Client {
     }
 
     pub async fn get_rosters_in_league(&self, league_key: &LeagueKey) -> Result<Vec<Team>, Error> {
-        let url = format!("{}/league/{}/teams/roster", self.base_url, league_key,);
-        // debug!();
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext {
+            url: format!("/league/{league_key}/teams/roster"),
+            filters: None,
+        };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => Ok(league.teams),
                 other => Err(Error::UnexpectedContentVariant(format!(
@@ -798,9 +760,7 @@ impl Client {
         date: Option<NaiveDate>,
     ) -> Result<Roster, Error> {
         let url = format!(
-            "{}/team/{}/stats{}",
-            self.base_url,
-            team_key,
+            "/team/{team_key}/stats{}",
             if let Some(week) = week {
                 format!(":type=week;week={}", week)
             } else if let Some(date) = date {
@@ -809,8 +769,8 @@ impl Client {
                 String::from("")
             }
         );
-
-        match self.get(url.as_str()).await {
+        let request_context = RequestContext { url, filters: None };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::Team(team) => match team.roster {
                     Some(roster) => Ok(roster),
@@ -832,9 +792,9 @@ impl Client {
         &self,
         league_key: &LeagueKey,
     ) -> Result<Vec<DraftResult>, Error> {
-        let url = format!("{}/league/{}/draftresults", self.base_url, league_key);
-
-        match self.get(url.as_str()).await {
+        let url = format!("/league/{league_key}/draftresults");
+        let request_context = RequestContext { url, filters: None };
+        match self.get(request_context).await {
             Ok(content) => match content.content {
                 FantasyContent::League(league) => Ok(league.draft_results),
                 other => Err(Error::UnexpectedContentVariant(format!(

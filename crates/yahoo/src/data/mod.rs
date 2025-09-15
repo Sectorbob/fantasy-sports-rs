@@ -207,22 +207,13 @@ pub enum TransactionSourceType {
 }
 impl TransactionSourceType {
     pub fn is_team(&self) -> bool {
-        match self {
-            TransactionSourceType::Team => true,
-            _ => false,
-        }
+        matches!(self, TransactionSourceType::Team)
     }
     pub fn is_waivers(&self) -> bool {
-        match self {
-            TransactionSourceType::Waivers => true,
-            _ => false,
-        }
+        matches!(self, TransactionSourceType::Waivers)
     }
     pub fn is_free_agents(&self) -> bool {
-        match self {
-            TransactionSourceType::FreeAgents => true,
-            _ => false,
-        }
+        matches!(self, TransactionSourceType::FreeAgents)
     }
 }
 impl fmt::Display for TransactionSourceType {

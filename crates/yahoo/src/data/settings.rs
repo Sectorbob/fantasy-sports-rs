@@ -1,4 +1,4 @@
-use std::{fmt, usize};
+use std::fmt;
 
 use crate::PositionType;
 use crate::data::helpers::{bool_from_int, bool_from_optional_int, deserialize_naive_date};

@@ -40,7 +40,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let v: Option<i64> = Option::deserialize(deserializer)?;
-    Ok(v.map_or(false, |v| v != 0))
+    Ok(v.is_some_and(|v| v != 0))
 }
 
 #[derive(thiserror::Error, Debug)]

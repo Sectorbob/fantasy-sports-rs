@@ -79,7 +79,7 @@ impl FromStr for PlayerKey {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split('.');
 
-        let game_key_str = parts.next().ok_or_else(|| "missing game_key")?.to_string();
+        let game_key_str = parts.next().ok_or("missing game_key")?.to_string();
         let game_key = game_key_str
             .parse::<u32>()
             .map_err(|_| "game_key parse error")?;
@@ -87,7 +87,7 @@ impl FromStr for PlayerKey {
         // skip the middle "p"
         let _ = parts.next();
 
-        let player_id_str = parts.next().ok_or_else(|| "missing player_id")?;
+        let player_id_str = parts.next().ok_or("missing player_id")?;
 
         let player_id = player_id_str
             .parse::<u32>()
@@ -105,7 +105,7 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    PlayerKey::from_str(s.as_str()).map_err(|e| de::Error::custom(e))
+    PlayerKey::from_str(s.as_str()).map_err(de::Error::custom)
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]

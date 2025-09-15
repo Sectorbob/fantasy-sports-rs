@@ -1,6 +1,8 @@
 use crate::{GameCode, GameType};
+use std::fmt;
 
 /// Filters ths is not yet implemented. TODO
+#[derive(Default)]
 pub struct Filters {
     pub is_available: Option<bool>,
     pub game_types: Option<Vec<GameType>>,
@@ -9,12 +11,7 @@ pub struct Filters {
 }
 impl Filters {
     pub fn new() -> Self {
-        Filters {
-            is_available: None,
-            game_types: None,
-            game_codes: None,
-            seasons: None,
-        }
+        Filters::default()
     }
     pub fn set_is_available(&mut self, is_available: bool) {
         self.is_available = Some(is_available);
@@ -28,27 +25,29 @@ impl Filters {
     pub fn set_seasons(&mut self, seasons: Vec<String>) {
         self.seasons = Some(seasons);
     }
-
-    pub fn to_string(&self) -> String {
+}
+impl fmt::Display for Filters {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut filters = Vec::new();
         // if let Some(is_available) = self.is_available {
         //     filters.push(format!("is_available={}", is_available ? "1" : "0"));
         // }
         // if let Some(game_types) = &self.game_types {
         //     for game_type in game_types {
-        //         filters.push(format!("game_types={}", game_type.to_string()));
+        //         filters.push(format!("game_types={game_type}"));
         //     }
         // }
         if let Some(game_codes) = &self.game_codes {
             for game_code in game_codes {
-                filters.push(format!("game_codes={}", game_code.to_string()));
+                filters.push(format!("game_codes={game_code}"));
             }
         }
         if let Some(seasons) = &self.seasons {
             for season in seasons {
-                filters.push(format!("seasons={}", season));
+                filters.push(format!("seasons={season}"));
             }
         }
-        filters.join(",")
+
+        f.write_str(&filters.join(","))
     }
 }

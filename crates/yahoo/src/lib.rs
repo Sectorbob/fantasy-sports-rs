@@ -1,4 +1,3 @@
-mod cache;
 mod client;
 mod data;
 pub mod filters;

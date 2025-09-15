@@ -45,8 +45,8 @@ pub enum GameKey {
 impl std::fmt::Display for GameKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GameKey::Code(game_code) => write!(f, "{}", game_code.to_string()),
-            GameKey::Id(id) => write!(f, "{}", id),
+            GameKey::Code(game_code) => write!(f, "{game_code}"),
+            GameKey::Id(id) => write!(f, "{id}"),
         }
     }
 }
