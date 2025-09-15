@@ -165,17 +165,17 @@ impl Client {
         let mut v = self.code_verifier.lock().await;
         let _ = v.insert(String::from_utf8(code_verifier).unwrap());
 
-        return Ok(location.to_str().unwrap().to_string());
+        Ok(location.to_str().unwrap().to_string())
     }
 
     pub async fn get_token(&self, code: &str) -> Result<Token, Error> {
         let code_verifier_lock = self.code_verifier.lock().await;
-        let code_verifier = code_verifier_lock.as_ref().map_or(
-            Err(Error::UnknownError(String::from(
-                "no code_verifier available",
-            ))),
-            |v| Ok(v),
-        )?;
+        let code_verifier =
+            code_verifier_lock
+                .as_ref()
+                .ok_or(Error::UnknownError(String::from(
+                    "no code_verifier available",
+                )))?;
 
         let form = [
             ("client_id", self.client_id.as_str()),
@@ -239,10 +239,9 @@ impl Client {
 
     pub async fn refresh_token(&self) -> Result<Token, Error> {
         let mut token_lock = self.token.lock().await;
-        let token = token_lock.as_ref().map_or(
-            Err(Error::UnknownError("no token available".to_string())),
-            |t| Ok(t),
-        )?;
+        let token = token_lock
+            .as_ref()
+            .ok_or(Error::UnknownError("no token available".to_string()))?;
 
         let req = match self
             .auth_token_client
@@ -658,8 +657,8 @@ impl Client {
         player_keys_to_filter: Option<&Vec<PlayerKey>>,
     ) -> Result<Vec<Player>, Error> {
         let mut url = format!("/league/{league_key}/players");
-        if let Some(player_keys) = player_keys_to_filter {
-            if !player_keys.is_empty() {
+        if let Some(player_keys) = player_keys_to_filter
+            && !player_keys.is_empty() {
                 url.push_str(";player_keys=");
                 url.push_str(
                     player_keys
@@ -670,7 +669,6 @@ impl Client {
                         .as_str(),
                 );
             }
-        }
         let request_context = RequestContext { url, filters: None };
 
         match self.get(request_context).await {
