@@ -35,11 +35,11 @@ impl Client {
         self
     }
 
-    pub fn with_cache<T: Into<PathBuf>>(
+    pub async fn with_cache<T: Into<PathBuf>>(
         mut self,
         cache_dir: T,
     ) -> Result<Self, cached_client_rs::Error> {
-        self.client = self.client.with_cache(cache_dir)?;
+        self.client = self.client.with_cache(cache_dir).await?;
         Ok(self)
     }
 
