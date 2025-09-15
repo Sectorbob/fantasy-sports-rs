@@ -239,11 +239,16 @@ impl Client {
         Ok(token)
     }
 
-    pub async fn refresh_token(&self) -> Result<Token, Error> {
+    pub async fn refresh_token(&self, force_update: bool) -> Result<Token, Error> {
         let mut token_lock = self.token.lock().await;
         let token = token_lock
             .as_ref()
             .ok_or(Error::UnknownError("no token available".to_string()))?;
+
+        if !force_update && !token.is_expired() {
+            log::info!("not refreshing token since it's not yet within expiry window");
+            return Ok(token.clone());
+        }
 
         let req = match self
             .auth_token_client

@@ -60,6 +60,7 @@ pub struct Token {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
     #[serde(
+        default,
         skip_serializing_if = "Option::is_none",
         with = "chrono::serde::ts_milliseconds_option"
     )]
