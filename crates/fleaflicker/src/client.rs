@@ -10,6 +10,12 @@ const DEFAULT_BASE_URL: &str = "https://www.fleaflicker.com/api";
 pub struct Client {
     client: cached_client_rs::Client,
 }
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Client {
     pub fn new() -> Self {
         Client {
@@ -22,12 +28,12 @@ impl Client {
         self
     }
 
-    pub fn with_cache<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
-        self.client = self
-            .client
-            .with_cache(cache_dir)
-            .expect("unable to setup cache");
-        self
+    pub async fn with_cache<T: Into<PathBuf>>(
+        mut self,
+        cache_dir: T,
+    ) -> Result<Self, cached_client_rs::Error> {
+        self.client = self.client.with_cache(cache_dir).await?;
+        Ok(self)
     }
 
     pub async fn fetch_league_activity(

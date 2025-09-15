@@ -23,10 +23,10 @@ impl LeaguePlayer {
         self.pro_player.id
     }
     pub fn name(&self) -> &str {
-        &self.pro_player.name_full.as_str()
+        self.pro_player.name_full.as_str()
     }
     pub fn irl_team(&self) -> &str {
-        &self.pro_player.pro_team_abbreviation.as_str()
+        self.pro_player.pro_team_abbreviation.as_str()
     }
 }
 

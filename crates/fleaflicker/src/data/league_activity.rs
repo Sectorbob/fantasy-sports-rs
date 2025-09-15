@@ -21,7 +21,9 @@ pub struct WaiverResolutionTeam {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum WaiverResolutionType {
+    #[default]
     Priority,
     BlindBid,
     None,
@@ -38,11 +40,6 @@ impl WaiverResolutionType {
 impl fmt::Display for WaiverResolutionType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
-    }
-}
-impl Default for WaiverResolutionType {
-    fn default() -> Self {
-        WaiverResolutionType::Priority
     }
 }
 
@@ -133,7 +130,9 @@ impl fmt::Display for TransactionType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default)]
 pub enum TradeType {
+    #[default]
     TradeAccepted,
     TradeAcceptedFinal,
     TradeCancelled,
@@ -166,10 +165,5 @@ impl TradeType {
 impl fmt::Display for TradeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
-    }
-}
-impl Default for TradeType {
-    fn default() -> Self {
-        TradeType::TradeAccepted
     }
 }
