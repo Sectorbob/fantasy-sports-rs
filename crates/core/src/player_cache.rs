@@ -247,8 +247,6 @@ pub enum Error {
     NotFound,
     #[error("sled error: {0}")]
     SledError(#[from] sled::Error),
-    #[error("sleeper error: {0}")]
-    SleeperError(#[from] sleeper::Error),
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
     #[error("dev error: {0}")]
@@ -262,6 +260,29 @@ impl Error {
         match self {
             Error::NotFound => true,
             _ => false,
+        }
+    }
+}
+impl From<cached_client_rs::Error> for Error {
+    fn from(value: cached_client_rs::Error) -> Self {
+        match value {
+            cached_client_rs::Error::CacheError(cache_err) => {
+                Error::DevError(format!("cache error: {cache_err:?}"))
+            }
+            cached_client_rs::Error::ClientError(status_code, _) => {
+                Error::DevError(format!("http client error: {status_code}"))
+            }
+            cached_client_rs::Error::DevError(msg) => Error::DevError(msg),
+            cached_client_rs::Error::ReqwestError(error) => {
+                Error::DevError(format!("reqwest error: {error:?}"))
+            }
+            cached_client_rs::Error::NotFound(_) => Error::NotFound,
+            cached_client_rs::Error::SerdeError(serde_error) => match serde_error {
+                cached_client_rs::SerdeError::JsonError(json_err) => {
+                    Error::SerializationError(json_err)
+                }
+                cached_client_rs::SerdeError::XMLError(de_error) => todo!(),
+            },
         }
     }
 }

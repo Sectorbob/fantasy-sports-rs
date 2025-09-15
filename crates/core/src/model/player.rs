@@ -1,6 +1,7 @@
+use fleaflicker_fantasy_rs as fleaflicker;
 use serde::{Deserialize, Serialize};
 use sleeper_fantasy_rs as sleeper;
-use std::{fmt, str::FromStr};
+use std::{collections::HashSet, fmt, str::FromStr};
 use yahoo_fantasy_rs as yahoo;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -17,6 +18,34 @@ impl Player {
             name: format!("Missing Player ({})", id),
             positions: vec![],
             irl_team: None,
+        }
+    }
+}
+impl From<fleaflicker::ProPlayer> for Player {
+    fn from(value: fleaflicker::ProPlayer) -> Self {
+        Player::from(&value)
+    }
+}
+impl From<&fleaflicker::ProPlayer> for Player {
+    fn from(value: &fleaflicker::ProPlayer) -> Self {
+        let mut positions = value
+            .position_eligibility
+            .iter()
+            .filter_map(|p| {
+                PlayerPosition::from_str(p)
+                    .inspect_err(|err| log::error!("invalid pos: {err}"))
+                    .ok()
+            })
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        positions.sort_by_key(|p| p.to_string());
+
+        Player {
+            _id: value.id.to_string(),
+            name: value.name_full.clone(),
+            positions,
+            irl_team: Some(value.pro_team_abbreviation.clone()),
         }
     }
 }
@@ -74,7 +103,7 @@ impl fmt::Display for Player {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PlayerPosition {
     QB,
     RB,
@@ -82,6 +111,14 @@ pub enum PlayerPosition {
     TE,
     K,
     DEF,
+    LB,
+    EDR,
+    DE,
+    IL,
+    DT,
+    P,
+    CB,
+    S,
 }
 impl fmt::Display for PlayerPosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,6 +129,14 @@ impl fmt::Display for PlayerPosition {
             PlayerPosition::TE => "TE",
             PlayerPosition::K => "K",
             PlayerPosition::DEF => "DEF",
+            PlayerPosition::LB => "LB",
+            PlayerPosition::EDR => "EDR",
+            PlayerPosition::DE => "DE",
+            PlayerPosition::IL => "IL",
+            PlayerPosition::DT => "DT",
+            PlayerPosition::P => "P",
+            PlayerPosition::CB => "CB",
+            PlayerPosition::S => "S",
         };
         write!(f, "{}", s)
     }
@@ -120,19 +165,20 @@ impl From<&sleeper::Position> for PlayerPosition {
             sleeper::Position::DEF => PlayerPosition::DEF,
             sleeper::Position::DST => PlayerPosition::DEF,
             sleeper::Position::FB => PlayerPosition::RB, // map FB to RB
+
+            sleeper::Position::CB => PlayerPosition::CB,
+            sleeper::Position::DE => PlayerPosition::DE,
+            sleeper::Position::DT => PlayerPosition::DT,
+            sleeper::Position::LB => PlayerPosition::LB,
+            sleeper::Position::S => PlayerPosition::S,
+            sleeper::Position::FS => PlayerPosition::S,
+            sleeper::Position::SS => PlayerPosition::S,
+            sleeper::Position::P => PlayerPosition::P,
             _ => panic!("Unsupported Sleeper position: {value:?}",),
-            // sleeper::Position::LB => todo!(),
             // sleeper::Position::DB => todo!(),
             // sleeper::Position::DL => todo!(),
             // sleeper::Position::OL => todo!(),
-            // sleeper::Position::P => todo!(),
             // sleeper::Position::HC => todo!(),
-            // sleeper::Position::CB => todo!(),
-            // sleeper::Position::S => todo!(),
-            // sleeper::Position::FS => todo!(),
-            // sleeper::Position::SS => todo!(),
-            // sleeper::Position::DE => todo!(),
-            // sleeper::Position::DT => todo!(),
             // sleeper::Position::T => todo!(),
             // sleeper::Position::OT => todo!(),
             // sleeper::Position::OG => todo!(),
@@ -160,7 +206,18 @@ impl FromStr for PlayerPosition {
             "TE" => Ok(PlayerPosition::TE),
             "K" => Ok(PlayerPosition::K),
             "DEF" => Ok(PlayerPosition::DEF),
-            _ => Err("Invalid player position"),
+            "LB" => Ok(PlayerPosition::LB),
+            "EDR" => Ok(PlayerPosition::EDR),
+            "DE" => Ok(PlayerPosition::DE),
+            "IL" => Ok(PlayerPosition::IL),
+            "DT" => Ok(PlayerPosition::DT),
+            "P" => Ok(PlayerPosition::P),
+            "CB" => Ok(PlayerPosition::CB),
+            "S" => Ok(PlayerPosition::S),
+            other => {
+                log::error!("invalid player position: {other}");
+                Err("Invalid player position")
+            }
         }
     }
 }

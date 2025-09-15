@@ -293,7 +293,7 @@ pub async fn get_league_transactions(
     client: &Client,
     league: &League,
     force_update: &bool,
-) -> Result<Vec<Transaction>, sleeper_fantasy_rs::Error> {
+) -> Result<Vec<Transaction>, cached_client_rs::Error> {
     let weeks_to_scan = determine_weeks_to_scan(league);
 
     let transactions_for_week_futures = weeks_to_scan
@@ -304,7 +304,7 @@ pub async fn get_league_transactions(
                 .with_force_update(&force_update)
                 .send()
                 .map(move |res| {
-                    let result: Result<(usize, Vec<Transaction>), sleeper_fantasy_rs::Error> =
+                    let result: Result<(usize, Vec<Transaction>), cached_client_rs::Error> =
                         match res {
                             Ok(raw_txns) => Ok((week, raw_txns)),
                             Err(e) => {
@@ -344,7 +344,10 @@ mod tests {
     #[tokio::test]
     async fn test_check_league_matchups_runs_without_panic() {
         let force_update = false;
-        let client = Client::new().with_cache("cache/sleeper");
+        let client = Client::new()
+            .with_cache("cache/sleeper")
+            .await
+            .expect("failed to open cache");
         let league_ids = vec![
             "4581480575134427121", // 2024
             "383786432088067320",  // 2023

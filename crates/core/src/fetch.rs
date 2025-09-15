@@ -2,14 +2,14 @@ use crate::{
     ExternalId, Platform,
     data::{self as core},
     player_cache::PlayerCache,
-    sleeper_utils::{self, get_league_transactions},
+    sleeper_utils,
 };
 use fleaflicker_fantasy_rs as fleaflicker;
 use futures::{
     StreamExt, TryStreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
 };
-use sleeper_fantasy_rs::{self as sleeper};
+use sleeper_fantasy_rs as sleeper;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -17,7 +17,7 @@ use std::{
 };
 use tokio::io;
 use walkdir::WalkDir;
-use yahoo_fantasy_rs::{self as yahoo};
+use yahoo_fantasy_rs as yahoo;
 
 pub struct LeagueAccessor {
     pub fleaflicker_cli: Option<fleaflicker::Client>,
@@ -25,6 +25,7 @@ pub struct LeagueAccessor {
     players_cache: Option<PlayerCache>,
     pub yahoo_cli: Option<yahoo::Client>,
     cache_dir: Option<PathBuf>,
+    yahoo_settings: Option<(String, String, Option<String>, Option<yahoo::Token>)>,
 }
 impl LeagueAccessor {
     pub fn new() -> Self {
@@ -34,6 +35,7 @@ impl LeagueAccessor {
             players_cache: None,
             yahoo_cli: None,
             cache_dir: None,
+            yahoo_settings: None,
         }
     }
 
@@ -42,7 +44,23 @@ impl LeagueAccessor {
         self
     }
 
-    pub async fn init(&mut self) -> Result<(), Error> {
+    pub fn with_yahoo_settings<C: Into<String>, R: Into<String>, T: Into<String>>(
+        mut self,
+        client_id: C,
+        redirect_uri: R,
+        token_file: Option<T>,
+        token: Option<yahoo::Token>,
+    ) -> Self {
+        self.yahoo_settings = Some((
+            client_id.into(),
+            redirect_uri.into(),
+            token_file.map(|t| t.into()),
+            token,
+        ));
+        self
+    }
+
+    pub async fn init(&mut self) -> Result<(), AccessorInitError> {
         let (fleaflicker_cache_dir, sleeper_cache_dir, yahoo_cache_dir, player_cache) =
             match &self.cache_dir {
                 Some(cache_dir) => (
@@ -57,39 +75,92 @@ impl LeagueAccessor {
             .map(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok())
             .flatten();
         if let Some(player_cache) = &player_cache {
-            player_cache.init().await?;
+            player_cache
+                .init()
+                .await
+                .map_err(|e| AccessorInitError::FailedToSetupPlayerCache(e.to_string()))?;
         }
 
         let fleaflicker_cli = match fleaflicker_cache_dir {
-            Some(fleaflicker_cache_dir) => {
-                fleaflicker::Client::new().with_cache(fleaflicker_cache_dir)
-            }
+            Some(fleaflicker_cache_dir) => fleaflicker::Client::new()
+                .with_cache(fleaflicker_cache_dir)
+                .await
+                .map_err(|e| {
+                    AccessorInitError::FailedToSetupPlatformClient(
+                        Platform::FleaFlicker,
+                        e.to_string(),
+                    )
+                })?,
             None => fleaflicker::Client::new(),
         };
 
         let sleeper_cli = match sleeper_cache_dir {
-            Some(sleeper_cache_dir) => sleeper::Client::new().with_cache(sleeper_cache_dir),
+            Some(sleeper_cache_dir) => sleeper::Client::new()
+                .with_cache(sleeper_cache_dir)
+                .await
+                .map_err(|e| {
+                AccessorInitError::FailedToSetupPlatformClient(Platform::Sleeper, e.to_string())
+            })?,
             None => sleeper::Client::new(),
         };
-        let mut yahoo_cli = yahoo::Client::new_from_env()
-            .inspect_err(|err| log::warn!("failed to setup yahoo cli: {err}"))
-            .ok();
-        if let Some(cli) = yahoo_cli {
-            let tmp = cli.with_token_file::<String>(None).await.map_err(|err| {
-                yahoo::Error::UnknownError(format!("failed to load token file: {err}"))
-            })?;
-            tmp.refresh_token().await?;
-            yahoo_cli = Some(tmp)
-        }
-        if let Some(yahoo_cache_dir) = yahoo_cache_dir {
-            if let Some(cli) = yahoo_cli {
-                yahoo_cli = Some(cli.with_cache_dir(yahoo_cache_dir));
+
+        let mut yahoo_cli = if let Some((client_id, redirect_uri, opt_token_file, opt_token)) =
+            &self.yahoo_settings
+        {
+            let mut yahoo_cli = yahoo::Client::new(client_id, redirect_uri);
+            if let Some(token) = opt_token {
+                yahoo_cli = yahoo_cli.with_token(token.clone());
+                yahoo_cli
+            } else if let Some(token_file) = opt_token_file {
+                yahoo_cli = yahoo_cli
+                    .with_token_file(Some(token_file.to_string()))
+                    .await
+                    .map_err(|e| {
+                        AccessorInitError::FailedToSetupPlatformClient(
+                            Platform::Yahoo,
+                            format!("unable to bootstrap yahoo client due to bad token file: {e}"),
+                        )
+                    })?;
+                yahoo_cli
+            } else {
+                return Err(AccessorInitError::FailedToSetupPlatformClient(
+                    Platform::Yahoo,
+                    format!("unable to bootstrap yahoo client due to no token configuration"),
+                ));
             }
+        } else {
+            yahoo::Client::new_from_env().map_err(|e| {
+                AccessorInitError::FailedToSetupPlatformClient(
+                    Platform::Yahoo,
+                    format!("unable to bootstrap yahoo client due to missing env variables: {e}"),
+                )
+            })?.with_token_file::<String>(None).await.map_err(|err| {
+                yahoo::Error::UnknownError(format!("failed to load token file: {err}"))
+            }).map_err(|e| {
+                AccessorInitError::FailedToSetupPlatformClient(
+                    Platform::Yahoo,
+                    format!("unable to bootstrap yahoo client due to failure to load token file: {e}"),
+                )
+            })?
+        };
+
+        // TODO: only refresh if it needs to be
+        yahoo_cli.refresh_token(false).await.map_err(|e| {
+            AccessorInitError::FailedToSetupPlatformClient(Platform::Yahoo, e.to_string())
+        })?;
+
+        if let Some(yahoo_cache_dir) = yahoo_cache_dir {
+            yahoo_cli = yahoo_cli
+                .with_cache_dir(yahoo_cache_dir)
+                .await
+                .map_err(|e| {
+                    AccessorInitError::FailedToSetupPlatformClient(Platform::Yahoo, e.to_string())
+                })?;
         }
         self.players_cache = player_cache;
         self.fleaflicker_cli = Some(fleaflicker_cli);
         self.sleeper_cli = Some(sleeper_cli);
-        self.yahoo_cli = yahoo_cli;
+        self.yahoo_cli = Some(yahoo_cli);
         Ok(())
     }
 
@@ -206,6 +277,9 @@ impl LeagueAccessor {
         }
         Ok(total_size)
     }
+}
+unsafe impl Send for LeagueAccessor {
+    //TODO: WTF
 }
 
 pub(crate) async fn fetch_fleaflicker_leagues_for_user(
@@ -765,13 +839,19 @@ async fn fetch_yahoo_league_keys_for_user(
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum AccessorInitError {
+    #[error("failed to setup accessor player cache: {0}")]
+    FailedToSetupPlayerCache(String),
+    #[error("failed to setup {0} platform client: {1}")]
+    FailedToSetupPlatformClient(Platform, String),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("player cache error: {0}")]
     PlayerCacheError(#[from] crate::player_cache::Error),
-    #[error("fleaflicker error: {0}")]
-    FleaFlickerError(#[from] fleaflicker::Error),
-    #[error("sleeper error: {0}")]
-    SleeperError(#[from] sleeper::Error),
+    #[error("cached client error: {0}")]
+    CachedClientError(#[from] cached_client_rs::Error),
     #[error("yahoo error: {0}")]
     YahooError(#[from] yahoo::Error),
     #[error("dev error: {0}")]
@@ -785,6 +865,9 @@ impl Error {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
+    use yahoo_fantasy_rs as yahoo;
+
     use crate::fetch::{ExternalId, LeagueAccessor};
 
     #[tokio::test]
@@ -895,9 +978,24 @@ mod tests {
             ),
         ];
 
-        let mut fixture = LeagueAccessor::new().with_cache_dir("cache");
+        let mut fixture = LeagueAccessor::new()
+            .with_cache_dir("/Users/kyle/Library/Caches/fantasy-cli/cache")
+            .with_yahoo_settings(
+                "foo",
+                "bar",
+                None::<String>,
+                Some(yahoo::Token {
+                    access_token: "foo".to_string(),
+                    token_type: "foo".to_string(),
+                    expires_in: 100,
+                    refresh_token: "foo".to_string(),
+                    scope: None,
+                    ts: Some(Utc::now()),
+                }),
+            );
         fixture.init().await.expect("failed to initialized");
 
+        debug_assert!(fixture.fleaflicker_enabled(), "fleaflicker not enabled");
         debug_assert!(fixture.sleeper_enabled(), "sleeper not enabled");
         debug_assert!(fixture.yahoo_enabled(), "yahoo not enabled");
 

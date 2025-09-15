@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
 chrono = "0.4.41"
 fleaflicker-fantasy-rs = { version = "0.1.0", path = "../fleaflicker-fantasy-rs" }
 futures = "0.3.31"

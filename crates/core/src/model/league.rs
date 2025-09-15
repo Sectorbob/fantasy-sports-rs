@@ -1,6 +1,6 @@
 use crate::{
-    Draft, DraftPick, ExternalId, LeagueSettings, Player, Roster, Standings, StandingsEntry, Team,
-    Transaction, data::Scoreboard,
+    Draft, DraftPick, ExternalId, LeagueSettings, Platform, Player, Roster, Standings,
+    StandingsEntry, Team, Transaction, data::Scoreboard,
 };
 use fleaflicker_fantasy_rs as fleaflicker;
 use serde_json::Number;
@@ -142,11 +142,17 @@ impl League {
             League::Yahoo { league, .. } => LeagueStatus::from(league),
         }
     }
-    pub fn id(&self) -> String {
+    pub fn id(&self) -> ExternalId {
         match self {
-            League::FleaFlicker { league, .. } => league.id.to_string(),
-            League::Sleeper { league, .. } => league.league_id.clone(),
-            League::Yahoo { league, .. } => league.league_key.to_string(),
+            League::FleaFlicker { league, .. } => {
+                ExternalId::new(Platform::FleaFlicker, league.id.to_string())
+            }
+            League::Sleeper { league, .. } => {
+                ExternalId::new(Platform::Sleeper, league.league_id.clone())
+            }
+            League::Yahoo { league, .. } => {
+                ExternalId::new(Platform::Yahoo, league.league_key.to_string())
+            }
         }
     }
     pub fn name(&self) -> String {
