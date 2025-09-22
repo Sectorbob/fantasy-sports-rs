@@ -1,0 +1,13 @@
+[package]
+name = "fantasy-sports"
+version = "0.1.0-alpha"
+edition = "2024"
+authors = ["Kyle Heide <dev@sectorbob.net>"]
+rust-version = "1.89.0"
+description = ""
+repository = "https://github.com/Sectorbob/fantasy-sports-rs"
+license = "MIT"
+keywords = ["fantasy", "sports", "sleeper", "yahoo"]
+categories = ["api-bindings", "caching"]
+
+[dependencies]
