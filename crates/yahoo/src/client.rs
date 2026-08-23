@@ -90,7 +90,7 @@ impl Client {
         mut self,
         cache_dir: D,
     ) -> Result<Self, cached_client_rs::Error> {
-        self.cached_client = self.cached_client.with_cache(cache_dir).await?;
+        self.cached_client = self.cached_client.with_cache(cache_dir)?;
         Ok(self)
     }
 
@@ -333,7 +333,6 @@ impl Client {
             request_ctx,
             false,
             Some(ResponseBodyFormat::XML),
-            Some(format!("Bearer {token}", token = token.access_token)),
         );
         req.send().await.map_err(|err| {
             match err {
@@ -341,8 +340,8 @@ impl Client {
                     Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
 
-                cached_client_rs::Error::ClientError(status_code, body) => {
-                    let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>(body.as_str())
+                cached_client_rs::Error::ClientError(status_code) => {
+                    let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>("got http error {status_code}")
                         .inspect_err(|err| {
                             log::warn!(
                                 "got http error {status_code} and failed to parse body: {err}"
@@ -389,7 +388,7 @@ impl Client {
                             yahoo_error.description()
                         ))
                     } else {
-                        Error::UnknownError(format!("Got client error ({status_code}): {body}"))
+                        Error::UnknownError(format!("Got client error ({status_code})"))
                     }
                 }
                 cached_client_rs::Error::DevError(dev_err) => {
