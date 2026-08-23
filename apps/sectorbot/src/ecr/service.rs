@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet}, env::VarError, path, sync::Arc, u64
 };
 
+use cached_client_rs::Error as CachedClientError;
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
 use serde::{Deserialize, Serialize};
 use serenity::all::{
@@ -15,7 +16,7 @@ use crate::{
     store::{self, DataStore, DataStoreError, ExternalId, League, Platform},
 };
 
-pub const LEAGUE_ID: &str = "2489066589662560510";
+pub const LEAGUE_ID: &str = "1206780317471651229";// "2489066589662560510";
 pub const SPORT: sleeper::Sport = sleeper::Sport::NFL;
 
 pub struct Service {
@@ -30,10 +31,10 @@ impl Service {
         let sleeper_cache_dir = cache_dir.join("sleeper");
         let yahoo_cache_dir = cache_dir.join("yahoo");
         Ok(Service {
-            sleeper_cli: sleeper_fantasy_rs::Client::new_with_cache(None, sleeper_cache_dir),
-            yahoo_fantasy_cli: yahoo_fantasy_rs::Client::new_from_env()?
-                .with_cache_dir(yahoo_cache_dir)
-                .with_token_file::<String>(None).await?,
+            sleeper_cli: sleeper_fantasy_rs::Client::new()/*.with_cache(sleeper_cache_dir).await?*/,
+            yahoo_fantasy_cli: yahoo_fantasy_rs::Client::new_from_env()?,
+                // .with_cache_dir(yahoo_cache_dir).await?
+                // .with_token_file::<String>(None).await?,
             fantasypros_cli: fantasypros::Client::new(),
             store: Arc::clone(store_arc),
         })
@@ -48,7 +49,7 @@ impl Service {
         let league_id: String = league_id.into();
         let players_future = self.sleeper_cli.fetch_all_players(&sport);
         let league_future = self.sleeper_cli.get_league(league_id.clone());
-        let rosters_future = self.sleeper_cli.get_rosters_for_league(league_id.clone());
+        let rosters_future = self.sleeper_cli.get_rosters_in_league(league_id.clone());
         let users_future = self.sleeper_cli.get_users_for_league(league_id.clone());
         let league = league_future.await?;
         let draft_history = self.fetch_all_draft_history_sleeper(league.clone()).await?;
@@ -131,7 +132,7 @@ impl Service {
                         |player| {
                             (
                                 player.to_string(),
-                                player.position.clone().unwrap_or_default(),
+                                player.position.clone().map_or(String::new(), |v| v.to_string()),
                                 player.team.clone().unwrap_or_default(),
                             )
                         },
@@ -543,7 +544,7 @@ pub struct KeepablesContext {
 #[derive(thiserror::Error, Debug)]
 pub enum ECRError {
     #[error("failed to fetch from sleeper {0}")]
-    SleeperError(#[from] sleeper_fantasy_rs::Error),
+    SleeperError(#[from] CachedClientError),
 
     #[error("Sleeper element not found {0}")]
     NotFound(String),

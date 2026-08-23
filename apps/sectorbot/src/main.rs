@@ -90,8 +90,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Producer task: generates messages
-    start_feed_fetcher(1, &app_context, None).await?;
-    start_feed_fetcher(2, &app_context, Some(Duration::from_secs(2 * 60))).await?;
+    // start_feed_fetcher(1, &app_context, None).await?;
+    // start_feed_fetcher(2, &app_context, Some(Duration::from_secs(2 * 60))).await?;
 
     // This blocks
     match setup_discord_bot(&app_context, rx).await {
