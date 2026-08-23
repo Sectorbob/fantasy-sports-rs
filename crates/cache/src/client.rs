@@ -9,7 +9,7 @@ use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 pub struct Client {
     pub(crate) http_client: reqwest::Client,
     base_url: String,
-    cache: Option<Box<dyn Cacheable>>,
+    cache: Option<Box<dyn Cacheable + Send>>,
     outgoing_request_count: AtomicU64,
 }
 impl Client {
