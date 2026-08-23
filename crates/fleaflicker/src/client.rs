@@ -32,7 +32,7 @@ impl Client {
         mut self,
         cache_dir: T,
     ) -> Result<Self, cached_client_rs::Error> {
-        self.client = self.client.with_cache(cache_dir).await?;
+        self.client = self.client.with_cache(cache_dir)?;
         Ok(self)
     }
 
@@ -58,7 +58,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -86,7 +85,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -118,7 +116,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -156,7 +153,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -188,7 +184,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -226,7 +221,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -250,7 +244,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
@@ -278,7 +271,6 @@ impl Client {
                 },
                 false,
                 Some(ResponseBodyFormat::JSON),
-                None,
             )
             .send()
             .await
