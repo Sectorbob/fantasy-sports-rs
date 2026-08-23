@@ -269,7 +269,7 @@ impl From<cached_client_rs::Error> for Error {
             cached_client_rs::Error::CacheError(cache_err) => {
                 Error::DevError(format!("cache error: {cache_err:?}"))
             }
-            cached_client_rs::Error::ClientError(status_code, _) => {
+            cached_client_rs::Error::ClientError(status_code) => {
                 Error::DevError(format!("http client error: {status_code}"))
             }
             cached_client_rs::Error::DevError(msg) => Error::DevError(msg),
