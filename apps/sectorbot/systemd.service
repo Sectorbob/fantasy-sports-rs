@@ -1,0 +1,15 @@
+[Unit]
+Description=Sectorbot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/workspace/rust-projects/sectorbot
+ExecStart=%h/.cargo/bin/cargo run
+Restart=on-failure
+RestartSec=5
+Environment=WORKDIR=%h/projects/sectorbot
+
+[Install]
+WantedBy=default.target
