@@ -332,8 +332,13 @@ pub(crate) async fn fetch_fleaflicker_league_context(
     fleaflicker_league_id: String,
     _force_update: bool,
 ) -> Result<crate::League, Error> {
+    let fleaflicker_league_id: i32 = fleaflicker_league_id.parse().map_err(|_| {
+        Error::DevError(format!(
+            "fleaflicker league ids are numbers, got {fleaflicker_league_id:?}"
+        ))
+    })?;
     let league_standings = cli
-        .fetch_league_standings(fleaflicker_league_id.parse().unwrap(), None, None)
+        .fetch_league_standings(fleaflicker_league_id, None, None)
         .await?;
     let fleaflicker_league = league_standings.league.clone(); // this needs to come as a param
 
@@ -1036,5 +1041,61 @@ mod tests {
                 "{err}"
             );
         }
+    }
+
+    /// Serves the fleaflicker crate's recorded (pseudonymized) responses by endpoint.
+    struct FleaflickerFixtures;
+    impl Respond for FleaflickerFixtures {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            let file = match req.url.path() {
+                "/FetchLeagueStandings" => "fetch_league_standings_pre.json",
+                "/FetchLeagueTransactions" => "league_transactions_page_1.json",
+                "/FetchLeagueRosters" => "league_rosters.json",
+                "/FetchLeagueRules" => "fetch_league_rules.json",
+                _ => return ResponseTemplate::new(404),
+            };
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../fleaflicker/testdata")
+                .join(file);
+            ResponseTemplate::new(200)
+                .set_body_raw(std::fs::read_to_string(path).unwrap(), "application/json")
+        }
+    }
+
+    async fn fleaflicker_client() -> (fleaflicker::Client, MockServer) {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(".*"))
+            .respond_with(FleaflickerFixtures)
+            .mount(&server)
+            .await;
+        (
+            fleaflicker::Client::new().with_base_url(server.uri()),
+            server,
+        )
+    }
+
+    #[tokio::test]
+    async fn a_fleaflicker_league_is_assembled_from_the_api_responses() {
+        let (cli, _server) = fleaflicker_client().await;
+
+        let league = fetch_fleaflicker_league_context(&cli, &None, "1".to_string(), false)
+            .await
+            .expect("league should be fetched");
+
+        assert_eq!("Golden League 00", league.name());
+        assert_eq!("2025", league.season());
+        assert_eq!(12, league.rosters().len());
+        assert_eq!(12, league.standings().entries.len());
+        assert!(matches!(league, crate::League::FleaFlicker { .. }));
+    }
+
+    #[tokio::test]
+    async fn a_non_numeric_fleaflicker_league_id_is_an_error_not_a_panic() {
+        let (cli, _server) = fleaflicker_client().await;
+        let err = fetch_fleaflicker_league_context(&cli, &None, "abc".to_string(), false)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("abc"), "{err}");
     }
 }

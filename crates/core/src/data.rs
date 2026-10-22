@@ -119,11 +119,17 @@ pub struct Roster {
 }
 impl From<&fleaflicker::Roster> for Roster {
     fn from(value: &fleaflicker::Roster) -> Self {
+        // teams can be unowned (open slots) or unnamed, so every field has a fallback
         let owner = value.team.owners.as_ref().and_then(|owners| owners.first());
+        let id = value.team.id.map(|id| id.to_string()).unwrap_or_default();
         Roster {
-            id: value.team.id.unwrap().to_string(),
-            team_name: value.team.name.clone().unwrap(),
-            owner_name: owner.unwrap().display_name.clone(),
+            team_name: value
+                .team
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("Team {id}")),
+            owner_name: owner.map_or_else(|| format!("Team {id}"), |o| o.display_name.clone()),
+            id,
             player_ids: value
                 .players
                 .iter()
@@ -825,6 +831,41 @@ mod tests {
     use fantasy_sports_sleeper as sleeper;
     use fantasy_sports_yahoo as yahoo;
     use std::collections::HashMap;
+
+    fn fleaflicker_rosters() -> Vec<fantasy_sports_fleaflicker::Roster> {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fleaflicker/testdata/league_rosters.json"
+        );
+        let response: fantasy_sports_fleaflicker::FetchRostersResponse =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        response.rosters
+    }
+
+    #[test]
+    fn a_fleaflicker_roster_converts_with_its_owner_and_players() {
+        let rosters = fleaflicker_rosters();
+        let roster = core::Roster::from(&rosters[0]);
+        assert!(!roster.id.is_empty());
+        assert!(!roster.owner_name.is_empty());
+        assert!(!roster.player_ids.is_empty());
+    }
+
+    #[test]
+    fn an_unowned_or_unnamed_fleaflicker_team_does_not_crash_the_conversion() {
+        // open slots in a league have no owners (and can lack a name); this used to unwrap
+        let mut rosters = fleaflicker_rosters();
+        let team = &mut rosters[0].team;
+        team.owners = None;
+        team.name = None;
+        let id = team.id.expect("fixture teams have ids").to_string();
+
+        let roster = core::Roster::from(&rosters[0]);
+
+        assert_eq!(id, roster.id);
+        assert_eq!(format!("Team {id}"), roster.team_name);
+        assert_eq!(format!("Team {id}"), roster.owner_name);
+    }
 
     #[test]
     fn test_convert_yahoo_transaction() {
