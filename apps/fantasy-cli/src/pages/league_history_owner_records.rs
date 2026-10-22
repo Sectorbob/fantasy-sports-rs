@@ -1,10 +1,10 @@
 use std::io::{self, Stdout};
-use tui::{
+use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     layout::Constraint,
     style::Style,
-    terminal::CompletedFrame,
+    CompletedFrame,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
@@ -52,7 +52,7 @@ impl LeagueHistoryOwnerRecordsPage {
         terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
     ) -> io::Result<CompletedFrame<'a>> {
         terminal.draw(|f| {
-            let size = f.size();
+            let size = f.area();
             let title: String = if let Some(title_override) = self.title_override.clone() {
                 title_override.trim().to_string()
             } else {
@@ -81,7 +81,7 @@ impl LeagueHistoryOwnerRecordsPage {
                 ]));
             }
 
-            let table = Table::new(rows)
+            let table = Table::new(rows, Vec::<Constraint>::new())
                 .widths(&[
                     // Constraint::Percentage(20),
                     Constraint::Percentage(30),

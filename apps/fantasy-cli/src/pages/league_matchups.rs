@@ -1,7 +1,7 @@
 use std::io::Stdout;
 
 use fantasy_sports_core::League;
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -15,7 +15,7 @@ pub struct LeagueMatchupsPage {}
 impl LeagueMatchupsPage {
     pub fn draw<'a>(
         &self,
-        f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>,
+        f: &mut ratatui::Frame<'a>,
         rect: &Rect,
         league: &League,
     ) {

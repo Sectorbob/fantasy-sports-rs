@@ -1,12 +1,12 @@
 use std::io::{self, Stdout};
 
 use fantasy_sports_core::League;
-use tui::{
+use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::Style,
-    terminal::CompletedFrame,
+    CompletedFrame,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -52,7 +52,7 @@ impl<'a> LeagueSummaryPage<'a> {
         let num_of_rows = 2;
 
         terminal.draw(|f| {
-            let size = f.size();
+            let size = f.area();
             let block = Block::default()
                 .title(format!(
                     "{} ('q' to quit, 'w' to welcome, 'l' to leagues, 'b' to go back, 'd' to draftboard, 'm' to matchups, 't' to transactions)",
@@ -144,8 +144,8 @@ impl<'a> LeagueSummaryPage<'a> {
 
 fn render_league_details(
     league: &League,
-    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
-    row: &tui::layout::Rect,
+    f: &mut ratatui::Frame<'_>,
+    row: &ratatui::layout::Rect,
 ) {
     let title = "Summary";
 
@@ -203,8 +203,8 @@ fn render_league_details(
 
 fn render_league_teams(
     league: &League,
-    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
-    row: &tui::layout::Rect,
+    f: &mut ratatui::Frame<'_>,
+    row: &ratatui::layout::Rect,
 ) {
     let teams = league.teams();
     let title = format!("Teams ({})", teams.len(),);
@@ -230,8 +230,8 @@ fn render_league_teams(
 
 fn render_league_playoff_results(
     league: &League,
-    f: &mut tui::Frame<'_, CrosstermBackend<Stdout>>,
-    row: &tui::layout::Rect,
+    f: &mut ratatui::Frame<'_>,
+    row: &ratatui::layout::Rect,
 ) {
     let teams = league.teams();
     if let Some(playoff_results) = league.playoff_results() {

@@ -1,11 +1,11 @@
 use fantasy_sports_core::{League, Player, PlayerPosition};
 use fantasy_sports_sleeper::User;
 use std::{collections::HashMap, io::Stdout};
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{self, Rect},
     style::Style,
-    text::{Span, Spans, Text},
+    text::{Span, Line, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 use fantasy_sports_yahoo as yahoo;
@@ -108,7 +108,7 @@ impl RosterWidget {
                 .collect::<Vec<Player>>(),
         }
     }
-    pub fn draw<'a>(&self, f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>, rect: &Rect) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let title = format!("{}'s Roster", self.team_name);
 
         let block = Block::default()
@@ -134,12 +134,12 @@ impl RosterWidget {
             .unwrap_or(2);
 
         let layout = layout::Layout::default()
-            .direction(tui::layout::Direction::Horizontal)
+            .direction(ratatui::layout::Direction::Horizontal)
             .margin(1)
             .constraints(
                 [
-                    tui::layout::Constraint::Length(pos_col_width as u16),
-                    tui::layout::Constraint::Min(25),
+                    ratatui::layout::Constraint::Length(pos_col_width as u16),
+                    ratatui::layout::Constraint::Min(25),
                 ]
                 .as_ref(),
             )
@@ -149,7 +149,7 @@ impl RosterWidget {
             self.players
                 .iter()
                 .map(|p| {
-                    Spans::from(
+                    Line::from(
                         p.positions
                             .iter()
                             .map(|pos| helpers::position_span(pos))
@@ -161,7 +161,7 @@ impl RosterWidget {
         let right_text = Text::from(
             self.players
                 .iter()
-                .map(|p| Spans::from(Span::raw(p.name.as_str())))
+                .map(|p| Line::from(Span::raw(p.name.as_str())))
                 .collect::<Vec<_>>(),
         );
 

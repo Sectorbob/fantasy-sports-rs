@@ -1,10 +1,10 @@
 use fantasy_sports_core::{self as core, DraftType};
 use std::io::Stdout;
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    text::{Span, Spans, Text},
+    text::{Span, Line, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
@@ -28,7 +28,7 @@ impl DraftBoardPage {
         }
     }
 
-    pub fn draw<'a>(&self, f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>, rect: &Rect) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let league_name = if let Some(n) = &self.league_name {
             n
         } else {
@@ -147,8 +147,8 @@ impl DraftBoardPage {
                     )));
 
                     Text::from(vec![
-                        Spans::from(vec![Span::raw(player_name)]),
-                        Spans::from(pos_team),
+                        Line::from(vec![Span::raw(player_name)]),
+                        Line::from(pos_team),
                     ])
                 } else {
                     Text::from(format!("Overall\n{overall}"))

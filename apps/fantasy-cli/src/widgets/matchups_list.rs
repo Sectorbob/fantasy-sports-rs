@@ -4,7 +4,7 @@ use std::{
 };
 
 use fantasy_sports_core as core;
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
@@ -69,7 +69,7 @@ impl MatchupsList {
     }
     pub fn draw<'a>(
         &self,
-        f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>,
+        f: &mut ratatui::Frame<'a>,
         rect: &Rect,
         for_team: Option<&String>,
     ) {
@@ -192,16 +192,16 @@ impl MatchupsList {
         let header = if team_mode {
             Some(
                 Row::new(vec!["Week", "Opponent", "Result"])
-                    .style(tui::style::Style::default().add_modifier(tui::style::Modifier::BOLD))
+                    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD))
                     .style(Style::default().fg(Color::Yellow)),
             )
         } else {
             None
             // Row::new(vec!["Team 1", "", "", "Team 2"])
-            //     .style(tui::style::Style::default().add_modifier(tui::style::Modifier::BOLD))
+            //     .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD))
         };
 
-        let mut table = Table::new(rows)
+        let mut table = Table::new(rows, Vec::<Constraint>::new())
             // .block(Block::default().borders(Borders::ALL).title("Students"))
             .widths(&col_widths);
         if let Some(header) = header {

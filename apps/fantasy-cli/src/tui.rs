@@ -11,11 +11,11 @@ use std::{
     time::Duration,
 };
 use tokio::time::sleep;
-use tui::{
+use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     style::{Color, Style},
-    terminal::CompletedFrame,
+    CompletedFrame,
     widgets::{Block, Borders},
 };
 
@@ -246,7 +246,7 @@ async fn render_loop(
                 if let Some(selected_league) = leagues_page.selected() {
                     terminal
                         .draw(|f| {
-                            let size = f.size();
+                            let size = f.area();
                             league_matchups_page.draw(f, &size, selected_league);
                         })
                         .map_err(|e| {
@@ -270,7 +270,7 @@ async fn render_loop(
                         pages::TransactionsPage::from_league(selected_league);
                     terminal
                         .draw(|f| {
-                            let size = f.size();
+                            let size = f.area();
                             league_transactions_page.draw(f, &size);
                         })
                         .map_err(|e| {
@@ -304,7 +304,7 @@ async fn render_loop(
                     league_draft_board_page = pages::DraftBoardPage::from(selected_league);
                     terminal
                         .draw(|f| {
-                            let size = f.size();
+                            let size = f.area();
                             league_draft_board_page.draw(f, &size);
                         })
                         .map_err(|e| {
@@ -424,7 +424,7 @@ fn draw_blank_screen_with_q_exit(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
 ) -> io::Result<CompletedFrame> {
     terminal.draw(|f| {
-        let size = f.size();
+        let size = f.area();
         let block = Block::default()
             .title("My TUI - Press 'q' to quit, 'l' to list")
             .borders(Borders::ALL)

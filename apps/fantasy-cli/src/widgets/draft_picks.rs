@@ -1,10 +1,10 @@
 use fantasy_sports_core as core;
 use std::io::Stdout;
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
@@ -37,7 +37,7 @@ impl DraftPicksWidget {
             _roster_id_filter: roster_id_filter,
         }
     }
-    pub fn draw<'a>(&self, f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>, rect: &Rect) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let title: String = if let Some(title_override) = self.title_override.clone() {
             title_override.trim().to_string()
         } else {
@@ -63,7 +63,7 @@ impl DraftPicksWidget {
             })
             .collect::<Vec<Row>>();
 
-        let table = Table::new(rows)
+        let table = Table::new(rows, Vec::<Constraint>::new())
             .widths(&[
                 Constraint::Percentage(12),
                 Constraint::Percentage(12),
@@ -74,7 +74,7 @@ impl DraftPicksWidget {
         f.render_widget(table, area);
     }
 
-    // fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Spans {
+    // fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Line {
     //     let player_id = player_move.player_id();
     //     if let Some(player) = self.players.get(&player_id) {
     //         let mut spans = vec![Span::raw(format!("{} [", player.name))];
@@ -85,14 +85,14 @@ impl DraftPicksWidget {
     //                 .map(|pos| helpers::position_span(pos)),
     //         );
     //         spans.push(Span::raw("]"));
-    //         Spans::from(spans)
+    //         Line::from(spans)
     //     } else {
-    //         Spans::from(Span::raw(format!("Player({player_id})")))
+    //         Line::from(Span::raw(format!("Player({player_id})")))
     //     }
     // }
 }
 
-fn format_entry<'d>(draft_pick: &'d core::DraftPick) -> (String, String, Spans<'d>) {
+fn format_entry<'d>(draft_pick: &'d core::DraftPick) -> (String, String, Line<'d>) {
     let mut player_spans: Vec<Span> = vec![Span::raw("[")];
     player_spans.extend(
         draft_pick
@@ -114,6 +114,6 @@ fn format_entry<'d>(draft_pick: &'d core::DraftPick) -> (String, String, Spans<'
     (
         draft_pick_round,
         draft_pick_overall,
-        Spans::from(player_spans),
+        Line::from(player_spans),
     )
 }

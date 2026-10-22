@@ -4,11 +4,11 @@ use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
 };
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
@@ -37,7 +37,7 @@ impl TransactionsPage {
             players: league.players().clone(), //TODO: i don't want to clone these
         }
     }
-    pub fn draw<'a>(&self, f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>, rect: &Rect) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let title: String = if let Some(title_override) = self.title_override.clone() {
             title_override.trim().to_string()
         } else {
@@ -75,7 +75,7 @@ impl TransactionsPage {
                         .into_iter()
                         .flat_map(|m| vec![m.dest_team_id.clone(), m.src_team_id.clone()]),
                 );
-                let adds: Vec<Spans> = player_moves
+                let adds: Vec<Line> = player_moves
                     .iter()
                     .filter(PlayerMove::is_add)
                     .map(|p_move| self.player_cell(p_move))
@@ -120,7 +120,7 @@ impl TransactionsPage {
             })
             .collect::<Vec<Row>>();
 
-        let table = Table::new(rows)
+        let table = Table::new(rows, Vec::<Constraint>::new())
             .widths(&[
                 Constraint::Percentage(20),
                 Constraint::Percentage(10),
@@ -136,7 +136,7 @@ impl TransactionsPage {
         f.render_widget(table, area);
     }
 
-    fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Spans {
+    fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Line {
         let player_id = player_move.player_id();
         if let Some(player) = self.players.get(&player_id) {
             let mut spans = vec![Span::raw(format!("{} [", player.name))];
@@ -147,9 +147,9 @@ impl TransactionsPage {
                     .map(|pos| helpers::position_span(pos)),
             );
             spans.push(Span::raw("]"));
-            Spans::from(spans)
+            Line::from(spans)
         } else {
-            Spans::from(Span::raw(format!("Player({player_id})")))
+            Line::from(Span::raw(format!("Player({player_id})")))
         }
     }
 }

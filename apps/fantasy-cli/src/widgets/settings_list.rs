@@ -1,7 +1,7 @@
 use std::io::Stdout;
 
 use fantasy_sports_core::League;
-use tui::{
+use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
@@ -24,7 +24,7 @@ impl SettingsListWidget {
             },
         }
     }
-    pub fn draw<'a>(&self, f: &mut tui::Frame<'a, CrosstermBackend<Stdout>>, rect: &Rect) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let title: String = if let Some(title_override) = self.title_override.clone() {
             title_override.trim().to_string()
         } else {
@@ -47,7 +47,7 @@ impl SettingsListWidget {
             .map(|(k, v)| Row::new(vec![Cell::from(*k), Cell::from(v.as_str())]))
             .collect::<Vec<Row>>();
 
-        let table = Table::new(rows)
+        let table = Table::new(rows, Vec::<Constraint>::new())
             // .block(Block::default().borders(Borders::ALL).title("Students"))
             .widths(&[Constraint::Percentage(60), Constraint::Percentage(40)]);
 

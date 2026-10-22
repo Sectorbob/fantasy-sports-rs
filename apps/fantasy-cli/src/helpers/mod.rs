@@ -2,7 +2,7 @@ use fantasy_sports_core as core;
 
 use crate::constants;
 
-pub fn color_from_position(pos: &core::PlayerPosition) -> tui::style::Color {
+pub fn color_from_position(pos: &core::PlayerPosition) -> ratatui::style::Color {
     match pos {
         core::PlayerPosition::QB => constants::COLOR_QB,
         core::PlayerPosition::RB => constants::COLOR_RB,
@@ -14,9 +14,9 @@ pub fn color_from_position(pos: &core::PlayerPosition) -> tui::style::Color {
     }
 }
 
-pub fn position_span(pos: &core::PlayerPosition) -> tui::text::Span {
-    tui::text::Span::styled(
+pub fn position_span(pos: &core::PlayerPosition) -> ratatui::text::Span {
+    ratatui::text::Span::styled(
         format!("{pos}"),
-        tui::style::Style::default().fg(color_from_position(pos)),
+        ratatui::style::Style::default().fg(color_from_position(pos)),
     )
 }

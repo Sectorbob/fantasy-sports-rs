@@ -2,11 +2,11 @@ use std::io::{self, Stdout};
 
 use crossterm::event::KeyCode;
 use fantasy_sports_core::League;
-use tui::{
+use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     style::{Modifier, Style},
-    terminal::CompletedFrame,
+    CompletedFrame,
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
@@ -64,7 +64,7 @@ impl<'a> LeaguesPage {
 
         if self.leagues.is_empty() {
             terminal.draw(|f| {
-                let size = f.size();
+                let size = f.area();
                 let paragraph =
                     Paragraph::new("You do not have any leagues loaded.\n\nPress c to configure.")
                         .block(
@@ -79,7 +79,7 @@ impl<'a> LeaguesPage {
             })
         } else {
             terminal.draw(|f| {
-                let size = f.size();
+                let size = f.area();
                 let list = List::new(self.make_list())
                     .block(
                         Block::default()
@@ -96,7 +96,7 @@ impl<'a> LeaguesPage {
                     )
                     .highlight_symbol(">> ");
 
-                let mut state = tui::widgets::ListState::default();
+                let mut state = ratatui::widgets::ListState::default();
                 state.select(Some(self.selected));
                 f.render_stateful_widget(list, size, &mut state);
             })

@@ -26,5 +26,5 @@ serde_json.workspace = true
 fantasy-sports-sleeper.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tui.workspace = true
+ratatui.workspace = true
 fantasy-sports-yahoo.workspace = true
