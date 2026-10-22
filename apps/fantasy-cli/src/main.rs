@@ -68,9 +68,15 @@ async fn main() -> Result<(), core::Error> {
         "yahoo" => yahoo_utils::exec(fantasy_league_accessor)
             .await
             .map_err(|e| core::Error::YahooError(e)),
-        "sleeper" => core::sleeper_utils::exec()
-            .await
-            .map_err(|e| core::Error::DevError(format!("sleeper cli quit {e:?}"))),
+        "sleeper" => match cfg.sleeper_user_id.as_deref() {
+            // usage: fantasy-cli sleeper <league_id>...
+            Some(user) => core::sleeper_utils::exec(user, &args[2..])
+                .await
+                .map_err(|e| core::Error::DevError(format!("sleeper cli quit {e:?}"))),
+            None => Err(core::Error::DevError(
+                "set sleeper_user_id in config.json to use the sleeper command".to_string(),
+            )),
+        },
         "tui" => tui::exec(fantasy_league_accessor, cfg)
             .await
             .map_err(|e| core::Error::DevError(format!("tui quit {e:?}"))),
