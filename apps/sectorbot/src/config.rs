@@ -18,7 +18,7 @@ const DEFAULT_HTTP_SERVER_PORT: u16 = 8080;
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     // Load environment variables from .env file if it exists
-    if let Err(err) = dotenv::dotenv() {
+    if let Err(err) = dotenvy::dotenv() {
         eprintln!("Failed to load .env file: {}", err);
     }
     setup_logger();

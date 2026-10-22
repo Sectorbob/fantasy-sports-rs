@@ -693,10 +693,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotenv"
-version = "0.15.0"
+name = "dotenvy"
+version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dtoa"
@@ -776,7 +776,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "log",
- "quick-xml 0.38.4",
+ "quick-xml 0.42.0",
  "reqwest",
  "rmp-serde",
  "serde",
@@ -874,7 +874,7 @@ dependencies = [
  "itertools",
  "log",
  "pkce",
- "quick-xml 0.38.4",
+ "quick-xml 0.42.0",
  "reqwest",
  "serde",
  "serde-xml-rs",
@@ -1952,22 +1952,22 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "encoding_rs",
  "memchr",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+dependencies = [
+ "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -2428,7 +2428,7 @@ dependencies = [
  "axum",
  "chrono",
  "chrono-tz",
- "dotenv",
+ "dotenvy",
  "fantasy-sports-cache",
  "fantasy-sports-core",
  "fantasy-sports-sleeper",
