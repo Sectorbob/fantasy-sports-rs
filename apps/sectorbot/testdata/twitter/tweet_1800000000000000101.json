@@ -1,0 +1,151 @@
+{
+ "__typename": "Tweet",
+ "lang": "en",
+ "favorite_count": 212,
+ "created_at": "2025-01-15T17:13:22.000Z",
+ "display_text_range": [
+  0,
+  218
+ ],
+ "entities": {
+  "hashtags": [],
+  "urls": [],
+  "user_mentions": [],
+  "symbols": []
+ },
+ "id_str": "1800000000000000101",
+ "text": "If rookie Riley Rookie hits for the Rovers -- and not just in a down the line kinda way -- extend the OL coach immediately.\nThe Rovers have been desperate for a Day 3 OL draft hit since Pat Anchor (Lee Backup I guess).",
+ "user": {
+  "id_str": "1000000001",
+  "name": "Sam Sample",
+  "screen_name": "SampleScribe",
+  "is_blue_verified": true,
+  "profile_image_shape": "Circle",
+  "verified": false,
+  "profile_image_url_https": "https://pbs.example.invalid/profile_images/1000000001/avatar_normal.jpg"
+ },
+ "edit_control": {
+  "edit_tweet_ids": [
+   "1800000000000000101"
+  ],
+  "editable_until_msecs": "1700000000000",
+  "is_edit_eligible": true,
+  "edits_remaining": "5"
+ },
+ "conversation_count": 14,
+ "news_action_type": "conversation",
+ "isEdited": false,
+ "isStaleEdit": false,
+ "quoted_tweet": {
+  "__typename": "Tweet",
+  "lang": "en",
+  "favorite_count": 212,
+  "created_at": "2025-01-15T16:55:17.000Z",
+  "display_text_range": [
+   0,
+   157
+  ],
+  "entities": {
+   "hashtags": [],
+   "urls": [],
+   "user_mentions": [
+    {
+     "id_str": "1000000003",
+     "indices": [
+      1,
+      13
+     ],
+     "name": "Riley Rookie",
+     "screen_name": "RileyRookie"
+    }
+   ],
+   "symbols": [],
+   "media": [
+    {
+     "display_url": "pic.example.invalid/pic001",
+     "expanded_url": "https://x.example.invalid/alexquote/status/1800000000000000099/photo/1",
+     "indices": [
+      123,
+      146
+     ],
+     "url": "https://t.example.invalid/pic001"
+    }
+   ]
+  },
+  "id_str": "1800000000000000099",
+  "text": "⁦@RileyRookie⁩ has reason to smile. He continues to handle his business and held his own at right tackle with the first team https://t.example.invalid/pic001",
+  "user": {
+   "id_str": "1000000002",
+   "name": "Alex Quote",
+   "screen_name": "alexquote",
+   "is_blue_verified": true,
+   "profile_image_shape": "Circle",
+   "verified": false,
+   "profile_image_url_https": "https://pbs.example.invalid/profile_images/1000000002/avatar_normal.jpg"
+  },
+  "edit_control": {
+   "edit_tweet_ids": [
+    "1800000000000000099"
+   ],
+   "editable_until_msecs": "1700000000000",
+   "is_edit_eligible": true,
+   "edits_remaining": "5"
+  },
+  "conversation_count": 14,
+  "news_action_type": "conversation",
+  "isEdited": false,
+  "isStaleEdit": false,
+  "mediaDetails": [
+   {
+    "display_url": "pic.example.invalid/pic001",
+    "expanded_url": "https://x.example.invalid/alexquote/status/1800000000000000099/photo/1",
+    "indices": [
+     123,
+     146
+    ],
+    "url": "https://t.example.invalid/pic001",
+    "ext_media_availability": {
+     "status": "Available"
+    },
+    "media_url_https": "https://pbs.example.invalid/media/sample001.jpg",
+    "original_info": {
+     "height": 900,
+     "width": 600,
+     "focus_rects": []
+    },
+    "sizes": {
+     "large": {
+      "h": 900,
+      "resize": "fit",
+      "w": 600
+     },
+     "medium": {
+      "h": 900,
+      "resize": "fit",
+      "w": 600
+     },
+     "small": {
+      "h": 680,
+      "resize": "fit",
+      "w": 383
+     },
+     "thumb": {
+      "h": 150,
+      "resize": "crop",
+      "w": 150
+     }
+    },
+    "type": "photo"
+   }
+  ],
+  "photos": [
+   {
+    "expandedUrl": "https://x.example.invalid/alexquote/status/1800000000000000099/photo/1",
+    "url": "https://pbs.example.invalid/media/sample001.jpg",
+    "width": 600,
+    "height": 900
+   }
+  ]
+ },
+ "retweet_count": 7
+}
