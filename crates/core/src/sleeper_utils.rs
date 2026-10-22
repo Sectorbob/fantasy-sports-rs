@@ -6,22 +6,22 @@ use std::{collections::HashMap, error::Error, ops::Range};
 
 const START_WEEK: usize = 1;
 
-pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
+/// Developer harness: prints a tour of what the Sleeper client can fetch for `user` and the given leagues.
+pub async fn exec(user: &str, league_ids: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let force_update = false;
     let sport = Sport::NFL;
     let client = Client::new(); //.with_cache(cache_dir);
     let players = client.fetch_all_players(&sport).await?;
     check_trending_players(&players, &client, &sport).await;
     log::debug!("Sport: {sport}");
-    let user = client.get_user("sectorbob").await.unwrap();
+    let user = client.get_user(user).await?;
     log::debug!("User: {user:#?}");
-    check_all_leagues_in(&client, "2019", &user, &sport).await;
-    check_all_leagues_in(&client, "2024", &user, &sport).await;
-    check_all_ecr_leagues(&client).await;
-    let league = client
-        .get_league(&String::from("4581480575134427121"))
-        .await
-        .unwrap();
+    let Some(first_league_id) = league_ids.first() else {
+        return Err("pass at least one sleeper league id".into());
+    };
+    check_all_ecr_leagues(&client, league_ids).await;
+    let league = client.get_league(first_league_id).await?;
+    check_all_leagues_in(&client, &league.season, &user, &sport).await;
     let owners_future = client.get_users_for_league(&league.league_id);
     let rosters_future = client.get_rosters_in_league(&league.league_id);
 
@@ -64,7 +64,7 @@ pub async fn exec() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => eprintln!("Error checking league matchups: {}", e),
     }
-    check_transactions(&client, &String::from("4581480575134427121"), &sport).await;
+    check_transactions(&client, first_league_id, &sport).await;
 
     Ok(())
 }
@@ -149,16 +149,7 @@ async fn check_trending_players(players: &HashMap<String, Player>, client: &Clie
     }
 }
 
-async fn check_all_ecr_leagues(client: &Client) {
-    let ecr_league_ids = vec![
-        "4581480575134427121", // 2024
-        "383786432088067320",  // 2023
-        "323299806782982483",  // 2022
-        "652490366221046118",  // 2021
-        "121226934266994911",  // 2020
-        "164974877262287888",  // 2019
-    ];
-
+async fn check_all_ecr_leagues(client: &Client, ecr_league_ids: &[String]) {
     for league_id in ecr_league_ids {
         let league = client.get_league(&String::from(league_id)).await.unwrap();
         println!(
@@ -335,39 +326,4 @@ pub async fn get_league_transactions(
         }
     }
     Ok(transactions)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_check_league_matchups_runs_without_panic() {
-        let force_update = false;
-        let client = Client::new()
-            .with_cache("cache/sleeper")
-            .await
-            .expect("failed to open cache");
-        let league_ids = vec![
-            "4581480575134427121", // 2024
-            "383786432088067320",  // 2023
-            "323299806782982483",  // 2022
-            "652490366221046118",  // 2021
-            "121226934266994911",  // 2020
-            "164974877262287888",  // 2019
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<String>>();
-
-        // This test checks that the function runs without panicking.
-        // It uses dummy values and expects the function to handle errors gracefully.
-
-        for league_id in league_ids.iter() {
-            let league = client.get_league(league_id).await.unwrap();
-            let _matchups = get_league_matchups(&league, &client /*&players*/, &force_update)
-                .await
-                .unwrap();
-        }
-    }
 }
