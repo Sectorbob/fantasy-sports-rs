@@ -215,9 +215,10 @@ impl Handler {
         ctx: &Context,
         msg: &Message,
     ) -> Result<(), ECRError> {
-        let standings = Standings::from_sleeper(self.league_id()?).await?;
+        let league_id = self.league_id()?;
+        let standings = Standings::from_sleeper(league_id).await?;
         let order = standings.randomize_bucketed_draft_order();
-        let text_report = Standings::visualize_draft_order(order).await?;
+        let text_report = Standings::visualize_draft_order(league_id, order).await?;
         send_as_code(&ctx, &msg, text_report).await;
         Ok(())
     }
