@@ -304,7 +304,7 @@ mod tests {
             .await;
 
         let response = client
-            .get_leagues_for_user("user_a271a94dea@example.com", None, None)
+            .get_leagues_for_user("user@example.com", None, None)
             .await
             .expect("request failed");
 
@@ -326,7 +326,7 @@ mod tests {
             .await;
 
         let response = client
-            .get_leagues_for_user("user_a271a94dea@example.com", None, None)
+            .get_leagues_for_user("user@example.com", None, None)
             .await
             .expect("request failed");
 
@@ -591,7 +591,7 @@ mod tests {
     //     let fixture = Client::new();
 
     //     let response = fixture
-    //         .get("/FetchUserLeagues?email=user_a271a94dea@example.com")
+    //         .get("/FetchUserLeagues?email=user@example.com")
     //         .await
     //         .expect("request failed");
 
