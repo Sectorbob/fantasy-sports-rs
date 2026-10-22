@@ -947,6 +947,7 @@ dependencies = [
  "fantasy-sports-fleaflicker",
  "fantasy-sports-sleeper",
  "fantasy-sports-yahoo",
+ "flate2",
  "futures",
  "log",
  "serde",

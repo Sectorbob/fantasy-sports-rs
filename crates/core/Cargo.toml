@@ -27,4 +27,5 @@ walkdir.workspace = true
 fantasy-sports-yahoo.workspace = true
 
 [dev-dependencies]
+flate2.workspace = true
 wiremock.workspace = true

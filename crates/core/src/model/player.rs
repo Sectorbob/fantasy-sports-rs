@@ -119,6 +119,14 @@ pub enum PlayerPosition {
     P,
     CB,
     S,
+    /// offensive line: tackles, guards and centers
+    OL,
+    /// defensive backs that are not specifically a cornerback or safety
+    DB,
+    /// defensive line that is not specifically an end or tackle
+    DL,
+    /// anything that has no fantasy position of its own (coaches, athletes, long snappers, ...)
+    Other,
 }
 impl fmt::Display for PlayerPosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -137,6 +145,10 @@ impl fmt::Display for PlayerPosition {
             PlayerPosition::P => "P",
             PlayerPosition::CB => "CB",
             PlayerPosition::S => "S",
+            PlayerPosition::OL => "OL",
+            PlayerPosition::DB => "DB",
+            PlayerPosition::DL => "DL",
+            PlayerPosition::Other => "Other",
         };
         write!(f, "{}", s)
     }
@@ -165,32 +177,31 @@ impl From<&sleeper::Position> for PlayerPosition {
             sleeper::Position::DEF => PlayerPosition::DEF,
             sleeper::Position::DST => PlayerPosition::DEF,
             sleeper::Position::FB => PlayerPosition::RB, // map FB to RB
+            sleeper::Position::KP => PlayerPosition::K,
+            sleeper::Position::TEAM => PlayerPosition::DEF,
 
             sleeper::Position::CB => PlayerPosition::CB,
             sleeper::Position::DE => PlayerPosition::DE,
-            sleeper::Position::DT => PlayerPosition::DT,
-            sleeper::Position::LB => PlayerPosition::LB,
-            sleeper::Position::S => PlayerPosition::S,
-            sleeper::Position::FS => PlayerPosition::S,
-            sleeper::Position::SS => PlayerPosition::S,
+            sleeper::Position::DT | sleeper::Position::NT => PlayerPosition::DT,
+            sleeper::Position::LB | sleeper::Position::ILB | sleeper::Position::OLB => {
+                PlayerPosition::LB
+            }
+            sleeper::Position::LEO => PlayerPosition::EDR, // a hybrid end / outside linebacker
+            sleeper::Position::S | sleeper::Position::FS | sleeper::Position::SS => {
+                PlayerPosition::S
+            }
             sleeper::Position::P => PlayerPosition::P,
-            _ => panic!("Unsupported Sleeper position: {value:?}",),
-            // sleeper::Position::DB => todo!(),
-            // sleeper::Position::DL => todo!(),
-            // sleeper::Position::OL => todo!(),
-            // sleeper::Position::HC => todo!(),
-            // sleeper::Position::T => todo!(),
-            // sleeper::Position::OT => todo!(),
-            // sleeper::Position::OG => todo!(),
-            // sleeper::Position::G => todo!(),
-            // sleeper::Position::C => todo!(),
-            // sleeper::Position::LS => todo!(),
-            // sleeper::Position::ILB => todo!(),
-            // sleeper::Position::NT => todo!(),
-            // sleeper::Position::OLB => todo!(),
-            // sleeper::Position::LEO => todo!(),
-            // sleeper::Position::ATH => todo!(),
-            // sleeper::Position::KP => todo!(),
+            sleeper::Position::DB => PlayerPosition::DB,
+            sleeper::Position::DL => PlayerPosition::DL,
+            sleeper::Position::OL
+            | sleeper::Position::T
+            | sleeper::Position::OT
+            | sleeper::Position::OG
+            | sleeper::Position::G
+            | sleeper::Position::C => PlayerPosition::OL,
+            sleeper::Position::HC | sleeper::Position::LS | sleeper::Position::ATH => {
+                PlayerPosition::Other
+            }
         }
     }
 }
@@ -214,10 +225,178 @@ impl FromStr for PlayerPosition {
             "P" => Ok(PlayerPosition::P),
             "CB" => Ok(PlayerPosition::CB),
             "S" => Ok(PlayerPosition::S),
+            "OL" => Ok(PlayerPosition::OL),
+            "DB" => Ok(PlayerPosition::DB),
+            "DL" => Ok(PlayerPosition::DL),
+            "Other" => Ok(PlayerPosition::Other),
             other => {
                 log::error!("invalid player position: {other}");
                 Err("Invalid player position")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    /// every position name Sleeper uses, as it appears on the wire
+    const SLEEPER_POSITIONS: [&str; 33] = [
+        "QB", "RB", "WR", "TE", "K", "DEF", "DST", "LB", "DB", "DL", "OL", "P", "HC", "CB", "S",
+        "FS", "SS", "DE", "DT", "T", "OT", "OG", "G", "C", "LS", "ILB", "NT", "FB", "OLB", "LEO",
+        "ATH", "K/P", "TEAM",
+    ];
+
+    const ALL_POSITIONS: [PlayerPosition; 18] = [
+        PlayerPosition::QB,
+        PlayerPosition::RB,
+        PlayerPosition::WR,
+        PlayerPosition::TE,
+        PlayerPosition::K,
+        PlayerPosition::DEF,
+        PlayerPosition::LB,
+        PlayerPosition::EDR,
+        PlayerPosition::DE,
+        PlayerPosition::IL,
+        PlayerPosition::DT,
+        PlayerPosition::P,
+        PlayerPosition::CB,
+        PlayerPosition::S,
+        PlayerPosition::OL,
+        PlayerPosition::DB,
+        PlayerPosition::DL,
+        PlayerPosition::Other,
+    ];
+
+    fn sleeper_position(name: &str) -> sleeper::Position {
+        serde_json::from_str(&format!("\"{name}\"")).expect("a Sleeper position")
+    }
+
+    #[test]
+    fn every_sleeper_position_converts_instead_of_panicking() {
+        for name in SLEEPER_POSITIONS {
+            let _ = PlayerPosition::from(&sleeper_position(name));
+        }
+    }
+
+    #[test]
+    fn related_sleeper_positions_share_a_core_position() {
+        let to = |name: &str| PlayerPosition::from(&sleeper_position(name));
+        assert_eq!(PlayerPosition::DEF, to("DST"));
+        assert_eq!(PlayerPosition::DEF, to("TEAM"));
+        assert_eq!(PlayerPosition::RB, to("FB"));
+        assert_eq!(PlayerPosition::K, to("K/P"));
+        for name in ["T", "OT", "OG", "G", "C", "OL"] {
+            assert_eq!(PlayerPosition::OL, to(name), "{name}");
+        }
+        for name in ["FS", "SS", "S"] {
+            assert_eq!(PlayerPosition::S, to(name), "{name}");
+        }
+        for name in ["ILB", "OLB", "LB"] {
+            assert_eq!(PlayerPosition::LB, to(name), "{name}");
+        }
+        assert_eq!(PlayerPosition::Other, to("HC"));
+    }
+
+    #[test]
+    fn the_whole_recorded_sleeper_player_universe_converts() {
+        // this used to panic on the first offensive lineman
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../sleeper/testdata/players_nfl.json.gz"
+        );
+        let mut json = String::new();
+        flate2::read::GzDecoder::new(std::fs::File::open(path).unwrap())
+            .read_to_string(&mut json)
+            .unwrap();
+        let players: std::collections::HashMap<String, sleeper::Player> =
+            serde_json::from_str(&json).unwrap();
+        assert!(players.len() > 10_000);
+
+        let converted: Vec<Player> = players.values().map(Player::from).collect();
+
+        assert_eq!(players.len(), converted.len());
+        assert!(
+            converted
+                .iter()
+                .any(|p| p.positions == [PlayerPosition::OL])
+        );
+    }
+
+    #[test]
+    fn positions_round_trip_through_their_text_form() {
+        for position in ALL_POSITIONS {
+            assert_eq!(
+                Ok(position.clone()),
+                position.to_string().parse(),
+                "{position}"
+            );
+        }
+        assert!("QUARTERBACK".parse::<PlayerPosition>().is_err());
+        assert!(
+            "qb".parse::<PlayerPosition>().is_err(),
+            "positions are case sensitive"
+        );
+    }
+
+    #[test]
+    fn yahoo_positions_map_one_to_one() {
+        for (yahoo_position, expected) in [
+            (yahoo::PlayerPosition::QB, PlayerPosition::QB),
+            (yahoo::PlayerPosition::RB, PlayerPosition::RB),
+            (yahoo::PlayerPosition::WR, PlayerPosition::WR),
+            (yahoo::PlayerPosition::TE, PlayerPosition::TE),
+            (yahoo::PlayerPosition::K, PlayerPosition::K),
+            (yahoo::PlayerPosition::DEF, PlayerPosition::DEF),
+        ] {
+            assert_eq!(expected, PlayerPosition::from(&yahoo_position));
+        }
+    }
+
+    #[test]
+    fn a_missing_player_says_so_and_displays_without_a_team() {
+        let player = Player::missing(&"42".to_string());
+        assert_eq!("42", player._id);
+        assert_eq!("Missing Player (42)", player.name);
+        assert_eq!("[] Missing Player (42) ", player.to_string());
+    }
+
+    #[test]
+    fn a_player_displays_positions_name_and_team() {
+        let player = Player {
+            _id: "1".into(),
+            name: "Casey Catcher".into(),
+            positions: vec![PlayerPosition::WR, PlayerPosition::TE],
+            irl_team: Some("EXR".into()),
+        };
+        assert_eq!("[WR,TE] Casey Catcher EXR", player.to_string());
+    }
+
+    #[test]
+    fn a_fleaflicker_player_gets_sorted_unique_positions() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fleaflicker/testdata/league_rosters.json"
+        );
+        let response: fleaflicker::FetchRostersResponse =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let mut pro_player = response.rosters[0].players[0].pro_player.clone();
+        pro_player.position_eligibility = vec!["WR".into(), "TE".into(), "WR".into(), "??".into()];
+
+        let player = Player::from(&pro_player);
+
+        assert_eq!(pro_player.id.to_string(), player._id);
+        assert_eq!(pro_player.name_full, player.name);
+        assert_eq!(
+            Some(pro_player.pro_team_abbreviation.clone()),
+            player.irl_team
+        );
+        // duplicates collapse, unknown positions are dropped, the rest is in name order
+        assert_eq!(
+            vec![PlayerPosition::TE, PlayerPosition::WR],
+            player.positions
+        );
     }
 }
