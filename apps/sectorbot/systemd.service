@@ -6,10 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/workspace/rust-projects/sectorbot
-ExecStart=%h/.cargo/bin/cargo run
+ExecStart=%h/workspace/rust-projects/sectorbot/target/debug/sectorbot
 Restart=on-failure
 RestartSec=5
-Environment=WORKDIR=%h/projects/sectorbot
+Environment=WORKDIR=%h/rust-projects/sectorbot
 
 [Install]
 WantedBy=default.target
