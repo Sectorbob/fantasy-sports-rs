@@ -113,7 +113,7 @@ impl Service {
                 .map(sleeper::User::clone)
                 .unwrap_or_else(|| {
                     log::warn!("for some reason, we could not find the user info {user_id:?} for roster({roster_id})",
-                        user_id = roster.owner_id, 
+                        user_id = roster.owner_id,
                         roster_id = roster.roster_id,
                     );
                     sleeper::User {
