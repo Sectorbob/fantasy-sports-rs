@@ -1,5 +1,5 @@
 [package]
-name = "fleaflicker-fantasy-rs"
+name = "fantasy-sports-fleaflicker"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ description = "Rust client for the Fleaflicker fantasy sports API"
 
 [dependencies]
 async-trait.workspace = true
-cached-client-rs.workspace = true
+fantasy-sports-cache.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 directories.workspace = true
 log.workspace = true

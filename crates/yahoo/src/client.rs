@@ -7,7 +7,7 @@ use crate::{
     },
     token,
 };
-use cached_client_rs::{Request, RequestContext, ResponseBodyFormat};
+use fantasy_sports_cache::{Request, RequestContext, ResponseBodyFormat};
 use chrono::{NaiveDate, Utc};
 use core::str;
 use itertools::join;
@@ -31,7 +31,7 @@ const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fa
 pub struct Client {
     base_url: String,
     auth_token_client: reqwest::Client,
-    cached_client: cached_client_rs::Client,
+    cached_client: fantasy_sports_cache::Client,
     /// this client is responsible for generating the oauth request token url
     client_no_redirects: reqwest::Client,
     pub client_id: String,
@@ -58,7 +58,7 @@ impl Client {
                 .user_agent(USER_AGENT)
                 .build()
                 .expect("dev error creating auth url http client for yahoo client"),
-            cached_client: cached_client_rs::Client::new(YAHOO_FANTASY_API_BASE_URL.to_string())
+            cached_client: fantasy_sports_cache::Client::new(YAHOO_FANTASY_API_BASE_URL.to_string())
                 .with_http_client(
                     reqwest::Client::builder()
                         .user_agent(USER_AGENT)
@@ -89,7 +89,7 @@ impl Client {
     pub async fn with_cache_dir<D: Into<PathBuf>>(
         mut self,
         cache_dir: D,
-    ) -> Result<Self, cached_client_rs::Error> {
+    ) -> Result<Self, fantasy_sports_cache::Error> {
         self.cached_client = self.cached_client.with_cache(cache_dir)?;
         Ok(self)
     }
@@ -335,11 +335,11 @@ impl Client {
             .with_bearer_auth(token.access_token.as_str());
         req.send().await.map_err(|err| {
             match err {
-                cached_client_rs::Error::CacheError(error) => {
+                fantasy_sports_cache::Error::CacheError(error) => {
                     Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
 
-                cached_client_rs::Error::ClientError { status: status_code, body } => {
+                fantasy_sports_cache::Error::ClientError { status: status_code, body } => {
                     let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>(&body)
                         .inspect_err(|err| {
                             log::warn!(
@@ -390,16 +390,16 @@ impl Client {
                         Error::UnknownError(format!("Got client error ({status_code})"))
                     }
                 }
-                cached_client_rs::Error::DevError(dev_err) => {
+                fantasy_sports_cache::Error::DevError(dev_err) => {
                     Error::UnknownError(format!("got dev error from cached_client: {dev_err}"))
                 }
 
-                cached_client_rs::Error::ReqwestError(error) => {
+                fantasy_sports_cache::Error::ReqwestError(error) => {
                     Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
 
-                cached_client_rs::Error::NotFound(_) => Error::NotFound,
-                cached_client_rs::Error::SerdeError(serde_error) => Error::UnknownError(format!(
+                fantasy_sports_cache::Error::NotFound(_) => Error::NotFound,
+                fantasy_sports_cache::Error::SerdeError(serde_error) => Error::UnknownError(format!(
                     "failed to deserialize response body: {serde_error:?}"
                 )),
             }

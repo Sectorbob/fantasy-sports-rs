@@ -208,26 +208,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "cached-client-rs"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "log",
- "quick-xml 0.38.4",
- "reqwest",
- "rmp-serde",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "wiremock",
-]
-
-[[package]]
 name = "camino"
 version = "1.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -785,47 +765,125 @@ dependencies = [
 ]
 
 [[package]]
-name = "fantasy-cli"
+name = "fantasy-sports"
+version = "0.1.0"
+
+[[package]]
+name = "fantasy-sports-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "log",
+ "quick-xml 0.38.4",
+ "reqwest",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "fantasy-sports-cli"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "crossterm 0.29.0",
  "dirs",
- "fantasy-core-rs",
+ "fantasy-sports-core",
+ "fantasy-sports-sleeper",
+ "fantasy-sports-yahoo",
  "flexi_logger",
  "futures",
  "log",
  "serde",
  "serde_json",
- "sleeper-fantasy-rs",
  "thiserror 2.0.21",
  "tokio",
  "tui",
- "yahoo-fantasy-rs",
 ]
 
 [[package]]
-name = "fantasy-core-rs"
+name = "fantasy-sports-core"
 version = "0.1.0"
 dependencies = [
- "cached-client-rs",
  "chrono",
- "fleaflicker-fantasy-rs",
+ "fantasy-sports-cache",
+ "fantasy-sports-fleaflicker",
+ "fantasy-sports-sleeper",
+ "fantasy-sports-yahoo",
  "futures",
  "log",
  "serde",
  "serde_json",
  "sled",
- "sleeper-fantasy-rs",
  "thiserror 2.0.21",
  "tokio",
  "walkdir",
- "yahoo-fantasy-rs",
 ]
 
 [[package]]
-name = "fantasy-sports"
+name = "fantasy-sports-fleaflicker"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "directories",
+ "fantasy-sports-cache",
+ "flate2",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "fantasy-sports-sleeper"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "directories",
+ "fantasy-sports-cache",
+ "flate2",
+ "log",
+ "rand 0.9.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "fantasy-sports-yahoo"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "fantasy-sports-cache",
+ "itertools",
+ "log",
+ "pkce",
+ "quick-xml 0.38.4",
+ "reqwest",
+ "serde",
+ "serde-xml-rs",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "tokio",
+ "wiremock",
+]
 
 [[package]]
 name = "fastrand"
@@ -848,25 +906,6 @@ dependencies = [
  "crc32fast",
  "miniz_oxide",
  "zlib-rs",
-]
-
-[[package]]
-name = "fleaflicker-fantasy-rs"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "cached-client-rs",
- "chrono",
- "directories",
- "flate2",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.21",
- "tokio",
- "wiremock",
 ]
 
 [[package]]
@@ -2387,11 +2426,13 @@ name = "sectorbot"
 version = "0.1.0"
 dependencies = [
  "axum",
- "cached-client-rs",
  "chrono",
  "chrono-tz",
  "dotenv",
- "fantasy-core-rs",
+ "fantasy-sports-cache",
+ "fantasy-sports-core",
+ "fantasy-sports-sleeper",
+ "fantasy-sports-yahoo",
  "flate2",
  "html-escape",
  "log",
@@ -2407,12 +2448,10 @@ dependencies = [
  "serde_json",
  "serenity",
  "sled",
- "sleeper-fantasy-rs",
  "thiserror 2.0.21",
  "tokio",
  "tracing-subscriber",
  "wiremock",
- "yahoo-fantasy-rs",
 ]
 
 [[package]]
@@ -2719,24 +2758,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
-]
-
-[[package]]
-name = "sleeper-fantasy-rs"
-version = "0.1.0"
-dependencies = [
- "cached-client-rs",
- "chrono",
- "directories",
- "flate2",
- "log",
- "rand 0.9.5",
- "reqwest",
- "serde",
- "serde_json",
- "serde_repr",
- "tokio",
- "wiremock",
 ]
 
 [[package]]
@@ -3755,27 +3776,6 @@ name = "xml"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f45bb2c13fec6a6cb4c0f76a7e94839e110a14ec803ec2940777a94c347bc52"
-
-[[package]]
-name = "yahoo-fantasy-rs"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "cached-client-rs",
- "chrono",
- "itertools",
- "log",
- "pkce",
- "quick-xml 0.38.4",
- "reqwest",
- "serde",
- "serde-xml-rs",
- "serde_json",
- "sha2",
- "thiserror 2.0.21",
- "tokio",
- "wiremock",
-]
 
 [[package]]
 name = "yoke"

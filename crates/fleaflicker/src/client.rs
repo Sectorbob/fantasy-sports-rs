@@ -2,13 +2,13 @@ use crate::{
     BoxScore, Draftboard, FetchRostersResponse, LeagueActivityItem, LeagueRules, LeagueStandings,
     LeaguesForUserResponse, ResponseList, Sport,
 };
-use cached_client_rs::{Error, RequestContext, ResponseBodyFormat};
+use fantasy_sports_cache::{Error, RequestContext, ResponseBodyFormat};
 use std::path::PathBuf;
 
 const DEFAULT_BASE_URL: &str = "https://www.fleaflicker.com/api";
 
 pub struct Client {
-    client: cached_client_rs::Client,
+    client: fantasy_sports_cache::Client,
 }
 impl Default for Client {
     fn default() -> Self {
@@ -19,7 +19,7 @@ impl Default for Client {
 impl Client {
     pub fn new() -> Self {
         Client {
-            client: cached_client_rs::Client::new(DEFAULT_BASE_URL.to_string()),
+            client: fantasy_sports_cache::Client::new(DEFAULT_BASE_URL.to_string()),
         }
     }
 
@@ -31,7 +31,7 @@ impl Client {
     pub async fn with_cache<T: Into<PathBuf>>(
         mut self,
         cache_dir: T,
-    ) -> Result<Self, cached_client_rs::Error> {
+    ) -> Result<Self, fantasy_sports_cache::Error> {
         self.client = self.client.with_cache(cache_dir)?;
         Ok(self)
     }

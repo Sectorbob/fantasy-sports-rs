@@ -13,11 +13,11 @@ authors = ["Kyle Heide <dev@sectorbob.net>"]
 
 [workspace.dependencies]
 # workspace members
-cached-client-rs = { path = "crates/cache", version = "0.1.0" }
-sleeper-fantasy-rs = { path = "crates/sleeper", version = "0.1.0" }
-yahoo-fantasy-rs = { path = "crates/yahoo", version = "0.1.0" }
-fleaflicker-fantasy-rs = { path = "crates/fleaflicker", version = "0.1.0" }
-fantasy-core-rs = { path = "crates/core", version = "0.1.0" }
+fantasy-sports-cache = { path = "crates/cache", version = "0.1.0" }
+fantasy-sports-sleeper = { path = "crates/sleeper", version = "0.1.0" }
+fantasy-sports-yahoo = { path = "crates/yahoo", version = "0.1.0" }
+fantasy-sports-fleaflicker = { path = "crates/fleaflicker", version = "0.1.0" }
+fantasy-sports-core = { path = "crates/core", version = "0.1.0" }
 
 # third party (single place to bump versions)
 async-trait = "0.1.89"

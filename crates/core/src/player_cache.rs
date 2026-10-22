@@ -2,9 +2,9 @@ use crate as core;
 use chrono::{DateTime, Duration, Utc};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 use std::path::Path;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 const SLEEPER_PLAYER_TTL: Duration = Duration::hours(24);
 const DEFAULT_CACHE_DIR: &'static str = "players";
@@ -263,25 +263,25 @@ impl Error {
         }
     }
 }
-impl From<cached_client_rs::Error> for Error {
-    fn from(value: cached_client_rs::Error) -> Self {
+impl From<fantasy_sports_cache::Error> for Error {
+    fn from(value: fantasy_sports_cache::Error) -> Self {
         match value {
-            cached_client_rs::Error::CacheError(cache_err) => {
+            fantasy_sports_cache::Error::CacheError(cache_err) => {
                 Error::DevError(format!("cache error: {cache_err:?}"))
             }
-            cached_client_rs::Error::ClientError { status: status_code, .. } => {
+            fantasy_sports_cache::Error::ClientError { status: status_code, .. } => {
                 Error::DevError(format!("http client error: {status_code}"))
             }
-            cached_client_rs::Error::DevError(msg) => Error::DevError(msg),
-            cached_client_rs::Error::ReqwestError(error) => {
+            fantasy_sports_cache::Error::DevError(msg) => Error::DevError(msg),
+            fantasy_sports_cache::Error::ReqwestError(error) => {
                 Error::DevError(format!("reqwest error: {error:?}"))
             }
-            cached_client_rs::Error::NotFound(_) => Error::NotFound,
-            cached_client_rs::Error::SerdeError(serde_error) => match serde_error {
-                cached_client_rs::SerdeError::JsonError(json_err) => {
+            fantasy_sports_cache::Error::NotFound(_) => Error::NotFound,
+            fantasy_sports_cache::Error::SerdeError(serde_error) => match serde_error {
+                fantasy_sports_cache::SerdeError::JsonError(json_err) => {
                     Error::SerializationError(json_err)
                 }
-                cached_client_rs::SerdeError::XMLError(de_error) => todo!(),
+                fantasy_sports_cache::SerdeError::XMLError(de_error) => todo!(),
             },
         }
     }

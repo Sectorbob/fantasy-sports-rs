@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use sleeper_fantasy_rs::{
+use fantasy_sports_sleeper::{
     Client, League, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
 };
 use std::{collections::HashMap, error::Error, ops::Range};
@@ -126,7 +126,7 @@ async fn check_trending_players(players: &HashMap<String, Player>, client: &Clie
     println!("Player Count: {}", players.iter().count());
 
     let trending_players = client
-        .get_trending_players(&sport, sleeper_fantasy_rs::TrendType::ADD, None, Some(100))
+        .get_trending_players(&sport, fantasy_sports_sleeper::TrendType::ADD, None, Some(100))
         .await
         .unwrap();
     println!("Trending Count: {}", trending_players.iter().count());
@@ -284,7 +284,7 @@ pub async fn get_league_transactions(
     client: &Client,
     league: &League,
     force_update: &bool,
-) -> Result<Vec<Transaction>, cached_client_rs::Error> {
+) -> Result<Vec<Transaction>, fantasy_sports_cache::Error> {
     let weeks_to_scan = determine_weeks_to_scan(league);
 
     let transactions_for_week_futures = weeks_to_scan
@@ -295,7 +295,7 @@ pub async fn get_league_transactions(
                 .with_force_update(&force_update)
                 .send()
                 .map(move |res| {
-                    let result: Result<(usize, Vec<Transaction>), cached_client_rs::Error> =
+                    let result: Result<(usize, Vec<Transaction>), fantasy_sports_cache::Error> =
                         match res {
                             Ok(raw_txns) => Ok((week, raw_txns)),
                             Err(e) => {

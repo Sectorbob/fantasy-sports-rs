@@ -1,4 +1,4 @@
-use fantasy_core_rs as core;
+use fantasy_sports_core as core;
 use std::io::Stdout;
 use tui::{
     backend::CrosstermBackend,
@@ -74,7 +74,7 @@ impl DraftPicksWidget {
         f.render_widget(table, area);
     }
 
-    // fn player_cell(&self, player_move: &fantasy_core_rs::PlayerMove) -> Spans {
+    // fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Spans {
     //     let player_id = player_move.player_id();
     //     if let Some(player) = self.players.get(&player_id) {
     //         let mut spans = vec![Span::raw(format!("{} [", player.name))];

@@ -1,5 +1,5 @@
-use sleeper_fantasy_rs as sleeper;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug, PartialEq)]
 pub enum ScoringSettings {
@@ -214,7 +214,7 @@ impl From<&sleeper::ScoringSettings> for ScoringSettings {
     fn from(value: &sleeper::ScoringSettings) -> Self {
         {
             match value {
-                sleeper_fantasy_rs::ScoringSettings::Football {
+                fantasy_sports_sleeper::ScoringSettings::Football {
                     pass_2pt,
                     pass_int,
                     pass_yd,
@@ -332,7 +332,7 @@ impl From<&sleeper::ScoringSettings> for ScoringSettings {
                     bonus_rush_40p: rush_40p.clone(),
                     bonus_rec_40p: rec_40p.clone(),
                 },
-                sleeper_fantasy_rs::ScoringSettings::Basketball {
+                fantasy_sports_sleeper::ScoringSettings::Basketball {
                     pts: _,
                     ast: _,
                     reb: _,
@@ -566,7 +566,7 @@ impl From<yahoo::Settings> for ScoringSettings {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use yahoo_fantasy_rs as yahoo;
+    use fantasy_sports_yahoo as yahoo;
 
     use crate::{LeagueSettings, ScoringSettings};
 

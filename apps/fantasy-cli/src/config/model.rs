@@ -1,4 +1,4 @@
-use fantasy_core_rs::ExternalId;
+use fantasy_sports_core::ExternalId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ConfigModel {

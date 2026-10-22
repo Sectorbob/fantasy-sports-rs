@@ -2,13 +2,13 @@ use std::{
     collections::{HashMap, HashSet}, env::VarError, path, sync::Arc, u64
 };
 
-use cached_client_rs::Error as CachedClientError;
+use fantasy_sports_cache::Error as CachedClientError;
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
 use serde::{Deserialize, Serialize};
 use serenity::all::{
     Colour, EditMember, EditRole, GuildId, Http, Member, Permissions, Role, RoleId, UserId,
 };
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 
 use crate::{
     ecr::keepers::{Keepable, KeepablesReport, get_keeper_status, get_player_history},
@@ -19,8 +19,8 @@ use crate::{
 pub const SPORT: sleeper::Sport = sleeper::Sport::NFL;
 
 pub struct Service {
-    sleeper_cli: sleeper_fantasy_rs::Client,
-    yahoo_fantasy_cli: yahoo_fantasy_rs::Client,
+    sleeper_cli: fantasy_sports_sleeper::Client,
+    yahoo_fantasy_cli: fantasy_sports_yahoo::Client,
     fantasypros_cli: fantasypros::Client,
     store: Arc<DataStore>,
 }
@@ -30,8 +30,8 @@ impl Service {
         let sleeper_cache_dir = cache_dir.join("sleeper");
         let yahoo_cache_dir = cache_dir.join("yahoo");
         Ok(Service {
-            sleeper_cli: sleeper_fantasy_rs::Client::new()/*.with_cache(sleeper_cache_dir).await?*/,
-            yahoo_fantasy_cli: yahoo_fantasy_rs::Client::new_from_env()?,
+            sleeper_cli: fantasy_sports_sleeper::Client::new()/*.with_cache(sleeper_cache_dir).await?*/,
+            yahoo_fantasy_cli: fantasy_sports_yahoo::Client::new_from_env()?,
                 // .with_cache_dir(yahoo_cache_dir).await?
                 // .with_token_file::<String>(None).await?,
             fantasypros_cli: fantasypros::Client::new(),
@@ -566,10 +566,10 @@ pub enum ECRError {
     DatastoreError(#[from] store::DataStoreError),
 
     #[error("yahoo error: {0}")]
-    YahooError(#[from] yahoo_fantasy_rs::Error),
+    YahooError(#[from] fantasy_sports_yahoo::Error),
 
     #[error("yahoo token error: {0}")]
-    YahooTokenError(#[from] yahoo_fantasy_rs::token::Error),
+    YahooTokenError(#[from] fantasy_sports_yahoo::token::Error),
 
     #[error("env variable error: {0}")]
     EnvVarError(#[from] VarError),

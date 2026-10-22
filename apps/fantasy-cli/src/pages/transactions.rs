@@ -1,5 +1,5 @@
 use crate::{constants, helpers};
-use fantasy_core_rs::{self as core, PlayerMove};
+use fantasy_sports_core::{self as core, PlayerMove};
 use std::{
     collections::{HashMap, HashSet},
     io::Stdout,
@@ -136,7 +136,7 @@ impl TransactionsPage {
         f.render_widget(table, area);
     }
 
-    fn player_cell(&self, player_move: &fantasy_core_rs::PlayerMove) -> Spans {
+    fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Spans {
         let player_id = player_move.player_id();
         if let Some(player) = self.players.get(&player_id) {
             let mut spans = vec![Span::raw(format!("{} [", player.name))];

@@ -1,4 +1,4 @@
-# fleaflicker-fantasy-rs
+# fantasy-sports-fleaflicker
 consume fleaflicker fantasy apis in rust
 
 

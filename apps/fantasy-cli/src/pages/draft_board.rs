@@ -1,4 +1,4 @@
-use fantasy_core_rs::{self as core, DraftType};
+use fantasy_sports_core::{self as core, DraftType};
 use std::io::Stdout;
 use tui::{
     backend::CrosstermBackend,

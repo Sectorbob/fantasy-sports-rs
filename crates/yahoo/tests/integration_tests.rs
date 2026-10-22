@@ -5,7 +5,7 @@
 //! - `YAHOO_TOKEN_FILE` pointing at a token file produced by the auth flow
 //!   (see `notes/README.md`)
 
-use yahoo_fantasy_rs::{Client, GameCode};
+use fantasy_sports_yahoo::{Client, GameCode};
 
 #[tokio::test]
 #[ignore = "live: needs Yahoo credentials and a token file"]

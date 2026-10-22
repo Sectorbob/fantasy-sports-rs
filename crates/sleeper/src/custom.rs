@@ -2,7 +2,7 @@ use crate::{
     Client, PlayoffBracketEntry,
     data::{LeagueSettings, Matchup, Player, Roster, User},
 };
-use cached_client_rs::Error;
+use fantasy_sports_cache::Error;
 use rand::{rng, seq::SliceRandom as _};
 use std::collections::{HashMap, HashSet};
 

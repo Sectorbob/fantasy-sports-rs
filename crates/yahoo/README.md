@@ -1,4 +1,4 @@
-# yahoo-fantasy-rs
+# fantasy-sports-yahoo
 rust crate for consuming yahoo fantasy sports apis
 
 ### TODOs

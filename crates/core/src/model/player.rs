@@ -1,8 +1,8 @@
-use fleaflicker_fantasy_rs as fleaflicker;
+use fantasy_sports_fleaflicker as fleaflicker;
 use serde::{Deserialize, Serialize};
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 use std::{collections::HashSet, fmt, str::FromStr};
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Player {

@@ -1,16 +1,16 @@
-use fantasy_core_rs::LeagueAccessor;
+use fantasy_sports_core::LeagueAccessor;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
     io::{Error as IOError, ErrorKind},
 };
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
-use yahoo_fantasy_rs::{
+use fantasy_sports_yahoo::{
     Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
     Team, TeamStandings, Token, Transaction,
 };
 
-pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), yahoo_fantasy_rs::Error> {
+pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), fantasy_sports_yahoo::Error> {
     let enable_check_users = false;
     let enable_check_game = false;
     let enable_check_games = false;
@@ -26,7 +26,7 @@ pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), yahoo_fantasy_r
     debug!("Building Yahoo Fantasy Client...");
     let client = league_accessor
         .yahoo_cli
-        .ok_or(yahoo_fantasy_rs::Error::UnknownError(
+        .ok_or(fantasy_sports_yahoo::Error::UnknownError(
             "no yahoo_cli is set".to_string(),
         ))?;
     debug!("Yahoo Fantasy Client built");

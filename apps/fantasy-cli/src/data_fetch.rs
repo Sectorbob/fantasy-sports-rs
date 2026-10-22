@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use fantasy_core_rs::{self as core, ExternalId};
+use fantasy_sports_core::{self as core, ExternalId};
 use futures::{TryStreamExt, stream::FuturesUnordered};
-use sleeper_fantasy_rs::{self as sleeper};
-use yahoo_fantasy_rs::{self as yahoo};
+use fantasy_sports_sleeper::{self as sleeper};
+use fantasy_sports_yahoo::{self as yahoo};
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
@@ -100,7 +100,7 @@ async fn get_sleeper_leagues(
         let league_context = league_accessor
             .fetch_league_context(
                 &core::ExternalId {
-                    platform: fantasy_core_rs::Platform::Sleeper,
+                    platform: fantasy_sports_core::Platform::Sleeper,
                     id: sleeper_league.league_id.clone(),
                 },
                 false,
@@ -108,7 +108,7 @@ async fn get_sleeper_leagues(
             .await?;
 
         leagues.push(league_context.with_owner_id(ExternalId::new(
-            fantasy_core_rs::Platform::Sleeper,
+            fantasy_sports_core::Platform::Sleeper,
             sleeper_user_id.clone(),
         )));
     }
@@ -168,20 +168,20 @@ async fn get_yahoo_leagues(
             let league_ctx = league_accessor
                 .fetch_league_context(
                     &core::ExternalId {
-                        platform: fantasy_core_rs::Platform::Yahoo,
+                        platform: fantasy_sports_core::Platform::Yahoo,
                         id: league_key.to_string(),
                     },
                     false,
                 )
                 .await?;
 
-            Ok::<core::League, fantasy_core_rs::Error>(league_ctx)
+            Ok::<core::League, fantasy_sports_core::Error>(league_ctx)
         });
     }
     while let Some(yahoo_league) = yahoo_teams_tasks.try_next().await? {
         if let Some(user_guid) = &yahoo_user_guid {
             leagues.push(yahoo_league.with_owner_id(ExternalId {
-                platform: fantasy_core_rs::Platform::Yahoo,
+                platform: fantasy_sports_core::Platform::Yahoo,
                 id: user_guid.clone(),
             }));
         } else {

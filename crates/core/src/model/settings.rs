@@ -1,8 +1,8 @@
 use crate::ScoringSettings;
 use chrono::{DateTime, NaiveDate, Utc};
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 use std::fmt;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug)]
 pub struct LeagueSettings {
@@ -235,8 +235,8 @@ impl From<sleeper::WaiverType> for WaiverType {
 impl From<&yahoo::WaiverType> for WaiverType {
     fn from(value: &yahoo::WaiverType) -> Self {
         match value {
-            yahoo_fantasy_rs::WaiverType::FR => WaiverType::FAAB,
-            yahoo_fantasy_rs::WaiverType::R => WaiverType::RollingWaivers,
+            fantasy_sports_yahoo::WaiverType::FR => WaiverType::FAAB,
+            fantasy_sports_yahoo::WaiverType::R => WaiverType::RollingWaivers,
         }
     }
 }

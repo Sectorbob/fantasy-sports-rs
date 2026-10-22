@@ -1,5 +1,5 @@
 [package]
-name = "fantasy-cli"
+name = "fantasy-sports-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,18 +9,22 @@ authors.workspace = true
 description = "Terminal UI for browsing your fantasy sports leagues"
 publish = false  # decided before the first release
 
+[[bin]]
+name = "fantasy-cli"
+path = "src/main.rs"
+
 [dependencies]
 chrono.workspace = true
 crossterm.workspace = true
 dirs.workspace = true
-fantasy-core-rs.workspace = true
+fantasy-sports-core.workspace = true
 flexi_logger.workspace = true
 futures.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sleeper-fantasy-rs.workspace = true
+fantasy-sports-sleeper.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tui.workspace = true
-yahoo-fantasy-rs.workspace = true
+fantasy-sports-yahoo.workspace = true

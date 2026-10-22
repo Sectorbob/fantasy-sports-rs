@@ -1,12 +1,12 @@
 use std::{fmt, str::FromStr};
 
-use fleaflicker_fantasy_rs as fleaflicker;
+use fantasy_sports_fleaflicker as fleaflicker;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, Visitor},
 };
-use sleeper_fantasy_rs as sleeper;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExternalId {
@@ -97,7 +97,7 @@ impl TryFrom<String> for ExternalId {
         ExternalId::parse(value)
     }
 }
-impl From<fleaflicker_fantasy_rs::League> for ExternalId {
+impl From<fantasy_sports_fleaflicker::League> for ExternalId {
     fn from(value: fleaflicker::League) -> Self {
         ExternalId {
             platform: Platform::FleaFlicker,

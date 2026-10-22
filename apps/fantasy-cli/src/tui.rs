@@ -4,7 +4,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use fantasy_core_rs::{self as core};
+use fantasy_sports_core::{self as core};
 use std::{
     io::{self, Stdout},
     sync::Arc,
@@ -374,7 +374,7 @@ async fn render_loop(
 
                             if let Err(err) = events_tx
                                 .send(events::BackendAction::RefreshLeague(core::ExternalId {
-                                    platform: fantasy_core_rs::Platform::Sleeper,
+                                    platform: fantasy_sports_core::Platform::Sleeper,
                                     id: league_id.to_string(),
                                 }))
                                 .await

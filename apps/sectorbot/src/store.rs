@@ -3,7 +3,7 @@ use chrono_tz::US::Pacific;
 use core::fmt;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sleeper_fantasy_rs::User as SleeperUser;
+use fantasy_sports_sleeper::User as SleeperUser;
 use std::collections::HashMap;
 use std::str::FromStr;
 

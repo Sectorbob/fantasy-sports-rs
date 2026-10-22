@@ -5,7 +5,7 @@ use crate::{
         Transaction, TrendType, TrendingPlayer, User,
     },
 };
-use cached_client_rs::Request;
+use fantasy_sports_cache::Request;
 use reqwest;
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
@@ -14,12 +14,12 @@ const SLEEPER_API_BASE_URL: &str = "https://api.sleeper.app/v1";
 const SLEEPER_CDN_BASE_URL: &str = "https://sleepercdn.com";
 
 pub struct Client {
-    client: cached_client_rs::Client,
+    client: fantasy_sports_cache::Client,
 }
 impl Client {
     pub fn new() -> Self {
         Client {
-            client: cached_client_rs::Client::new(SLEEPER_API_BASE_URL.to_string())
+            client: fantasy_sports_cache::Client::new(SLEEPER_API_BASE_URL.to_string())
                 .with_http_client(
                     reqwest::ClientBuilder::new()
                         .gzip(true) // sets the accept-encoding: gzip and auto decodes the response body
@@ -38,7 +38,7 @@ impl Client {
     pub async fn with_cache<T: Into<PathBuf>>(
         mut self,
         cache_dir: T,
-    ) -> Result<Self, cached_client_rs::Error> {
+    ) -> Result<Self, fantasy_sports_cache::Error> {
         self.client = self.client.with_cache(cache_dir)?;
         Ok(self)
     }
@@ -59,7 +59,7 @@ impl Client {
     pub async fn fetch_all_players(
         &self,
         sport: &Sport,
-    ) -> Result<HashMap<String, Player>, cached_client_rs::Error> {
+    ) -> Result<HashMap<String, Player>, fantasy_sports_cache::Error> {
         self.fetch_all_players_request(sport).send().await
     }
 
@@ -71,7 +71,7 @@ impl Client {
         r#type: TrendType,
         lookback_hours: Option<u32>,
         limit: Option<u32>,
-    ) -> Result<Vec<TrendingPlayer>, cached_client_rs::Error> {
+    ) -> Result<Vec<TrendingPlayer>, fantasy_sports_cache::Error> {
         self.get_trending_players_request(sport, &r#type, &lookback_hours, &limit)
             .send()
             .await
@@ -82,7 +82,7 @@ impl Client {
     ///
     /// Via the user resource, you can GET the user object by either providing
     /// the username or user_id of the user.
-    pub async fn get_user<T: Id>(&self, user: T) -> Result<User, cached_client_rs::Error> {
+    pub async fn get_user<T: Id>(&self, user: T) -> Result<User, fantasy_sports_cache::Error> {
         let user: String = user.to_string();
         self.get_user_request(user.as_str()).send().await
     }
@@ -94,7 +94,7 @@ impl Client {
         user_id: T,
         sport: &Sport,
         season: T,
-    ) -> Result<Vec<League>, cached_client_rs::Error> {
+    ) -> Result<Vec<League>, fantasy_sports_cache::Error> {
         let user_id = user_id.to_string();
         let season = season.to_string();
         self.get_leagues_for_user_request(user_id.as_str(), sport, season.as_str())
@@ -103,7 +103,7 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific league.
-    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, cached_client_rs::Error> {
+    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, fantasy_sports_cache::Error> {
         let league_id: String = league_id.to_string();
         self.get_league_request(league_id.as_str()).send().await
     }
@@ -112,7 +112,7 @@ impl Client {
     pub async fn get_rosters_in_league<T: Id>(
         &self,
         league_id: T,
-    ) -> Result<Vec<Roster>, cached_client_rs::Error> {
+    ) -> Result<Vec<Roster>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_rosters_in_league_request(league_id.as_str())
             .send()
@@ -126,7 +126,7 @@ impl Client {
     pub async fn get_users_for_league<T: Id>(
         &self,
         league_id: T,
-    ) -> Result<Vec<User>, cached_client_rs::Error> {
+    ) -> Result<Vec<User>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_users_for_league_request(league_id.as_str())
             .send()
@@ -145,7 +145,7 @@ impl Client {
         &self,
         league_id: T,
         week: usize,
-    ) -> Result<Vec<Matchup>, cached_client_rs::Error> {
+    ) -> Result<Vec<Matchup>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_matchups_request(league_id.as_str(), week)
             .send()
@@ -157,7 +157,7 @@ impl Client {
         &self,
         league_id: T,
         week: usize,
-    ) -> Result<Vec<Transaction>, cached_client_rs::Error> {
+    ) -> Result<Vec<Transaction>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_transactions_request(league_id.as_str(), week)
             .send()
@@ -169,7 +169,7 @@ impl Client {
     pub async fn get_traded_picks_in_league<T: Id>(
         &self,
         league_id: T,
-    ) -> Result<Vec<DraftPickMove>, cached_client_rs::Error> {
+    ) -> Result<Vec<DraftPickMove>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_traded_picks_in_league_request(league_id.as_str())
             .send()
@@ -180,7 +180,7 @@ impl Client {
     pub async fn get_sport_state(
         &self,
         sport: &Sport,
-    ) -> Result<SportState, cached_client_rs::Error> {
+    ) -> Result<SportState, fantasy_sports_cache::Error> {
         self.get_sport_state_request(sport).send().await
     }
 
@@ -190,7 +190,7 @@ impl Client {
         user_id: T,
         sport: &Sport,
         season: T,
-    ) -> Result<Vec<Draft>, cached_client_rs::Error> {
+    ) -> Result<Vec<Draft>, fantasy_sports_cache::Error> {
         let user_id = user_id.to_string();
         let season = season.to_string();
         self.get_drafts_for_user_request(user_id.as_str(), sport, season.as_str())
@@ -206,7 +206,7 @@ impl Client {
     pub async fn get_drafts_for_league<T: Id>(
         &self,
         league_id: T,
-    ) -> Result<Vec<Draft>, cached_client_rs::Error> {
+    ) -> Result<Vec<Draft>, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         self.get_drafts_for_league_request(league_id.as_str())
             .send()
@@ -214,7 +214,7 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific draft.
-    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, cached_client_rs::Error> {
+    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, fantasy_sports_cache::Error> {
         let draft_id = draft_id.to_string();
         self.get_draft_request(draft_id.as_str()).send().await
     }
@@ -223,7 +223,7 @@ impl Client {
     pub async fn get_draft_picks<T: Id>(
         &self,
         draft_id: T,
-    ) -> Result<Vec<DraftPick>, cached_client_rs::Error> {
+    ) -> Result<Vec<DraftPick>, fantasy_sports_cache::Error> {
         let draft_id = draft_id.to_string();
         self.get_draft_picks_request(draft_id.as_str()).send().await
     }
@@ -236,7 +236,7 @@ impl Client {
         &self,
         league_id: T,
         is_losers_bracket: bool,
-    ) -> Result<Bracket, cached_client_rs::Error> {
+    ) -> Result<Bracket, fantasy_sports_cache::Error> {
         let league_id = league_id.to_string();
         let bracket_matchups: Vec<PlayoffBracketEntry> = self
             .get_playoff_bracket_request(league_id.as_str(), is_losers_bracket)
@@ -250,12 +250,12 @@ impl Client {
 
     pub fn get_league_request<'a>(&'a self, league_id: &'a str) -> Request<'a, League> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -264,12 +264,12 @@ impl Client {
         sport: &'a Sport,
     ) -> Request<'a, HashMap<String, Player>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/players/{sport}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
     pub fn get_trending_players_request<'a>(
@@ -280,7 +280,7 @@ impl Client {
         limit: &'a Option<u32>,
     ) -> Request<'a, Vec<TrendingPlayer>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/players/{sport}/trending/{}", r#type),
                 filters: {
                     let filters_vec = [("lookback_hours", lookback_hours), ("limit", limit)]
@@ -299,18 +299,18 @@ impl Client {
                 },
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
     pub fn get_user_request<'a>(&'a self, user: &'a str) -> Request<'a, User> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/user/{user}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -321,12 +321,12 @@ impl Client {
         season: &'a str,
     ) -> Request<'a, Vec<League>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/user/{user_id}/leagues/{sport}/{season}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
 
         )
     }
@@ -336,12 +336,12 @@ impl Client {
         league_id: &'a str,
     ) -> Request<'a, Vec<Roster>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/rosters"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -350,12 +350,12 @@ impl Client {
         league_id: &'a str,
     ) -> Request<'a, Vec<User>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/users"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -365,12 +365,12 @@ impl Client {
         week: usize,
     ) -> Request<'a, Vec<Matchup>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/matchups/{week}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -380,12 +380,12 @@ impl Client {
         week: usize,
     ) -> Request<'a, Vec<Transaction>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/transactions/{week}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -394,23 +394,23 @@ impl Client {
         league_id: &'a str,
     ) -> Request<'a, Vec<DraftPickMove>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/traded_picks"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
     pub fn get_sport_state_request<'a>(&'a self, sport: &'a Sport) -> Request<'a, SportState> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/state/{sport}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -421,12 +421,12 @@ impl Client {
         season: &'a str,
     ) -> Request<'a, Vec<Draft>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/user/{user_id}/drafts/{sport}/{season}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -435,34 +435,34 @@ impl Client {
         league_id: &'a str,
     ) -> Request<'a, Vec<Draft>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/league/{league_id}/drafts"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
     pub fn get_draft_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Draft> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/draft/{draft_id}"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
     pub fn get_draft_picks_request<'a>(&'a self, draft_id: &'a str) -> Request<'a, Vec<DraftPick>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!("/draft/{draft_id}/picks"),
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 
@@ -470,9 +470,9 @@ impl Client {
         &'a self,
         league_id: &'a str,
         is_losers_bracket: bool,
-    ) -> cached_client_rs::Request<'a, Vec<PlayoffBracketEntry>> {
+    ) -> fantasy_sports_cache::Request<'a, Vec<PlayoffBracketEntry>> {
         self.client.build_request(
-            cached_client_rs::RequestContext {
+            fantasy_sports_cache::RequestContext {
                 url: format!(
                     "/league/{league_id}/{bracket_name}",
                     bracket_name = if is_losers_bracket {
@@ -484,7 +484,7 @@ impl Client {
                 filters: None,
             },
             false,
-            Some(cached_client_rs::ResponseBodyFormat::JSON),
+            Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
         )
     }
 

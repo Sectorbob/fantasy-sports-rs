@@ -1,4 +1,4 @@
-use fantasy_core_rs as core;
+use fantasy_sports_core as core;
 
 pub enum Event {
     // Input(char),

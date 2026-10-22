@@ -4,12 +4,12 @@ use crate::{
     player_cache::PlayerCache,
     sleeper_utils,
 };
-use fleaflicker_fantasy_rs as fleaflicker;
+use fantasy_sports_fleaflicker as fleaflicker;
 use futures::{
     StreamExt, TryStreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
 };
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -17,7 +17,7 @@ use std::{
 };
 use tokio::io;
 use walkdir::WalkDir;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 pub struct LeagueAccessor {
     pub fleaflicker_cli: Option<fleaflicker::Client>,
@@ -811,7 +811,7 @@ impl Sport {
 }
 
 async fn fetch_yahoo_league_keys_for_user(
-    yahoo_client: &yahoo_fantasy_rs::Client,
+    yahoo_client: &fantasy_sports_yahoo::Client,
     seasons: &Vec<String>,
     yahoo_game_code: yahoo::GameCode,
 ) -> Result<Vec<ExternalId>, Error> {
@@ -851,7 +851,7 @@ pub enum Error {
     #[error("player cache error: {0}")]
     PlayerCacheError(#[from] crate::player_cache::Error),
     #[error("cached client error: {0}")]
-    CachedClientError(#[from] cached_client_rs::Error),
+    CachedClientError(#[from] fantasy_sports_cache::Error),
     #[error("yahoo error: {0}")]
     YahooError(#[from] yahoo::Error),
     #[error("dev error: {0}")]

@@ -8,7 +8,7 @@ use tui::{
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
 
-use fantasy_core_rs::{self as core};
+use fantasy_sports_core::{self as core};
 
 use crate::{config::HistoryConfig, constants};
 

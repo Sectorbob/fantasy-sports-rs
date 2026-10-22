@@ -1,4 +1,4 @@
-use fantasy_core_rs as core;
+use fantasy_sports_core as core;
 use flexi_logger::{FileSpec, Logger, WriteMode};
 use log::*;
 use std::env;

@@ -1,6 +1,6 @@
 use std::io::{self, Stdout};
 
-use fantasy_core_rs::League;
+use fantasy_sports_core::League;
 use tui::{
     Terminal,
     backend::CrosstermBackend,

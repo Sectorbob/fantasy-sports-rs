@@ -1,5 +1,5 @@
 use crate::ecr::service::DraftResult;
-use sleeper_fantasy_rs::DraftPick;
+use fantasy_sports_sleeper::DraftPick;
 use std::collections::{HashMap, HashSet};
 
 pub fn get_keeper_status<T: Into<String>>(player_id: T, picks: &Vec<DraftPick>) -> KeeperStatus {

@@ -7,4 +7,4 @@
 - [ ] implement for NFL.com
 - [ ] implement for [Fleaflicker](https://www.fleaflicker.com/api-docs/index.html)
 - [ ] make these clients have the ability to cache locally
-- [ ] implement server side oauth2 for 'yahoo_fantasy_rs' lib
+- [ ] implement server side oauth2 for 'fantasy_sports_yahoo' lib

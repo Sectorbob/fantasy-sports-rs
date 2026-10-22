@@ -5,7 +5,7 @@ use serenity::all::{
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
-use sleeper_fantasy_rs::custom::Standings;
+use fantasy_sports_sleeper::custom::Standings;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -36,7 +36,7 @@ pub struct Handler {
     pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
     pub ecr_service: ecr::service::Service,
-    // pub sleeper_cli: sleeper_fantasy_rs::Client,
+    // pub sleeper_cli: fantasy_sports_sleeper::Client,
 }
 impl Handler {
     fn league_id(&self) -> Result<&str, ECRError> {

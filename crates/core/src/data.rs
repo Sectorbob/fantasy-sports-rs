@@ -1,10 +1,10 @@
 use crate::{ExternalId, Player, PlayerPosition};
 use chrono::{DateTime, Utc};
-use fleaflicker_fantasy_rs as fleaflicker;
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_fleaflicker as fleaflicker;
+use fantasy_sports_sleeper as sleeper;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -843,9 +843,9 @@ pub struct StandingsEntry {
 mod tests {
     use crate as core;
     use chrono::DateTime;
-    use sleeper_fantasy_rs as sleeper;
+    use fantasy_sports_sleeper as sleeper;
     use std::collections::HashMap;
-    use yahoo_fantasy_rs as yahoo;
+    use fantasy_sports_yahoo as yahoo;
 
     #[test]
     fn test_convert_yahoo_transaction() {

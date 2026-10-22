@@ -2,11 +2,11 @@ use crate::{
     Draft, DraftPick, ExternalId, LeagueSettings, Platform, Player, Roster, Standings,
     StandingsEntry, Team, Transaction, data::Scoreboard,
 };
-use fleaflicker_fantasy_rs as fleaflicker;
+use fantasy_sports_fleaflicker as fleaflicker;
 use serde_json::Number;
-use sleeper_fantasy_rs as sleeper;
+use fantasy_sports_sleeper as sleeper;
 use std::{collections::HashMap, fmt};
-use yahoo_fantasy_rs as yahoo;
+use fantasy_sports_yahoo as yahoo;
 
 const N_A: &str = "N/A";
 
@@ -757,9 +757,9 @@ impl From<&yahoo::League> for LeagueStatus {
 #[cfg(test)]
 mod tests {
     use crate::{ExternalId, League, LeagueAccessor};
-    use sleeper_fantasy_rs as sleeper;
+    use fantasy_sports_sleeper as sleeper;
     use std::{collections::HashMap, ops::Index};
-    use yahoo_fantasy_rs as yahoo;
+    use fantasy_sports_yahoo as yahoo;
 
     // #[tokio::test]
     //TODO: stub out data, vs using cache
