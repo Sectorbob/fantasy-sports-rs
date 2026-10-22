@@ -114,7 +114,7 @@ impl<'a> LeaguesPage {
         match key_code {
             KeyCode::Char('r') => KeyHandleResult::GoToLeagueHistoryOwnerRecords,
             KeyCode::Down => {
-                if self.selected < self.leagues.len() - 1 {
+                if self.selected + 1 < self.leagues.len() {
                     self.selected += 1;
                 }
                 KeyHandleResult::Noop
@@ -140,4 +140,36 @@ pub enum KeyHandleResult {
     Noop,
     GoToLeagueSummary,
     GoToLeagueHistoryOwnerRecords,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn navigating_an_empty_list_does_not_panic_or_select_anything() {
+        let mut page = LeaguesPage::new();
+        // the list is empty until the first fetch finishes; this used to underflow `len() - 1`
+        for key in [KeyCode::Down, KeyCode::Down, KeyCode::Up, KeyCode::Up] {
+            assert!(matches!(page.handle_key(&key), KeyHandleResult::Noop));
+        }
+        assert!(page.selected().is_none());
+    }
+
+    #[test]
+    fn keys_map_to_navigation_results() {
+        let mut page = LeaguesPage::new();
+        assert!(matches!(
+            page.handle_key(&KeyCode::Enter),
+            KeyHandleResult::GoToLeagueSummary
+        ));
+        assert!(matches!(
+            page.handle_key(&KeyCode::Char('r')),
+            KeyHandleResult::GoToLeagueHistoryOwnerRecords
+        ));
+        assert!(matches!(
+            page.handle_key(&KeyCode::Char('x')),
+            KeyHandleResult::Unhandled
+        ));
+    }
 }
