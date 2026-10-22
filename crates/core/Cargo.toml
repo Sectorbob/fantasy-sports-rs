@@ -1,0 +1,19 @@
+[package]
+name = "fantasy-core-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
+chrono = "0.4.41"
+fleaflicker-fantasy-rs = { version = "0.1.0", path = "../fleaflicker-fantasy-rs" }
+futures = "0.3.31"
+log = "0.4.27"
+serde = "1.0.219"
+serde_json = "1.0.142"
+sled = "0.34.7"
+sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
+thiserror = "2.0.14"
+tokio = "1.47.1"
+walkdir = "2.5.0"
+yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }
