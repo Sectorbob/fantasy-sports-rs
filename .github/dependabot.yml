@@ -11,3 +11,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # the tag of this action IS the Rust version it installs (the MSRV job pins 1.88.0 on
+      # purpose), so a "newer version" would silently move the minimum supported Rust version
+      - dependency-name: "dtolnay/rust-toolchain"
