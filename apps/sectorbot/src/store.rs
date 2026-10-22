@@ -18,15 +18,19 @@ pub struct DataStore {
     leagues: sled::Db,
 }
 impl DataStore {
+    /// Opens (creating if needed) the store in `./data_store`.
     pub fn new() -> Self {
-        let feeds = sled::open("data_store/feeds").expect("Failed to open data store");
-        let quotas = sled::open("data_store/quotas").expect("Failed to open quotas store");
-        let leagues = sled::open("data_store/leagues").expect("Failed to open leagues store");
-        DataStore {
-            feeds,
-            quotas,
-            leagues,
-        }
+        DataStore::open("data_store").expect("Failed to open the data store")
+    }
+
+    /// Opens (creating if needed) the feeds, quotas and leagues databases under `dir`.
+    pub fn open<P: AsRef<std::path::Path>>(dir: P) -> Result<Self, DataStoreError> {
+        let dir = dir.as_ref();
+        Ok(DataStore {
+            feeds: sled::open(dir.join("feeds"))?,
+            quotas: sled::open(dir.join("quotas"))?,
+            leagues: sled::open(dir.join("leagues"))?,
+        })
     }
 
     pub fn get_feed(&self, id: u64) -> Option<Feed> {
@@ -204,13 +208,13 @@ pub enum DataStoreError {
     #[error("element not found {0}")]
     ElementNotFound(String),
 
-    #[error("failed to fetch from sleeper {0}")]
+    #[error("database error: {0}")]
     SledError(#[from] sled::Error),
 
     #[error("failed to deserialize item: {0}")]
     SerdeError(#[from] serde_json::Error),
 
-    #[error("failed to deserialize item: {0}")]
+    #[error("{0}")]
     DevError(String),
 }
 
@@ -497,7 +501,7 @@ impl<'de> Deserialize<'de> for QuotaKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct League {
     pub guild_id: String,
     pub current_season: i32,
@@ -523,7 +527,163 @@ impl League {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
+    use super::{DataStore, DataStoreError, Feed, League};
     use crate::store::{ExternalId, Platform};
+    use std::collections::HashMap;
+    use tempfile::TempDir;
+
+    fn store() -> (DataStore, TempDir) {
+        let dir = TempDir::new().unwrap();
+        (DataStore::open(dir.path()).unwrap(), dir)
+    }
+
+    fn feed(id: u64, sources: Vec<ExternalId>) -> Feed {
+        Feed {
+            id,
+            name: format!("Feed {id}"),
+            description: String::new(),
+            sources,
+            last_updated: None,
+            destination: ExternalId {
+                platform: None,
+                id: "123".into(),
+            },
+            pool_interval: 300,
+            quiet_time: "".into(),
+            entries: vec![],
+        }
+    }
+
+    fn league(guild: &str) -> League {
+        League {
+            guild_id: guild.into(),
+            current_season: 2025,
+            league_id_map: HashMap::new(),
+            member_map: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn feeds_round_trip_and_get_default_platforms() {
+        let (store, _dir) = store();
+        assert!(store.get_feed(1).is_none());
+
+        let bare = ExternalId {
+            platform: None,
+            id: "SampleScribe".into(),
+        };
+        let youtube = ExternalId::new(Platform::Youtube, "UCexample".into());
+        store
+            .save_feed(&feed(1, vec![bare, youtube.clone()]))
+            .unwrap();
+
+        let loaded = store.get_feed(1).expect("feed was saved");
+        // untagged sources are twitter handles, an untagged destination is a discord channel
+        assert_eq!(Some(Platform::Twitter), loaded.sources[0].platform);
+        assert_eq!(youtube, loaded.sources[1]);
+        assert_eq!(Some(Platform::Discord), loaded.destination.platform);
+    }
+
+    #[test]
+    fn listing_feeds_returns_every_saved_feed() {
+        let (store, _dir) = store();
+        store.save_feed(&feed(1, vec![])).unwrap();
+        store.save_feed(&feed(2, vec![])).unwrap();
+        store.save_feed(&feed(2, vec![])).unwrap(); // saving again replaces
+        let mut ids: Vec<u64> = store.list_feeds().unwrap().iter().map(|f| f.id).collect();
+        ids.sort();
+        assert_eq!(vec![1, 2], ids);
+    }
+
+    #[test]
+    fn data_survives_reopening_the_store() {
+        let dir = TempDir::new().unwrap();
+        {
+            let store = DataStore::open(dir.path()).unwrap();
+            store.save_feed(&feed(7, vec![])).unwrap();
+        }
+        let store = DataStore::open(dir.path()).unwrap();
+        assert_eq!("Feed 7", store.get_feed(7).unwrap().name);
+    }
+
+    #[test]
+    fn quotas_default_to_zero_and_round_trip_per_platform_and_day() {
+        let (store, _dir) = store();
+        let day = chrono::NaiveDate::from_ymd_opt(2025, 8, 1);
+        assert_eq!(0, store.get_quota(&Platform::Youtube, day).unwrap());
+        store.set_quota(&Platform::Youtube, day, 300).unwrap();
+        assert_eq!(300, store.get_quota(&Platform::Youtube, day).unwrap());
+        assert_eq!(0, store.get_quota(&Platform::Twitter, day).unwrap());
+        assert_eq!(
+            0,
+            store
+                .get_quota(
+                    &Platform::Youtube,
+                    chrono::NaiveDate::from_ymd_opt(2025, 8, 2)
+                )
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn missing_leagues_are_reported_by_guild() {
+        let (store, _dir) = store();
+        match store.get_league("nope") {
+            Err(DataStoreError::ElementNotFound(guild)) => assert_eq!("nope", guild),
+            other => panic!("expected ElementNotFound, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn league_season_and_member_mappings_are_stored() {
+        let (store, _dir) = store();
+        store.save_league(&league("g1")).unwrap();
+
+        let sleeper_league = ExternalId::new(Platform::Sleeper, "999".into());
+        store
+            .set_league_season_mapping("g1", 2025, sleeper_league.clone())
+            .unwrap();
+        assert_eq!(
+            Some(sleeper_league),
+            store.get_league("g1").unwrap().current_league_id()
+        );
+
+        store
+            .set_league_user_mapping(
+                "g1",
+                "member",
+                ExternalId::new(Platform::Sleeper, "u1".into()),
+            )
+            .unwrap();
+        // mapping the same member again replaces the id for that platform
+        store
+            .set_league_user_mapping(
+                "g1",
+                "member",
+                ExternalId::new(Platform::Sleeper, "u2".into()),
+            )
+            .unwrap();
+        let saved = store.get_league("g1").unwrap();
+        assert_eq!(
+            Some(&"u2".to_string()),
+            saved.member_map["member"].get(&Platform::Sleeper)
+        );
+        assert_eq!(1, store.list_leagues().unwrap().len());
+    }
+
+    #[test]
+    fn a_user_mapping_needs_a_platform() {
+        let (store, _dir) = store();
+        store.save_league(&league("g1")).unwrap();
+        let untagged = ExternalId {
+            platform: None,
+            id: "u1".into(),
+        };
+        assert!(matches!(
+            store.set_league_user_mapping("g1", "member", untagged),
+            Err(DataStoreError::DevError(_))
+        ));
+    }
 
     #[test]
     fn test_external_id_deserialization() {

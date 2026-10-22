@@ -36,5 +36,6 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 flate2.workspace = true
+tempfile.workspace = true
 serde_assert.workspace = true
 wiremock.workspace = true

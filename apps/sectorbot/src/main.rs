@@ -560,6 +560,36 @@ fn feed_cleanup(feed: &mut Feed, store: &DataStore) -> bool {
 mod tests {
     use super::*;
     use crate::{twitter::User, yt::ItemId};
+    use tempfile::TempDir;
+
+    #[test]
+    fn seeding_adds_new_feeds_and_leaves_existing_ones_alone() {
+        let dir = TempDir::new().unwrap();
+        let store = DataStore::open(dir.path().join("db")).unwrap();
+        let path = std::path::Path::new("feeds.example.json");
+
+        seed_feeds(&store, path).unwrap();
+        assert_eq!(2, store.list_feeds().unwrap().len());
+
+        // a feed that has since collected entries must not be reset by the next start-up
+        let mut feed = store.get_feed(1).unwrap();
+        feed.last_updated = Some("2025-01-15T12:00:00Z".to_string());
+        store.save_feed(&feed).unwrap();
+        seed_feeds(&store, path).unwrap();
+        assert_eq!(2, store.list_feeds().unwrap().len());
+        assert_eq!(
+            Some("2025-01-15T12:00:00Z".to_string()),
+            store.get_feed(1).unwrap().last_updated
+        );
+    }
+
+    #[test]
+    fn seeding_from_a_missing_file_is_an_error_not_a_panic() {
+        let dir = TempDir::new().unwrap();
+        let store = DataStore::open(dir.path()).unwrap();
+        let err = seed_feeds(&store, std::path::Path::new("nope.json")).unwrap_err();
+        assert!(err.to_string().contains("nope.json"), "{err}");
+    }
 
     #[test]
     fn test_feed_entry_from_tweet() {
