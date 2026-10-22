@@ -92,9 +92,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Producer task: generates messages
-    // start_feed_fetcher(1, &app_context, None).await?;
-    // start_feed_fetcher(2, &app_context, Some(Duration::from_secs(2 * 60))).await?;
+    // Producer tasks: poll each configured feed, staggered so they do not all hit the APIs at once
+    if app_context.config.enable_feed_fetcher {
+        let mut feeds = app_context.store.list_feeds()?;
+        feeds.sort_by_key(|feed| feed.id);
+        for (i, feed) in feeds.iter().enumerate() {
+            let delay = (i > 0).then(|| Duration::from_secs(2 * 60 * i as u64));
+            start_feed_fetcher(feed.id, &app_context, delay).await?;
+        }
+    } else {
+        log::info!("Feed fetcher disabled (set ENABLE_FEED_FETCHER=true to poll feeds)");
+    }
 
     // This blocks
     match setup_discord_bot(&app_context, rx).await {
