@@ -71,24 +71,17 @@ async fn fetch_rss_feed(
     Extension(state): Extension<Arc<AppContext>>,
 ) -> impl IntoResponse {
     log::info!("Fetching RSS feed with feed_name={feed_name}");
-    let feed_id = match feed_name.as_str() {
-        "giants" => 1,
-        "nfl" => 2,
-        other => {
-            log::warn!("Unknown feed name: {}", other);
-            return Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .header("Content-Type", "text/plain")
-                .body("feed not found".to_string())
-                .unwrap();
-        }
-    };
-
-    let response = match state.store.get_feed(feed_id) {
+    let feed = state
+        .store
+        .list_feeds()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|feed| feed_slug(&feed.name) == feed_name || feed.id.to_string() == feed_name);
+    let response = match feed {
         Some(feed) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/rss+xml")
-            .body(Into::<rss::Channel>::into(feed).to_string())
+            .body(feed_to_channel(feed, &state.config.public_base_url).to_string())
             .unwrap(),
         None => Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -131,44 +124,56 @@ impl IntoResponse for AppError {
     }
 }
 
-impl From<Feed> for rss::Channel {
-    fn from(feed: Feed) -> Self {
-        let feed_link = format!("http://host-de504cfe.example.invalid/feeds/{}", feed.name);
-        let mut channel = Channel::default();
-        channel.set_title(feed.name.clone());
-        channel.set_description(feed.description.clone());
-        channel.set_link(feed_link);
-        channel.set_language("en-US".to_string());
-        channel.set_last_build_date(chrono::Utc::now().to_rfc2822()); // consider handlign differently
-        channel.set_generator("Sectorbot RSS Generator".to_string());
-        channel.set_ttl(1.to_string()); // Time to live in minutes
-        // channel.set_image(rss::Image {
-        //     url: "http://".to_string(),
-        //     title: "Sectorbot Feed".to_string(),
-        //     link: "http://".to_string(),
-        //     width: None,
-        //     height: None,
-        //     description: None,
-        //     ..Default::default()
-        // });
-        // channel.set_web_master("".to_string());
-        channel.set_copyright("Copyright © 2025 Sectorbot".to_string());
-        channel.set_pub_date(chrono::Utc::now().to_rfc2822()); // consider handlign differently
-        // channel.set_docs("https://sectorbot.com/rss".to_string());
-        // channel.set_managing_editor("".to_string());
+/// URL-friendly feed name: "Rovers News" -> "rovers-news"
+pub(crate) fn feed_slug(name: &str) -> String {
+    name.trim()
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
 
-        // let extensions = ExtensionMap::default();
-        // channel.set_extensions(extensions);
+pub(crate) fn feed_to_channel(feed: Feed, public_base_url: &str) -> Channel {
+    let feed_link = format!(
+        "{}/feeds/{}",
+        public_base_url.trim_end_matches('/'),
+        feed_slug(&feed.name)
+    );
+    let mut channel = Channel::default();
+    channel.set_title(feed.name.clone());
+    channel.set_description(feed.description.clone());
+    channel.set_link(feed_link);
+    channel.set_language("en-US".to_string());
+    channel.set_last_build_date(chrono::Utc::now().to_rfc2822()); // consider handlign differently
+    channel.set_generator("Sectorbot RSS Generator".to_string());
+    channel.set_ttl(1.to_string()); // Time to live in minutes
+    // channel.set_image(rss::Image {
+    //     url: "http://".to_string(),
+    //     title: "Sectorbot Feed".to_string(),
+    //     link: "http://".to_string(),
+    //     width: None,
+    //     height: None,
+    //     description: None,
+    //     ..Default::default()
+    // });
+    // channel.set_web_master("".to_string());
+    channel.set_copyright("Copyright © 2025 Sectorbot".to_string());
+    channel.set_pub_date(chrono::Utc::now().to_rfc2822()); // consider handlign differently
+    // channel.set_docs("https://sectorbot.com/rss".to_string());
+    // channel.set_managing_editor("".to_string());
 
-        let mut entries = feed.entries;
-        entries.sort_by_key(|e| e.source_ts);
-        entries.reverse(); // Most recent first
+    // let extensions = ExtensionMap::default();
+    // channel.set_extensions(extensions);
 
-        for entry in entries {
-            channel.items.push(entry.into());
-        }
-        channel
+    let mut entries = feed.entries;
+    entries.sort_by_key(|e| e.source_ts);
+    entries.reverse(); // Most recent first
+
+    for entry in entries {
+        channel.items.push(entry.into());
     }
+    channel
 }
 
 impl From<FeedEntry> for rss::Item {
@@ -237,13 +242,21 @@ mod tests {
             quiet_time: "".to_string(),
         };
 
-        let rss_channel: rss::Channel = feed.into();
+        let rss_channel = crate::server::feed_to_channel(feed, "http://localhost:8080/");
         assert_eq!(rss_channel.title, "Test Feed");
         assert!(!rss_channel.items.is_empty());
         assert_eq!(1, rss_channel.items.len());
+        assert_eq!("http://localhost:8080/feeds/test-feed", rss_channel.link);
         assert_eq!(
             "- It’s Casey Catcher’s world & we’re just living in it",
             &rss_channel.items[0].description.clone().unwrap()
         );
+    }
+
+    #[test]
+    fn test_feed_slug() {
+        assert_eq!("rovers-news", crate::server::feed_slug("Rovers News"));
+        assert_eq!("nfl-news", crate::server::feed_slug("  NFL  News! "));
+        assert_eq!("feed-2", crate::server::feed_slug("Feed #2"));
     }
 }

@@ -16,7 +16,6 @@ use crate::{
     store::{self, DataStore, DataStoreError, ExternalId, League, Platform},
 };
 
-pub const LEAGUE_ID: &str = "1206780317471651229";// "2489066589662560510";
 pub const SPORT: sleeper::Sport = sleeper::Sport::NFL;
 
 pub struct Service {
@@ -587,7 +586,7 @@ mod tests {
     use tokio::fs::{self};
 
     use crate::ecr::keepers::Keepable;
-    use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
+    use crate::ecr::service::{KeepablesContext, SPORT, Service};
 
     #[test]
     fn test_compute_keepables_report() {
@@ -643,10 +642,11 @@ mod tests {
     #[allow(dead_code)]
     async fn fetch_and_save_ctx<T: Into<String>>(
         svc: &Service,
+        league_id: &str,
         outfile: T,
     ) -> Result<KeepablesContext, Box<dyn Error>> {
         let keepables_context: KeepablesContext =
-            svc.fetch_keepable_context(LEAGUE_ID, &SPORT).await?;
+            svc.fetch_keepable_context(league_id, &SPORT).await?;
         let outfile = outfile.into();
         fs::write(outfile, serde_json::to_vec(&keepables_context)?).await?;
         Ok(keepables_context)

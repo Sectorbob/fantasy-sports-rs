@@ -6,18 +6,17 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use sleeper_fantasy_rs::custom::Standings;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
-use crate::ecr::service::{ECRError, LEAGUE_ID, SPORT};
+use crate::ecr::service::{ECRError, SPORT};
 use crate::store::{self, ExternalId, FeedEvent, League, Platform};
 use crate::twitter::syndication;
 use crate::yt::{self, YoutubeClient};
 use crate::{ecr, twitter};
 
-const SECTORBOB_DISCORD_USER_ID: u64 = 87326629677516917;
 
 pub struct AppContext {
     pub config: Config,
@@ -30,12 +29,22 @@ impl Drop for AppContext {
 }
 
 pub struct Handler {
+    /// Sleeper league for `!keepables` / `!draft`; those commands are disabled when `None`.
+    pub sleeper_league_id: Option<String>,
+    /// The only user allowed to run `!` commands; all are refused when `None`.
+    pub admin_discord_user_id: Option<u64>,
     pub yt_client: Arc<YoutubeClient>,
     pub events_receiver: Arc<Mutex<Receiver<FeedEvent>>>,
     pub ecr_service: ecr::service::Service,
     // pub sleeper_cli: sleeper_fantasy_rs::Client,
 }
 impl Handler {
+    fn league_id(&self) -> Result<&str, ECRError> {
+        self.sleeper_league_id
+            .as_deref()
+            .ok_or_else(|| ECRError::NotFound("SLEEPER_LEAGUE_ID is not configured".to_string()))
+    }
+
     async fn process_health_command(&self, ctx: &Context, msg: &Message) -> Result<(), ECRError> {
         let message = format!(
             "Youtube credits consumed: {}",
@@ -194,7 +203,7 @@ impl Handler {
     ) -> Result<(), ECRError> {
         let keepables_ctx = self
             .ecr_service
-            .fetch_keepable_context(LEAGUE_ID, &SPORT)
+            .fetch_keepable_context(self.league_id()?, &SPORT)
             .await?;
         let keepables_report = self.ecr_service.get_keepables(&keepables_ctx)?;
         send_as_code(&ctx, &msg, keepables_report.text_report()).await;
@@ -206,7 +215,7 @@ impl Handler {
         ctx: &Context,
         msg: &Message,
     ) -> Result<(), ECRError> {
-        let standings = Standings::from_sleeper(LEAGUE_ID).await?;
+        let standings = Standings::from_sleeper(self.league_id()?).await?;
         let order = standings.randomize_bucketed_draft_order();
         let text_report = Standings::visualize_draft_order(order).await?;
         send_as_code(&ctx, &msg, text_report).await;
@@ -307,8 +316,9 @@ impl Handler {
             .ok_or_else(|| ECRError::NotFound(format!("did not match a user in sleeper league")))
     }
 
-    fn is_permitted(_ctx: &Context, msg: &Message) -> bool {
-        msg.author.id.get() == SECTORBOB_DISCORD_USER_ID
+    fn is_permitted(&self, msg: &Message) -> bool {
+        self.admin_discord_user_id
+            .is_some_and(|admin| msg.author.id.get() == admin)
     }
 }
 
@@ -329,7 +339,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        if msg.content.starts_with("!") && !Handler::is_permitted(&ctx, &msg) {
+        if msg.content.starts_with("!") && !self.is_permitted(&msg) {
             // block it and delete the message
             log::warn!(
                 "{user}, is not permitted to run commands",
@@ -662,19 +672,10 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
     }
 }
 
-fn channel_icon_url_for<T: Into<String>>(channel_id: T) -> Option<String> {
-    let channel_id: String = channel_id.into();
-    match channel_id.as_str() {
-        "UC-AfHSMCZfj9_SB__lDiVGQ" => Some("https://yt3.ggpht.com/tRo8f2fdVJxU4reo2GkwQM7KObcOGkizJ2a_1y5Q77asZszVPSuWYSHiZMvGXm5Ob06A6dFc=s48-c-k-c0x00ffffff-no-rj".to_string()),
-        "UCJ5JxdXQ6xh48GL8kGQJT0w" => Some("https://yt3.ggpht.com/ytc/AIdro_lzKU60jKmyyAQsfIY5qke_sjpRbIJ6jYt3O8T2gpv5IA=s88-c-k-c0x00ffffff-no-r".to_string()),
-        "UC2uN7halHCl7g2GW_r7p6DA" => Some("https://yt3.ggpht.com/vR_Vl3WywEfr5gaOfbdF9HkLsKmJadpf2HKmwMtkORTA-Whs3T7sl5l6TWEMC0DP8UG_GnQ52A=s88-c-k-c0x00ffffff-no-rj".to_string()),
-        "UCF_O9xJbBoQ0D7x8Q8F0mAA" => Some("https://yt3.ggpht.com/BFI-S3ZFf3lQTOTuXjmip5Q5_sE3m9UbCO1Iv8jXJdLl0RonRBv0270q6LeM-aRj65ufSt5q=s88-c-k-c0x00ffffff-no-rj".to_string()),
-        // "" => Some("".to_string()),
-        _ => None
-    }
-}
-
-fn discord_embed_for_youtube(video: &yt::Item) -> Option<CreateEmbed> {
+fn discord_embed_for_youtube(
+    video: &yt::Item,
+    channel_icons: &HashMap<String, String>,
+) -> Option<CreateEmbed> {
     let channel_name = video
         .snippet
         .as_ref()
@@ -685,7 +686,7 @@ fn discord_embed_for_youtube(video: &yt::Item) -> Option<CreateEmbed> {
         .as_ref()
         .map(|snippet| snippet.channel_id.clone())
         .flatten()?;
-    let channel_icon = channel_icon_url_for(&channel_id);
+    let channel_icon = channel_icons.get(&channel_id).cloned();
     let link = video.link()?;
     let title = video.title();
     let description = encode_text(video.description().as_str());
@@ -880,6 +881,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_youtube_embed_uses_the_configured_channel_icon() {
+        let json = tokio::fs::read_to_string("testdata/yt/list_playlist_items.json").await.unwrap();
+        let yt::Response::PlaylistItemListResponse { items, .. } = serde_json::from_str(&json).unwrap() else {
+            panic!("expected a playlist item response");
+        };
+        let icons = HashMap::from([(
+            "UCexampleRoverBanter0001".to_string(),
+            "https://img.example.invalid/icon.png".to_string(),
+        )]);
+        let embed = to_embed(discord_embed_for_youtube(&items[0], &icons).unwrap());
+        assert_eq!(
+            Some("https://img.example.invalid/icon.png".to_string()),
+            embed.author.and_then(|a| a.icon_url)
+        );
+    }
+
+    #[tokio::test]
     async fn test_youtube_to_embed() {
         let youtube_playlist_videos_str =
             tokio::fs::read_to_string(format!("testdata/yt/list_playlist_items.json"))
@@ -895,13 +913,13 @@ mod tests {
         }
         .expect("no videos loaded");
 
-        let embed = to_embed(discord_embed_for_youtube(&videos[0]).expect("no embed created"));
+        let embed = to_embed(discord_embed_for_youtube(&videos[0], &HashMap::new()).expect("no embed created"));
         let expected = to_embed(CreateEmbed::new()
             .url(format!("https://www.youtube.com/watch?v=exampleVid01")) // I am using x.com instead of fxtwitter.com
             .author(
                 CreateEmbedAuthor::new("Rover Banter")
                     .url(format!("https://www.youtube.com/watch?v=exampleVid01")),
-                // no icon: the synthetic channel is not in channel_icon_url_for's table
+                // no icon: the channel is not in the configured icon map
             ).image("https://img.example.invalid/exampleVid01/medium.jpg")
             .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
             .colour(Colour(6513919))

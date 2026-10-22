@@ -1,6 +1,5 @@
 mod bot;
 mod config;
-mod custom_feed_generate;
 mod ecr;
 mod fantasypros;
 mod server;
@@ -57,6 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::error!("Failed to list feeds: {}", e);
             return Err(e.into());
         }
+    }
+
+    if let Some(path) = &config.feeds_file {
+        seed_feeds(&store, path)?;
     }
 
     log::info!("Data store initialized successfully!");
@@ -171,6 +174,8 @@ async fn setup_discord_bot(
     // your bot token with "Bot ", which is a requirement by Discord for bot users.
     let mut client = Client::builder(&app_context.config.discord_token, intents)
         .event_handler(Handler {
+            sleeper_league_id: app_context.config.sleeper_league_id.clone(),
+            admin_discord_user_id: app_context.config.admin_discord_user_id,
             yt_client: Arc::clone(&app_context.yt_client),
             events_receiver: Arc::new(Mutex::new(events_receiver)),
             ecr_service: ecr::service::Service::new(&app_context.store).await?,
@@ -183,6 +188,19 @@ async fn setup_discord_bot(
     // it reconnects.
     client.start().await?;
     log::info!("Discord bot started successfully!");
+    Ok(())
+}
+
+/// Adds the feeds from `path` that are not in the data store yet; existing feeds (and their entries) are left alone.
+fn seed_feeds(store: &DataStore, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    for feed in config::load_feeds_file(path)?.feeds {
+        if store.get_feed(feed.id).is_some() {
+            log::debug!("Feed {} ({}) already exists, not seeding", feed.id, feed.name);
+        } else {
+            log::info!("Seeding feed {} ({}) from {}", feed.id, feed.name, path.display());
+            store.save_feed(&feed)?;
+        }
+    }
     Ok(())
 }
 
