@@ -515,12 +515,17 @@ impl League {
                 owners,
                 rosters,
                 ..
-            } => matchups
-                .iter()
-                .map(|(week, matchups)| {
-                    Scoreboard::from_sleeper(*week as u32, matchups.clone(), rosters, owners)
-                })
-                .collect(),
+            } => {
+                // the weeks are kept in a HashMap, so put them in season order
+                let mut weeks: Vec<_> = matchups.iter().collect();
+                weeks.sort_by_key(|(week, _)| **week);
+                weeks
+                    .into_iter()
+                    .map(|(week, matchups)| {
+                        Scoreboard::from_sleeper(*week as u32, matchups.clone(), rosters, owners)
+                    })
+                    .collect()
+            }
             League::Yahoo { scoreboards, .. } => scoreboards.iter().map(Scoreboard::from).collect(), // Yahoo leagues do not have matchups in the same way
         }
     }
