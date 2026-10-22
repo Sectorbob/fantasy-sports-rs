@@ -28,7 +28,7 @@ impl Drop for AppContext {
 }
 
 pub struct Handler {
-    /// Sleeper league for `!keepables` / `!draft`; those commands are disabled when `None`.
+    /// Sleeper league for `!keepables` / `!draftorder`; those commands are disabled when `None`.
     pub sleeper_league_id: Option<String>,
     /// The only user allowed to run `!` commands; all are refused when `None`.
     pub admin_discord_user_id: Option<u64>,

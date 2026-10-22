@@ -97,7 +97,7 @@ pub struct Config {
     pub discord_token: String,
     pub twitter_cookie: String,
     pub yt_api_key: String,
-    /// Sleeper league used by the `!keepables` and `!draft` commands; they are disabled when unset.
+    /// Sleeper league used by the `!keepables` and `!draftorder` commands; they are disabled when unset.
     pub sleeper_league_id: Option<String>,
     /// The only Discord user allowed to run `!` commands; commands are disabled when unset.
     pub admin_discord_user_id: Option<u64>,

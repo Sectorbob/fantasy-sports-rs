@@ -4,8 +4,8 @@ use serde::{Deserialize, de::DeserializeOwned};
 use std::{marker::PhantomData, path::PathBuf, sync::atomic::AtomicU64};
 
 /// Client provides base functionality for a REST-ful GET client that can check
-/// a local cache dir. Right now there is no cache-ttl implemented, but a cache
-/// skip can be performed with a force_update flag
+/// a local cache dir. Cached responses expire after a time to live (24 hours by
+/// default); a cache skip can also be forced with the force_update flag
 pub struct Client {
     pub(crate) http_client: reqwest::Client,
     base_url: String,

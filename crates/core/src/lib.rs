@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 mod data;
 mod external_id;
 mod fetch;

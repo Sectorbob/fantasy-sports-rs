@@ -1,5 +1,10 @@
 # fantasy-sports-fleaflicker
-consume fleaflicker fantasy apis in rust
 
+A Rust client for the [Fleaflicker API](https://www.fleaflicker.com/api-docs/index.html). The
+API is public and needs no credentials.
 
-https://www.fleaflicker.com/api-docs/index.html
+Covers the user's leagues, league rules and standings, rosters, draft boards, league activity
+and transactions, and box scores. Responses are cached on disk through
+[`fantasy-sports-cache`](../cache).
+
+Tests replay recorded (pseudonymized) responses from `testdata/` with `wiremock`.

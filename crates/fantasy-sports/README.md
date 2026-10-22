@@ -1,7 +1,25 @@
-# fantasy sports sdk
+# fantasy-sports
 
-There are many Fantasy Sports platforms out there (Yahoo, Sleeper, Fleaflicker, etc). They all provide similar functions, but everyone has their preferences. The goal with this crate is to provide granular and common functionality for these different platforms in the same sdk for Rust.
+One Rust SDK for several fantasy sports platforms. Yahoo, Sleeper and Fleaflicker expose similar
+data through very different APIs; this crate puts them behind a single data model and caches
+what it fetches on disk.
 
-# For Developers
+This crate is a facade. The platform independent model is re-exported at the top level, and each
+platform client is a module (`sleeper`, `yahoo`, `fleaflicker`) plus the caching HTTP client
+(`cache`) they share.
 
-git config commit.gpgsign true
+```rust,no_run
+use fantasy_sports::{ExternalId, LeagueAccessor};
+
+# async fn run() -> Result<(), Box<dyn std::error::Error>> {
+let mut accessor = LeagueAccessor::new().with_cache_dir("/tmp/fantasy-cache");
+accessor.init().await?;
+
+let id = ExternalId::try_from("sleeper:1234567890")?;
+let league = accessor.fetch_league_context(&id, false).await?;
+println!("{} ({})", league.name(), league.season());
+# Ok(())
+# }
+```
+
+See the [workspace README](../../README.md) and [architecture notes](../../docs/ARCHITECTURE.md).
