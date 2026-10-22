@@ -1,7 +1,7 @@
 # fantasy-sports-core
 
 The platform independent data model for fantasy sports leagues, built over the
-[Sleeper](../sleeper), [Yahoo](../yahoo) and [Fleaflicker](../fleaflicker) clients.
+[Sleeper](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/sleeper), [Yahoo](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/yahoo) and [Fleaflicker](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/fleaflicker) clients.
 
 - `LeagueAccessor` fetches a whole league (settings, rosters, drafts, matchups, transactions,
   standings) from any platform given an `ExternalId` such as `sleeper:1234567890`, and caches it.
@@ -9,7 +9,7 @@ The platform independent data model for fantasy sports leagues, built over the
 - `PlayerCache` maps Yahoo player ids to Sleeper's player universe so rosters look alike.
 - `history::build_owner_records` merges one person's records across seasons and platforms.
 
-Most applications should depend on the [`fantasy-sports`](../fantasy-sports) facade instead of
+Most applications should depend on the [`fantasy-sports`](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/fantasy-sports) facade instead of
 this crate directly.
 
 ```shell

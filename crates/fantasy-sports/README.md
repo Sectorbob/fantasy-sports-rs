@@ -22,4 +22,4 @@ println!("{} ({})", league.name(), league.season());
 # }
 ```
 
-See the [workspace README](../../README.md) and [architecture notes](../../docs/ARCHITECTURE.md).
+See the [workspace README](https://github.com/Sectorbob/fantasy-sports-rs/blob/main/README.md) and [architecture notes](https://github.com/Sectorbob/fantasy-sports-rs/blob/main/docs/ARCHITECTURE.md).

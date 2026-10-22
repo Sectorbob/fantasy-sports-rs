@@ -5,7 +5,7 @@ and needs no credentials.
 
 Covers users, leagues and their rosters/users, drafts and picks, weekly matchups, transactions,
 traded picks, playoff brackets, trending players and the player universe. Responses are cached
-on disk through [`fantasy-sports-cache`](../cache).
+on disk through [`fantasy-sports-cache`](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/cache).
 
 ```rust,no_run
 use fantasy_sports_sleeper::Client;

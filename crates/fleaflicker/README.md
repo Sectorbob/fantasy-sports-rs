@@ -5,6 +5,6 @@ API is public and needs no credentials.
 
 Covers the user's leagues, league rules and standings, rosters, draft boards, league activity
 and transactions, and box scores. Responses are cached on disk through
-[`fantasy-sports-cache`](../cache).
+[`fantasy-sports-cache`](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/cache).
 
 Tests replay recorded (pseudonymized) responses from `testdata/` with `wiremock`.

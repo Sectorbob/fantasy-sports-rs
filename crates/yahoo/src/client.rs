@@ -717,13 +717,13 @@ impl Client {
         }
     }
 
-    /// Documentation: https://developer.yahoo.com/fantasysports/guide/#roster-resource
+    /// Documentation: <https://developer.yahoo.com/fantasysports/guide/#roster-resource>
     ///
     /// For NFL, you can specify a week parameter to retrieve a specific week – otherwise it will default to the current roster
-    /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;week=10
+    /// <https://fantasysports.yahooapis.com/fantasy/v2/team//roster;week=10>
     ///
     /// For MLB, NHL, or NBA, you can specify a date parameter to retrieve a specific date – otherwise it will default to today’s roster.
-    /// https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01
+    /// <https://fantasysports.yahooapis.com/fantasy/v2/team//roster;date=2011-05-01>
     pub async fn get_roster_for_team(&self, team_key: &TeamKey) -> Result<Roster, Error> {
         let request_context = RequestContext {
             url: format!("/team/{team_key}/roster"),

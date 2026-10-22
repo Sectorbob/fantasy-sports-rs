@@ -2,7 +2,7 @@
 
 A Rust client for the Yahoo Fantasy Sports API: games, leagues (settings, standings, scoreboards,
 draft results, transactions), teams and rosters, players. Responses are XML, parsed into typed
-structures, and cached on disk through [`fantasy-sports-cache`](../cache).
+structures, and cached on disk through [`fantasy-sports-cache`](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/cache).
 
 ## Authentication
 
@@ -20,7 +20,7 @@ the returned code for a token, and the token is stored in a JSON file (`with_tok
 `refresh_token(false)` refreshes it only when it has expired. A token that expires mid-run is
 reported as `Error::TokenExpired`.
 
-[`notes/`](notes) has curl scripts that walk through the same flow by hand.
+[`notes/`](https://github.com/Sectorbob/fantasy-sports-rs/tree/main/crates/yahoo/notes) has curl scripts that walk through the same flow by hand.
 
 ## Status
 
