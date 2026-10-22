@@ -10,6 +10,8 @@ mod events;
 mod helpers;
 mod pages;
 #[cfg(test)]
+mod render_tests;
+#[cfg(test)]
 mod test_util;
 mod tui;
 mod widgets;
@@ -55,11 +57,10 @@ async fn main() -> Result<(), core::Error> {
         .init()
         .await
         .expect("failed to initialized");
-    debug_assert!(
-        fantasy_league_accessor.sleeper_enabled(),
-        "sleeper not enabled"
-    );
-    debug_assert!(fantasy_league_accessor.yahoo_enabled(), "yahoo not enabled");
+    if !fantasy_league_accessor.yahoo_enabled() {
+        // set YAHOO_CLIENT_ID, YAHOO_REDIRECT_URI and YAHOO_TOKEN_FILE to see Yahoo leagues
+        log::info!("yahoo is not configured, only Sleeper leagues will be listed");
+    }
 
     let cache_dir_space_used = fantasy_league_accessor
         .disk_space_used()
