@@ -303,37 +303,48 @@ impl Standings {
         non_playoff_teams
     }
 
-    pub async fn visualize_draft_order(draft_order_roster_ids: Vec<u8>) -> Result<String, Error> {
+    /// Renders the draft order with each slot's owner, fetching rosters and users for `league_id`.
+    pub async fn visualize_draft_order<T: Into<String>>(
+        league_id: T,
+        draft_order_roster_ids: Vec<u8>,
+    ) -> Result<String, Error> {
         let client = Client::new();
-        let league_id = "2489066589662560510";
+        let league_id: String = league_id.into();
         let roster_map = client
-            .get_rosters_in_league(league_id)
+            .get_rosters_in_league(league_id.as_str())
             .await?
             .into_iter()
             .map(|r| (r.roster_id, r))
             .collect::<HashMap<u8, Roster>>();
         let user_map = client
-            .get_users_for_league(league_id)
+            .get_users_for_league(league_id.as_str())
             .await?
             .into_iter()
             .map(|u| (u.user_id.clone(), u))
             .collect::<HashMap<String, User>>();
-        let mut text = String::new();
-        for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
-            let slot = i + 1;
-            let roster = roster_map.get(roster_id).unwrap();
-            let username = roster
-                .owner_id
-                .as_ref()
-                .map(|owner_id| user_map.get(owner_id.as_str()))
-                .flatten()
-                .map(|user| user.display_name.clone())
-                .unwrap_or(format!("Roster {roster_id}"));
-            text.push_str(format!("{slot}: {username}").as_str());
-            text.push('\n');
-        }
-        Ok(text)
+        Ok(format_draft_order(&draft_order_roster_ids, &roster_map, &user_map))
     }
+}
+
+/// One line per draft slot: "<slot>: <owner display name>" (or "Roster <id>" when the owner is unknown).
+fn format_draft_order(
+    draft_order_roster_ids: &[u8],
+    roster_map: &HashMap<u8, Roster>,
+    user_map: &HashMap<String, User>,
+) -> String {
+    let mut text = String::new();
+    for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
+        let slot = i + 1;
+        let username = roster_map
+            .get(roster_id)
+            .and_then(|roster| roster.owner_id.as_ref())
+            .and_then(|owner_id| user_map.get(owner_id.as_str()))
+            .map(|user| user.display_name.clone())
+            .unwrap_or(format!("Roster {roster_id}"));
+        text.push_str(format!("{slot}: {username}").as_str());
+        text.push('\n');
+    }
+    text
 }
 
 #[cfg(test)]
@@ -347,8 +358,8 @@ mod custom_tests {
     };
 
     use crate::{
-        Client, League, LeagueStatus, Roster, User,
-        custom::Standings,
+        Client, League, LeagueStatus, PlayoffBracketEntry, Roster, User,
+        custom::{Standings, format_draft_order},
         data::{LeagueType, PlayoffType, WaiverType},
     };
 
@@ -462,37 +473,53 @@ mod custom_tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_randomize_bucketed_draft_order() {
-        let client = Client::new();
-        let league_id = "2489066589662560510";
-        let roster_map = client
-            .get_rosters_in_league(league_id)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|r| (r.roster_id, r))
-            .collect::<HashMap<u8, Roster>>();
-        let user_map = client
-            .get_users_for_league(league_id)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|u| (u.user_id.clone(), u))
-            .collect::<HashMap<String, User>>();
-        let standings = Standings::from_sleeper(league_id)
-            .await
-            .expect("failed to fetch sleeper standings data");
-        let draft_order_roster_ids = standings.randomize_bucketed_draft_order();
-        for (i, roster_id) in draft_order_roster_ids.iter().enumerate() {
-            let slot = i + 1;
-            let roster = roster_map.get(roster_id).unwrap();
-            let user = roster
-                .owner_id
-                .as_ref()
-                .map(|owner_id| user_map.get(owner_id.as_str()))
-                .flatten();
-            println!("{slot}: {:?}", user.map(|u| u.display_name.clone()))
+    fn standings_from_testdata() -> Standings {
+        let league_id = "164974877262287888";
+        let league: League = serde_json::from_str(
+            &fs::read_to_string(format!("testdata/v1/league/{league_id}.json")).unwrap(),
+        )
+        .unwrap();
+        let winners_bracket: Vec<PlayoffBracketEntry> = serde_json::from_str(
+            &fs::read_to_string(format!("testdata/v1/league/{league_id}/winners_bracket.json")).unwrap(),
+        )
+        .unwrap();
+        Standings::new(league.settings, winners_bracket, None)
+    }
+
+    #[test]
+    fn test_randomize_bucketed_draft_order() {
+        let standings = standings_from_testdata();
+        let playoff_teams = standings.list_playoff_roster_ids();
+        assert!(!playoff_teams.is_empty());
+
+        for _ in 0..20 {
+            let order = standings.randomize_bucketed_draft_order();
+
+            // every roster appears exactly once
+            let mut sorted = order.clone();
+            sorted.sort();
+            assert_eq!((1..=12).collect::<Vec<u8>>(), sorted);
+
+            // non-playoff teams draft first, playoff teams last
+            let first_playoff_slot = order.iter().position(|r| playoff_teams.contains(r)).unwrap();
+            assert_eq!(12 - playoff_teams.len(), first_playoff_slot);
+            assert!(order[first_playoff_slot..].iter().all(|r| playoff_teams.contains(r)));
         }
+    }
+
+    #[test]
+    fn test_format_draft_order_falls_back_to_the_roster_id_for_unknown_owners() {
+        let users: Vec<User> = serde_json::from_str(&fs::read_to_string("testdata/league_users.json").unwrap()).unwrap();
+        let rosters: Vec<Roster> = serde_json::from_str(&fs::read_to_string("testdata/league_rosters.json").unwrap()).unwrap();
+        let user_map = users.into_iter().map(|u| (u.user_id.clone(), u)).collect::<HashMap<_, _>>();
+        let mut roster_map = rosters.into_iter().map(|r| (r.roster_id, r)).collect::<HashMap<_, _>>();
+        let known = *roster_map.keys().min().unwrap();
+        let owner = roster_map[&known].owner_id.clone().unwrap();
+        let expected_name = user_map[&owner].display_name.clone();
+        roster_map.get_mut(&known).unwrap().owner_id = Some(owner);
+        roster_map.insert(99, Roster { roster_id: 99, owner_id: None, ..roster_map[&known].clone() });
+
+        let text = format_draft_order(&[known, 99], &roster_map, &user_map);
+        assert_eq!(format!("1: {expected_name}\n2: Roster 99\n"), text);
     }
 }

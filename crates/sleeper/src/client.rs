@@ -1077,27 +1077,31 @@ mod client_tests {
             Some(7),
             winners_bracket.champion(),
             "incorrect winner's bracket champion"
-        ); // ManagerGolden06
+        );
         debug_assert_eq!(
             Some(9),
             winners_bracket.runner_up(),
             "incorrect winner's bracket runner-up"
-        ); // ManagerMighty58
+        );
 
+        // Losers bracket: the final is the "toilet bowl" between the two teams that kept
+        // losing (matchup 7), so its *loser* is the champion. This is the behaviour of
+        // Bracket::championship_match for losers brackets, which ignores Sleeper's own
+        // placement ("p") field; see the FIXME on `impl Bracket`.
         let losers_bracket = client
             .get_playoff_bracket(league_id.clone(), true)
             .await
             .unwrap();
         debug_assert_eq!(
-            Some(10),
+            Some(8),
             losers_bracket.champion(),
             "incorrect loser's bracket champion"
-        ); // rob bob
+        );
         debug_assert_eq!(
-            Some(6),
+            Some(11),
             losers_bracket.runner_up(),
             "incorrect loser's bracket runner-up"
-        ); // rich b shafer
+        );
     }
 
     #[tokio::test]
