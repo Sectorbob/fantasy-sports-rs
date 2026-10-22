@@ -1,0 +1,53 @@
+# cargo-deny policy: `cargo deny check`
+#
+# Every exception below is deliberate and written down with its reason. Re-review them when
+# serenity or sled are updated (they are the only sources of the exceptions).
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+ignore = [
+    # rustls 0.22 / rustls-webpki 0.102 are pulled in by serenity 0.12.5 (the latest 0.12) via
+    # tokio-tungstenite 0.21, and have no fixed release on that line. They only protect the
+    # TLS connection to Discord's gateway from sectorbot. Fixed in rustls >= 0.23.46 and
+    # webpki >= 0.103.16, which every other crate here already uses. Remove these when serenity
+    # moves to a newer websocket stack.
+    { id = "RUSTSEC-2026-0346", reason = "rustls 0.22 via serenity; Debug output of TLS session values, which sectorbot never logs" },
+    { id = "RUSTSEC-2026-0349", reason = "rustls 0.22 via serenity; downgrade of later connections to classical key exchange, Discord gateway only" },
+    { id = "RUSTSEC-2026-0049", reason = "rustls-webpki 0.102 via serenity; CRL matching, Discord gateway only" },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.102 via serenity; URI name constraints, Discord gateway only" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki 0.102 via serenity; wildcard name constraints, Discord gateway only" },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki 0.102 via serenity; CRL parsing panic, Discord gateway only" },
+    { id = "RUSTSEC-2026-0382", reason = "rustls-webpki 0.102 via serenity; distrusted intermediates, Discord gateway only" },
+    # sled 0.34 (player cache and sectorbot's data store) depends on these unmaintained crates.
+    { id = "RUSTSEC-2025-0057", reason = "fxhash, unmaintained, via sled" },
+    { id = "RUSTSEC-2024-0384", reason = "instant, unmaintained, via sled" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

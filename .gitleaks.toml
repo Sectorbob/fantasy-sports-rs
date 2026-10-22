@@ -1,0 +1,16 @@
+# gitleaks configuration: `gitleaks git .` (history) or `gitleaks dir .` (working tree)
+title = "fantasy-sports-rs"
+
+[extend]
+useDefault = true
+
+# The `discord-client-id` rule fires on the word "discord" near any long number. These are the
+# only two places it does, and neither is a credential: a placeholder channel id in the example
+# feeds file, and a fake (pseudonymized) id in a server test.
+[[allowlists]]
+description = "placeholder and fake discord ids"
+condition = "OR"
+paths = [
+    '''apps/sectorbot/feeds\.example\.json''',
+    '''apps/sectorbot/src/server\.rs''',
+]
