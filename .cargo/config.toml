@@ -1,2 +1,3 @@
-    [target.x86_64-unknown-linux-musl]
-    linker = "rust-lld"
+# static (musl) builds for sectorbot link with rust-lld, see apps/sectorbot/Makefile
+[target.x86_64-unknown-linux-musl]
+linker = "rust-lld"

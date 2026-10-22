@@ -1,3 +1,6 @@
+# Example user unit: copy to ~/.config/systemd/user/sectorbot.service and adjust the paths
+# (%h is your home directory), then `systemctl --user enable --now sectorbot`.
+# Configuration is read from a .env file in WorkingDirectory, see .env.example.
 [Unit]
 Description=Sectorbot
 After=network-online.target
@@ -5,11 +8,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/workspace/rust-projects/sectorbot
-ExecStart=%h/workspace/rust-projects/sectorbot/target/debug/sectorbot
+WorkingDirectory=%h/fantasy-sports-rs/apps/sectorbot
+ExecStart=%h/fantasy-sports-rs/target/release/sectorbot
 Restart=on-failure
 RestartSec=5
-Environment=WORKDIR=%h/rust-projects/sectorbot
 
 [Install]
 WantedBy=default.target
