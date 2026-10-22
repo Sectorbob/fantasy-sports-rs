@@ -3,6 +3,8 @@
 mod client;
 mod data;
 pub mod filters;
+#[cfg(test)]
+mod oauth_tests;
 pub mod token;
 
 pub use client::{Client, Error};
