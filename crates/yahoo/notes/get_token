@@ -2,8 +2,9 @@
 
 source .env # Loads YAHOO_CLIENT_ID
 
-code=LOB6WUMP7YVG5AIIPOYJRPOL5J77JPVA
-code_verifier=SUPNBMW7UYMO726SULIBXQINZXG5INH5RAIUHDQ4IJ
+# usage: ./get_token <code from the redirect> <code_verifier used for request_auth>
+code=$1
+code_verifier=$2
 
 curl -v -X POST \
   -H "Content-Type: application/x-www-form-urlencoded" \

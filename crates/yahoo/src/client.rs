@@ -340,8 +340,8 @@ impl Client {
                     Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
 
-                cached_client_rs::Error::ClientError(status_code) => {
-                    let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>("got http error {status_code}")
+                cached_client_rs::Error::ClientError { status: status_code, body } => {
+                    let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>(&body)
                         .inspect_err(|err| {
                             log::warn!(
                                 "got http error {status_code} and failed to parse body: {err}"

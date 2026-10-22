@@ -1,44 +1,27 @@
-#[allow(dead_code)]
-#[cfg(test)]
-mod integration_tests {
-    use dotenv;
-    use yahoo_fantasy_rs::{Client, Game, GameCode};
+//! Live tests against the real Yahoo API. They need your own credentials and are ignored by
+//! default; run them with `cargo test -- --ignored` after exporting:
+//!
+//! - `YAHOO_CLIENT_ID`, `YAHOO_REDIRECT_URI` (your Yahoo developer app)
+//! - `YAHOO_TOKEN_FILE` pointing at a token file produced by the auth flow
+//!   (see `notes/README.md`)
 
-    // #[tokio::test]
-    async fn test_something() {
-        dotenv::from_filename("notes/.env").expect("should work");
+use yahoo_fantasy_rs::{Client, GameCode};
 
-        let fixture = Client::new_from_env()
-            .expect("unnable to load from env")
-            .with_token_file::<String>(None)
-            .await
-            .expect("failed to load token file");
-        assert_eq!(
-            "MH5MD53HFUWDT774Z3SKZV3CIJVFPRA5KO4ZKH6OE4A5DWD3TBXQLF5PYRFYT3SDEEWQ62GUNQZN43ZPJT6XKRJSWCZVUBLM",
-            fixture.client_id
-        );
-        assert_eq!(
-            "https://example.invalid/ccc3ad3b6d6cd350.png",
-            fixture.redirect_uri
-        );
-        assert_eq!(
-            Some("../fantasy-cli/.token.json".to_string()),
-            fixture.token_file
-        );
+#[tokio::test]
+#[ignore = "live: needs Yahoo credentials and a token file"]
+async fn live_get_games() {
+    let client = Client::new_from_env()
+        .expect("YAHOO_CLIENT_ID and YAHOO_REDIRECT_URI must be set")
+        .with_token_file::<String>(None)
+        .await
+        .expect("failed to load the token file (YAHOO_TOKEN_FILE)");
 
-        let _refreshed_token = fixture
-            .refresh_token()
-            .await
-            .expect("failed to update token");
-        // debug_assert_eq!("foo", refreshed_token.access_token, "token is unknoiwn");
+    // only refreshes when the token is about to expire
+    client.refresh_token(false).await.expect("failed to refresh token");
 
-        let _dest_dir = "./tests/data";
-
-        let games = fixture
-            .get_games(vec![GameCode::NFL], vec!["2019"])
-            .await
-            .expect("things");
-
-        assert_eq!(vec![] as Vec<Game>, games);
-    }
+    let games = client
+        .get_games(vec![GameCode::NFL], vec!["2019"])
+        .await
+        .expect("failed to fetch games");
+    assert!(!games.is_empty(), "expected at least one NFL game for 2019");
 }
