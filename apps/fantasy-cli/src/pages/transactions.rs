@@ -17,14 +17,6 @@ pub struct TransactionsPage {
     players: HashMap<String, core::Player>,
 }
 impl TransactionsPage {
-    pub fn new() -> Self {
-        TransactionsPage {
-            title_override: None,
-            transactions: vec![],
-            rosters: vec![],
-            players: HashMap::new(),
-        }
-    }
     pub fn from_league(league: &core::League) -> Self {
         TransactionsPage {
             title_override: None,

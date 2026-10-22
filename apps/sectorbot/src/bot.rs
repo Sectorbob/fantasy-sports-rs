@@ -6,7 +6,7 @@ use serenity::all::{
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -14,7 +14,7 @@ use crate::config::Config;
 use crate::ecr::service::{ECRError, SPORT};
 use crate::store::{self, ExternalId, FeedEvent, League, Platform};
 use crate::twitter::syndication;
-use crate::yt::{self, YoutubeClient};
+use crate::yt::YoutubeClient;
 use crate::{ecr, twitter};
 
 pub struct AppContext {
@@ -661,48 +661,6 @@ async fn let_em_know(http: &impl CacheHttp, msg: &Message, err: ECRError) {
     }
 }
 
-fn discord_embed_for_youtube(
-    video: &yt::Item,
-    channel_icons: &HashMap<String, String>,
-) -> Option<CreateEmbed> {
-    let channel_name = video
-        .snippet
-        .as_ref()
-        .and_then(|snippet| snippet.channel_title.clone())?;
-    let channel_id = video
-        .snippet
-        .as_ref()
-        .and_then(|snippet| snippet.channel_id.clone())?;
-    let channel_icon = channel_icons.get(&channel_id).cloned();
-    let link = video.link()?;
-    let title = video.title();
-    let description = encode_text(video.description().as_str());
-    let thumbnail_image_url = video
-        .snippet
-        .as_ref()
-        .map(|s| s.thumbnails.medium.url.clone());
-    let timestamp = video.snippet.as_ref().map(|snippet| snippet.published_at)?;
-    let mut embed_author = CreateEmbedAuthor::new(channel_name).url(link.as_str());
-    if let Some(channel_icon) = channel_icon {
-        embed_author = embed_author.icon_url(channel_icon.as_str());
-    }
-
-    let mut embed = CreateEmbed::new()
-        .author(embed_author)
-        .timestamp(timestamp)
-        .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
-        .colour(Colour::new(YOUTUBE_COLOR_HEX))
-        .description(description)
-        .title(title)
-        .url(link.as_str());
-
-    if let Some(thumbnail_image_url) = thumbnail_image_url {
-        embed = embed.image(thumbnail_image_url.as_str());
-    }
-
-    Some(embed)
-}
-
 /// Retweet and like counts as intent links, using only the counts the payload provides.
 fn engagement_line(tweet: &twitter::TweetResponse) -> Option<String> {
     let mut parts = vec![];
@@ -798,7 +756,7 @@ fn insert_from_media_details(
 mod tests {
     use super::*;
     use crate::twitter::TweetResponse;
-    use crate::yt;
+
     use serenity::all::Embed;
 
     #[tokio::test]
@@ -867,67 +825,5 @@ mod tests {
     fn to_embed(create_embed: CreateEmbed) -> Embed {
         let json = serde_json::to_string(&create_embed).expect("fail");
         serde_json::from_str(json.as_str()).expect("fail")
-    }
-
-    #[tokio::test]
-    async fn test_youtube_embed_uses_the_configured_channel_icon() {
-        let json = tokio::fs::read_to_string("testdata/yt/list_playlist_items.json")
-            .await
-            .unwrap();
-        let yt::Response::PlaylistItemListResponse { items, .. } =
-            serde_json::from_str(&json).unwrap()
-        else {
-            panic!("expected a playlist item response");
-        };
-        let icons = HashMap::from([(
-            "UCexampleRoverBanter0001".to_string(),
-            "https://img.example.invalid/icon.png".to_string(),
-        )]);
-        let embed = to_embed(discord_embed_for_youtube(&items[0], &icons).unwrap());
-        assert_eq!(
-            Some("https://img.example.invalid/icon.png".to_string()),
-            embed.author.and_then(|a| a.icon_url)
-        );
-    }
-
-    #[tokio::test]
-    async fn test_youtube_to_embed() {
-        let youtube_playlist_videos_str =
-            tokio::fs::read_to_string("testdata/yt/list_playlist_items.json".to_string())
-                .await
-                .expect("failed to load test data file");
-        let yt_videos_response: yt::Response =
-            serde_json::from_str(youtube_playlist_videos_str.as_str())
-                .expect("failed to deserialize list channels json");
-
-        let videos = match yt_videos_response {
-            yt::Response::PlaylistItemListResponse { items, .. } => Some(items),
-            _ => None,
-        }
-        .expect("no videos loaded");
-
-        let embed = to_embed(
-            discord_embed_for_youtube(&videos[0], &HashMap::new()).expect("no embed created"),
-        );
-        let expected = to_embed(CreateEmbed::new()
-            .url("https://www.youtube.com/watch?v=exampleVid01".to_string()) // I am using x.com instead of fxtwitter.com
-            .author(
-                CreateEmbedAuthor::new("Rover Banter")
-                    .url("https://www.youtube.com/watch?v=exampleVid01".to_string()),
-                // no icon: the channel is not in the configured icon map
-            ).image("https://img.example.invalid/exampleVid01/medium.jpg")
-            .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
-            .colour(Colour(6513919))
-            .title("Rovers Camp: rookie delivers + big play in practice")
-            .description("Sam and Alex break down the last two Rovers practices and a deep ball. That and a whole lot more!\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}\\#Rovers \\#football \\#camp")
-        );
-        debug_assert_eq!(expected.author, embed.author, "embed author is not right");
-        debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
-        debug_assert_eq!(expected.url, embed.url, "embed url is not right");
-        debug_assert_eq!(expected.image, embed.image, "embed image is not right");
-        debug_assert_eq!(
-            expected.description, embed.description,
-            "embed description is not right"
-        );
     }
 }

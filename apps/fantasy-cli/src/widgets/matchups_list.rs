@@ -220,6 +220,8 @@ impl Matchup {
     }
 }
 
+// `starters` is collected for a planned matchup detail view and is not rendered yet
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct MatchupSide {
     pub team_name: String,

@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 const YOUTUBE_API_V3_BASE_URL: &str = "https://www.googleapis.com/youtube/v3";
 
@@ -472,25 +472,6 @@ pub struct Thumbnail {
     pub url: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct YoutubeErrorResponse {
-    pub error: YoutubeRequestError,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct YoutubeRequestError {
-    pub message: String,
-    pub code: u16,
-    errors: Vec<YoutubeError>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct YoutubeError {
-    pub message: String,
-    pub domain: String,
-    pub reason: String,
 }
 
 #[cfg(test)]

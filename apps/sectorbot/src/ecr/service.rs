@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    env::VarError,
     path,
     sync::Arc,
     u64,
@@ -24,7 +23,6 @@ pub const SPORT: sleeper::Sport = sleeper::Sport::NFL;
 
 pub struct Service {
     sleeper_cli: fantasy_sports_sleeper::Client,
-    yahoo_fantasy_cli: fantasy_sports_yahoo::Client,
     fantasypros_cli: fantasypros::Client,
     store: Arc<DataStore>,
 }
@@ -35,9 +33,6 @@ impl Service {
         let _yahoo_cache_dir = cache_dir.join("yahoo");
         Ok(Service {
             sleeper_cli: fantasy_sports_sleeper::Client::new(), /*.with_cache(sleeper_cache_dir).await?*/
-            yahoo_fantasy_cli: fantasy_sports_yahoo::Client::new_from_env()?,
-            // .with_cache_dir(yahoo_cache_dir).await?
-            // .with_token_file::<String>(None).await?,
             fantasypros_cli: fantasypros::Client::new(),
             store: Arc::clone(store_arc),
         })
@@ -461,41 +456,6 @@ impl Service {
         };
         Ok(role_id)
     }
-
-    pub async fn create_necessary_roles(
-        &self,
-        guild_id: GuildId,
-        http: &Http,
-    ) -> Result<Vec<RoleId>, ECRError> {
-        let mut existing_roles = guild_id.roles(&http).await?;
-
-        let bystander_role = self
-            .get_existing_or_create(
-                guild_id,
-                http,
-                &mut existing_roles,
-                "bystander",
-                0x808080,
-                Permissions::READ_MESSAGE_HISTORY,
-            )
-            .await?;
-
-        let manager_role = self
-            .get_existing_or_create(
-                guild_id,
-                http,
-                &mut existing_roles,
-                "manager",
-                0x7E8C54,
-                Permissions::READ_MESSAGE_HISTORY |
-                // Permissions::CHANGE_NICKNAME |
-                Permissions::SEND_MESSAGES |
-                Permissions::SEND_MESSAGES_IN_THREADS,
-            )
-            .await?;
-
-        Ok(vec![bystander_role, manager_role])
-    }
 }
 
 /// This function will look through provided sleeper league data structures and
@@ -556,9 +516,6 @@ pub enum ECRError {
     #[error("Sleeper element not found {0}")]
     NotFound(String),
 
-    #[error("Unable to determine correct draft for league {0}")]
-    UndeterminableDraft(String),
-
     #[error("error fetching from fantasypros: {0}")]
     FantasyProsError(#[from] fantasypros::FantasyProsError),
 
@@ -567,15 +524,6 @@ pub enum ECRError {
 
     #[error("error performing discord operation: {0}")]
     DatastoreError(#[from] store::DataStoreError),
-
-    #[error("yahoo error: {0}")]
-    YahooError(#[from] fantasy_sports_yahoo::Error),
-
-    #[error("yahoo token error: {0}")]
-    YahooTokenError(#[from] fantasy_sports_yahoo::token::Error),
-
-    #[error("env variable error: {0}")]
-    EnvVarError(#[from] VarError),
 
     #[error("Unknown error {0}")]
     Unknown(String),

@@ -70,11 +70,6 @@ async fn do_it(
         loop {
             if let Some(action) = actions_rx.recv().await {
                 match action {
-                    events::BackendAction::Quit => {
-                        log::warn!(
-                            "Received Quit action, terminating event loop. <not yet implemented>"
-                        );
-                    }
                     events::BackendAction::RefreshLeague(external_id) => {
                         let force_update = true;
                         log::info!("Refreshing league with external_id: {}", external_id);
@@ -195,7 +190,6 @@ async fn render_loop(
         {
             match event {
                 // events::Event::Input(_) => todo!(),
-                events::Event::Tick => todo!(),
                 events::Event::LeagueRefreshComplete(league) => {
                     leagues_page.add_league(league);
                     league_history_owner_records_page =

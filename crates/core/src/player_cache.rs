@@ -183,21 +183,6 @@ impl PlayerCache {
             })
     }
 
-    pub(crate) fn get_sleeper_player_with_yahoo_id(
-        &self,
-        yahoo_id: u32,
-    ) -> Result<sleeper::Player> {
-        if let Some(sleeper_id) = self
-            .yahoo
-            .get(yahoo_id.to_le_bytes())?
-            .map(|b| String::from_utf8(b.to_vec()).expect("fucking hell"))
-        {
-            Ok(self.get_sleeper_player(sleeper_id)?)
-        } else {
-            Err(Error::NotFound)
-        }
-    }
-
     pub(crate) fn insert_sleeper_player(&self, player: &sleeper::Player) -> Result<()> {
         self.sleeper
             .insert(&player.player_id, serde_json::to_vec(player)?)?;

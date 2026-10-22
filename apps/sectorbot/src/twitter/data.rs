@@ -65,17 +65,7 @@ pub struct TimelineResponse {
     pub custom_server: bool,
     pub script_loader: Vec<String>,
 }
-impl TimelineResponse {
-    pub fn tweets(&self) -> Vec<&TweetResponse> {
-        self.props
-            .page_props
-            .timeline
-            .entries
-            .iter()
-            .filter_map(|te| te.content.tweet.as_ref().map(|t| t))
-            .collect()
-    }
-}
+impl TimelineResponse {}
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]

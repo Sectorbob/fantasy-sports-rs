@@ -16,16 +16,6 @@ pub struct DraftBoardPage {
     league_rosters: Vec<core::Roster>,
 }
 impl DraftBoardPage {
-    pub fn new() -> Self {
-        DraftBoardPage {
-            league_name: None,
-            league_season: None,
-            league_settings: None,
-            league_draft: None,
-            league_rosters: vec![],
-        }
-    }
-
     pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect) {
         let league_name = if let Some(n) = &self.league_name {
             n

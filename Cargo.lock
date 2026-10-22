@@ -2950,7 +2950,6 @@ dependencies = [
  "fantasy-sports-cache",
  "fantasy-sports-core",
  "fantasy-sports-sleeper",
- "fantasy-sports-yahoo",
  "flate2",
  "html-escape",
  "log",

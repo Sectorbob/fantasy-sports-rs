@@ -217,6 +217,7 @@ impl FantasyMatchupSide {
 pub struct Standings {
     league_settings: LeagueSettings,
     winners_bracket: Vec<PlayoffBracketEntry>,
+    #[allow(dead_code)] // reserved for ordering the toilet bowl, see the FIXME on `impl Bracket`
     losers_bracket: Option<Vec<PlayoffBracketEntry>>,
 }
 impl Standings {
