@@ -361,6 +361,7 @@ mod fs_cacher_tests {
             {
                 items.push(entry.file_name().to_str().unwrap().to_string());
             }
+            items.sort(); // read_dir order is unspecified
             items
         };
         debug_assert_eq!(vec![METADATA_FILE_NAME], f, "");
@@ -382,16 +383,15 @@ mod fs_cacher_tests {
             {
                 items.push(entry.file_name().to_str().unwrap().to_string());
             }
+            items.sort(); // read_dir order is unspecified
             items
         };
-        debug_assert_eq!(
-            vec![
-                METADATA_FILE_NAME,
-                "7cd876f5534890e60e293c92f2ed208cde2fdaa77a99dcdbb5a88f06992ad6d3"
-            ],
-            f,
-            "should have the new file"
-        );
+        let mut expected = vec![
+            METADATA_FILE_NAME,
+            "7cd876f5534890e60e293c92f2ed208cde2fdaa77a99dcdbb5a88f06992ad6d3",
+        ];
+        expected.sort();
+        debug_assert_eq!(expected, f, "should have the new file");
         {
             let meta = &fixture.metadata.lock().await.1;
             debug_assert!(!meta.is_empty(), "meta should not be empty");
