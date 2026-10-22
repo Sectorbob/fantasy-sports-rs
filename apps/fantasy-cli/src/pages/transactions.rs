@@ -1,16 +1,12 @@
 use crate::{constants, helpers};
 use fantasy_sports_core::{self as core, PlayerMove};
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    io::Stdout,
-};
+use std::collections::{HashMap, HashSet};
 
 const NA: &str = "N/A";
 
@@ -121,7 +117,7 @@ impl TransactionsPage {
             .collect::<Vec<Row>>();
 
         let table = Table::new(rows, Vec::<Constraint>::new())
-            .widths(&[
+            .widths([
                 Constraint::Percentage(20),
                 Constraint::Percentage(10),
                 Constraint::Percentage(20),
@@ -136,7 +132,7 @@ impl TransactionsPage {
         f.render_widget(table, area);
     }
 
-    fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Line {
+    fn player_cell(&self, player_move: &fantasy_sports_core::PlayerMove) -> Line<'_> {
         let player_id = player_move.player_id();
         if let Some(player) = self.players.get(&player_id) {
             let mut spans = vec![Span::raw(format!("{} [", player.name))];

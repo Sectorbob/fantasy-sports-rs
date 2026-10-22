@@ -1,12 +1,10 @@
 use fantasy_sports_core::{self as core, DraftType};
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use std::io::Stdout;
 
 use crate::{constants, helpers};
 
@@ -122,11 +120,10 @@ impl DraftBoardPage {
                             .split_whitespace()
                             .map(|s| s.to_string())
                             .collect::<Vec<_>>();
-                        if player_name_parts.len() > 0 {
-                            player_name_parts[0] =
-                                format!("{}.", player_name_parts[0][0..1].to_string());
+                        if !player_name_parts.is_empty() {
+                            player_name_parts[0] = format!("{}.", &player_name_parts[0][0..1]);
                         }
-                        player_name = format!("{}", player_name_parts.join(" "));
+                        player_name = player_name_parts.join(" ").to_string();
                     }
 
                     let mut pos_team = vec![];

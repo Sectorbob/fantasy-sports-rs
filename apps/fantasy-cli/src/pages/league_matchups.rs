@@ -1,8 +1,5 @@
-use std::io::Stdout;
-
 use fantasy_sports_core::League;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::Text,
@@ -36,7 +33,7 @@ impl LeagueMatchupsPage {
         let min_tile_height = rows_needed_in_each_tile + 2;
         let weeks = scoreboards.len();
         let rows = area.height as usize / min_tile_height;
-        let cols = weeks / rows + (if weeks % rows > 0 { 1 } else { 0 });
+        let cols = weeks / rows + (if !weeks.is_multiple_of(rows) { 1 } else { 0 });
 
         let chunks = Layout::default()
             .direction(Direction::Horizontal)

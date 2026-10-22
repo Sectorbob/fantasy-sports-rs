@@ -360,7 +360,7 @@ mod custom_tests {
     };
 
     use crate::{
-        Client, League, LeagueStatus, PlayoffBracketEntry, Roster, User,
+        League, LeagueStatus, PlayoffBracketEntry, Roster, User,
         custom::{Standings, format_draft_order},
         data::{LeagueType, PlayoffType, WaiverType},
     };
@@ -394,17 +394,16 @@ mod custom_tests {
         paths
             .iter()
             .map(|league_test_data_filename| {
-                let f = File::open(league_test_data_filename.clone()).expect(
-                    format!("failed to open test data file ({league_test_data_filename})").as_str(),
-                );
+                let f = File::open(league_test_data_filename.clone()).unwrap_or_else(|_| {
+                    panic!("failed to open test data file ({league_test_data_filename})")
+                });
 
-                serde_json::from_reader(BufReader::new(f)).expect(
-                    format!(
+                serde_json::from_reader(BufReader::new(f)).unwrap_or_else(|_| {
+                    panic!(
                         "failed to deserialize league json file: {}",
                         league_test_data_filename
                     )
-                    .as_str(),
-                )
+                })
             })
             .collect()
     }

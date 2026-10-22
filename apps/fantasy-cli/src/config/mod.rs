@@ -1,5 +1,4 @@
 use crate::constants::APP_NAME;
-use dirs;
 use std::{io, path::PathBuf};
 mod model;
 pub use model::*;

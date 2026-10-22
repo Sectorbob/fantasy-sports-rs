@@ -1,12 +1,10 @@
 use fantasy_sports_core as core;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-use std::io::Stdout;
 
 use crate::{constants, helpers};
 
@@ -23,7 +21,7 @@ impl DraftPicksWidget {
         roster_id_filter: Option<String>,
     ) -> Self {
         DraftPicksWidget {
-            title_override: title_override,
+            title_override,
             _league_id: league.id().to_string(),
             picks: league.draft().map_or(vec![], |d| {
                 d.picks
@@ -64,7 +62,7 @@ impl DraftPicksWidget {
             .collect::<Vec<Row>>();
 
         let table = Table::new(rows, Vec::<Constraint>::new())
-            .widths(&[
+            .widths([
                 Constraint::Percentage(12),
                 Constraint::Percentage(12),
                 Constraint::Percentage(76),
@@ -99,7 +97,7 @@ fn format_entry<'d>(draft_pick: &'d core::DraftPick) -> (String, String, Line<'d
             .player
             .positions
             .iter()
-            .map(|pos| helpers::position_span(&pos).clone()),
+            .map(|pos| helpers::position_span(pos).clone()),
     );
     player_spans.push(Span::raw("] "));
     player_spans.push(Span::raw(draft_pick.player.name.clone()));

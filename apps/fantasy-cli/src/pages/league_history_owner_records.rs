@@ -29,7 +29,7 @@ impl LeagueHistoryOwnerRecordsPage {
                 history
                     .league_name
                     .as_ref()
-                    .map_or(true, |name| l.name() == name.as_str())
+                    .is_none_or(|name| l.name() == name.as_str())
             })
             .map(|l| l.standings())
             .collect::<Vec<_>>();
@@ -71,7 +71,7 @@ impl LeagueHistoryOwnerRecordsPage {
                 .style(Style::default().bg(constants::COLOR_BACKGROUND));
 
             let mut rows = vec![];
-            for (_, e) in self.owner_records.iter().enumerate() {
+            for e in self.owner_records.iter() {
                 // let standings = &self.leagues_standings[i];
                 rows.push(Row::new(vec![
                     // Cell::from("Rapid League 17"),
@@ -86,7 +86,7 @@ impl LeagueHistoryOwnerRecordsPage {
             }
 
             let table = Table::new(rows, Vec::<Constraint>::new())
-                .widths(&[
+                .widths([
                     // Constraint::Percentage(20),
                     Constraint::Percentage(30),
                     Constraint::Percentage(20),

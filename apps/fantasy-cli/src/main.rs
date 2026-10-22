@@ -67,7 +67,7 @@ async fn main() -> Result<(), core::Error> {
     let result = match args[1].to_lowercase().as_str() {
         "yahoo" => yahoo_utils::exec(fantasy_league_accessor)
             .await
-            .map_err(|e| core::Error::YahooError(e)),
+            .map_err(core::Error::YahooError),
         "sleeper" => match cfg.sleeper_user_id.as_deref() {
             // usage: fantasy-cli sleeper <league_id>...
             Some(user) => core::sleeper_utils::exec(user, &args[2..])

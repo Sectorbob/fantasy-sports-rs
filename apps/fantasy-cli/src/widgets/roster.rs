@@ -2,13 +2,12 @@ use fantasy_sports_core::{League, Player, PlayerPosition};
 use fantasy_sports_sleeper::User;
 use fantasy_sports_yahoo as yahoo;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{self, Rect},
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use std::{collections::HashMap, io::Stdout};
+use std::collections::HashMap;
 
 use crate::{constants, helpers};
 
@@ -29,15 +28,12 @@ impl RosterWidget {
             } => rosters
                 .iter()
                 .find(|(_, r)| &r.owner_id == user_id)
-                .map(|(_, roster)| RosterWidget::from_sleeper(roster, &owners, &players)),
-            League::Yahoo { rosters, team, .. } => team
-                .as_ref()
-                .map(|t| {
-                    rosters
-                        .get(&t.team_id)
-                        .map(|r| RosterWidget::from_yahoo(t, r))
-                })
-                .flatten(),
+                .map(|(_, roster)| RosterWidget::from_sleeper(roster, owners, players)),
+            League::Yahoo { rosters, team, .. } => team.as_ref().and_then(|t| {
+                rosters
+                    .get(&t.team_id)
+                    .map(|r| RosterWidget::from_yahoo(t, r))
+            }),
             // the roster view is not implemented for FleaFlicker yet
             League::FleaFlicker { .. } => None,
         }
@@ -53,8 +49,7 @@ impl RosterWidget {
             team_name: roster
                 .owner_id
                 .as_ref()
-                .map(|owner_id| owners.get(owner_id).map(|owner| owner.display_name.clone()))
-                .flatten()
+                .and_then(|owner_id| owners.get(owner_id).map(|owner| owner.display_name.clone()))
                 .unwrap_or(format!("User({:?})", roster.owner_id)),
             players: roster
                 .players

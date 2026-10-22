@@ -526,6 +526,14 @@ pub fn avatar_thumbnail_url(avatar_id: String) -> String {
     format!("{SLEEPER_CDN_BASE_URL}/avatars/thumbs/{avatar_id}")
 }
 
+pub trait Id: Display {}
+
+impl Id for usize {}
+impl Id for &usize {}
+impl Id for &str {}
+impl Id for String {}
+impl Id for &String {}
+
 #[cfg(test)]
 mod client_tests {
     use crate::{SeasonType, Sport, SportState, TrendType, data::ScoringSettings};
@@ -634,13 +642,13 @@ mod client_tests {
             .unwrap();
         assert_eq!(12, matchups.len());
         assert_eq!(
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,]
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
                 .iter()
                 .map(|i| *i as u8)
                 .collect::<HashSet<u8>>(),
             matchups
                 .iter()
-                .map(|matchup| matchup.roster_id.clone())
+                .map(|matchup| matchup.roster_id)
                 .collect::<HashSet<u8>>()
         );
     }
@@ -665,7 +673,7 @@ mod client_tests {
             .unwrap();
         assert_eq!(12, rosters.len());
         assert_eq!(
-            vec![
+            [
                 "388386020462698342",
                 "359969312884605487",
                 "220642397291036141",
@@ -677,7 +685,7 @@ mod client_tests {
                 "149110893312457277",
                 "528873604862302116",
                 "585263245137071266",
-                "8600587490314352758",
+                "8600587490314352758"
             ]
             .iter()
             .map(|s| s.to_string())
@@ -709,7 +717,7 @@ mod client_tests {
             .unwrap();
         assert_eq!(12, users.len());
         assert_eq!(
-            vec![
+            [
                 "388386020462698342",
                 "359969312884605487",
                 "220642397291036141",
@@ -721,7 +729,7 @@ mod client_tests {
                 "149110893312457277",
                 "528873604862302116",
                 "585263245137071266",
-                "8600587490314352758",
+                "8600587490314352758"
             ]
             .iter()
             .map(|s| s.to_string())
@@ -966,14 +974,14 @@ mod client_tests {
                 fgm_50p: 5.0,
                 def_td: 6.0,
                 safe: 2.0,
-                pass_yd: 0.03999999910593033,
+                pass_yd: 0.04,
                 blk_kick: 2.0,
                 pass_td: 4.0,
-                rush_yd: 0.10000000149011612,
+                rush_yd: 0.1,
                 fum: 0.0,
                 pts_allow_28_34: -1.0,
                 pts_allow_35p: -4.0,
-                rec_yd: 0.10000000149011612,
+                rec_yd: 0.1,
                 def_st_ff: 0.0,
                 pts_allow_7_13: 4.0,
                 st_ff: 1.0,
@@ -1179,11 +1187,3 @@ mod client_tests {
         }
     }
 }
-
-pub trait Id: Display {}
-
-impl Id for usize {}
-impl Id for &usize {}
-impl Id for &str {}
-impl Id for String {}
-impl Id for &String {}

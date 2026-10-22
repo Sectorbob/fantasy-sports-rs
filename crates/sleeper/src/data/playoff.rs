@@ -328,8 +328,7 @@ mod tests {
         let owner_id = rosters
             .iter()
             .find(|r| r.roster_id == roster_id)
-            .map(|r| r.owner_id.as_ref())
-            .flatten()?;
+            .and_then(|r| r.owner_id.as_ref())?;
         users
             .iter()
             .find(|user| &user.user_id == owner_id)
@@ -362,7 +361,7 @@ mod tests {
         let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
         let rosters = load_rosters_in_league(LEAGUE_ID_2019);
         let users = load_users_in_league(LEAGUE_ID_2019);
-        let expected_team_names: Vec<String> = vec![
+        let expected_team_names: Vec<String> = [
             "Stormy Badgers 01",
             "Team ManagerStormy10",
             "Team ManagerBrave17",
@@ -389,7 +388,7 @@ mod tests {
         let bracket = load_test_winners_bracket(LEAGUE_ID_2019);
         let rosters = load_rosters_in_league(LEAGUE_ID_2019);
         let users = load_users_in_league(LEAGUE_ID_2019);
-        let expected_team_names: Vec<String> = vec!["Stormy Badgers 01", "Team ManagerStormy10"]
+        let expected_team_names: Vec<String> = ["Stormy Badgers 01", "Team ManagerStormy10"]
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();

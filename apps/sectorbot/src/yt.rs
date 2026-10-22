@@ -255,11 +255,7 @@ impl Item {
             ItemKind::Channel => todo!(),
             ItemKind::PlaylistItem => {
                 if let Some(content_details) = &self.content_details {
-                    if let Some(video_id) = &content_details.video_id {
-                        Some(video_id.clone())
-                    } else {
-                        None
-                    }
+                    content_details.video_id.clone()
                 } else {
                     None
                 }
@@ -280,12 +276,12 @@ impl Item {
     pub fn title(&self) -> String {
         self.snippet
             .as_ref()
-            .map_or_else(|| String::new(), |snippet| snippet.title.clone())
+            .map_or_else(String::new, |snippet| snippet.title.clone())
     }
     pub fn description(&self) -> String {
         self.snippet
             .as_ref()
-            .map_or_else(|| String::new(), |snippet| snippet.description.clone())
+            .map_or_else(String::new, |snippet| snippet.description.clone())
     }
     pub fn link(&self) -> Option<String> {
         match self.kind {
@@ -321,10 +317,10 @@ impl Item {
                 Some(format!("https://www.youtube.com/channel/{}", self.id.id()))
             }
             ItemKind::PlaylistItem => {
-                if let Some(content_details) = &self.content_details {
-                    if let Some(video_id) = &content_details.video_id {
-                        return Some(format!("https://www.youtube.com/watch?v={video_id}"));
-                    }
+                if let Some(content_details) = &self.content_details
+                    && let Some(video_id) = &content_details.video_id
+                {
+                    return Some(format!("https://www.youtube.com/watch?v={video_id}"));
                 }
                 None
             }
@@ -335,13 +331,7 @@ impl Item {
     pub fn published_at(&self) -> Option<DateTime<Utc>> {
         match self.kind {
             ItemKind::Other => None,
-            _ => {
-                if let Some(snippet) = &self.snippet {
-                    Some(snippet.published_at)
-                } else {
-                    None
-                }
-            }
+            _ => self.snippet.as_ref().map(|snippet| snippet.published_at),
         }
     }
     pub fn uploads_playlist_id(&self) -> Option<String> {

@@ -115,7 +115,7 @@ mod tests {
                     .append_header("x-xss-protection", "1; mode=block")
                     .set_body_bytes(
                         fs::read(data_file)
-                            .expect(format!("failed to load file: {data_file}").as_str()),
+                            .unwrap_or_else(|_| panic!("failed to load file: {data_file}")),
                     ),
             )
     }

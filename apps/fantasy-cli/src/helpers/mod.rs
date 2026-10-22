@@ -14,7 +14,7 @@ pub fn color_from_position(pos: &core::PlayerPosition) -> ratatui::style::Color 
     }
 }
 
-pub fn position_span(pos: &core::PlayerPosition) -> ratatui::text::Span {
+pub fn position_span(pos: &core::PlayerPosition) -> ratatui::text::Span<'_> {
     ratatui::text::Span::styled(
         format!("{pos}"),
         ratatui::style::Style::default().fg(color_from_position(pos)),

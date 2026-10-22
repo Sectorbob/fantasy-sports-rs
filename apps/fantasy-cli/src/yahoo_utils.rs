@@ -6,7 +6,7 @@ use fantasy_sports_yahoo::{
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
-    io::{Error as IOError, ErrorKind},
+    io::Error as IOError,
 };
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -186,13 +186,10 @@ async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     let auth_request_url = match client.get_request_auth_url().await {
         Ok(url) => url,
         Err(err) => {
-            return Err(IOError::new(
-                ErrorKind::Other,
-                format!(
-                    "received unexpected error while getting request auth url: {:?}",
-                    err
-                ),
-            ));
+            return Err(IOError::other(format!(
+                "received unexpected error while getting request auth url: {:?}",
+                err
+            )));
         }
     };
     debug!("Auth request URL: {}", auth_request_url);
@@ -202,10 +199,10 @@ async fn perform_oauth_flow(client: &mut Client) -> Result<Token, IOError> {
     let token = match client.get_token(&auth_code).await {
         Ok(t) => t,
         Err(err) => {
-            return Err(IOError::new(
-                ErrorKind::Other,
-                format!("received unexpected error while getting token: {:?}", err),
-            ));
+            return Err(IOError::other(format!(
+                "received unexpected error while getting token: {:?}",
+                err
+            )));
         }
     };
     debug!("Token: {:#?}", token);
@@ -247,7 +244,7 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                                 player_positions.insert(position);
                             }
                             PlayerPositions::Many(positions) => {
-                                positions.into_iter().for_each(|pos| {
+                                positions.iter().for_each(|pos| {
                                     player_positions.insert(pos);
                                 });
                             }
@@ -270,7 +267,7 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                                 player_positions.insert(position);
                             }
                             PlayerPositions::Many(positions) => {
-                                positions.into_iter().for_each(|pos| {
+                                positions.iter().for_each(|pos| {
                                     player_positions.insert(pos);
                                 });
                             }
@@ -293,7 +290,7 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                                 player_positions.insert(position);
                             }
                             PlayerPositions::Many(positions) => {
-                                positions.into_iter().for_each(|pos| {
+                                positions.iter().for_each(|pos| {
                                     player_positions.insert(pos);
                                 });
                             }
@@ -311,7 +308,7 @@ fn fancy_navigate_transactions(transactions: &Vec<Transaction>) {
                                 player_positions.insert(position);
                             }
                             PlayerPositions::Many(positions) => {
-                                positions.into_iter().for_each(|pos| {
+                                positions.iter().for_each(|pos| {
                                     player_positions.insert(pos);
                                 });
                             }

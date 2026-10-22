@@ -40,7 +40,7 @@ pub fn get_player_history<T: Into<String>>(
             // history.insert(season, PlayerHistorySeason());
         }
     }
-    return history;
+    history
 }
 
 pub struct KeepablesReport {
@@ -60,7 +60,7 @@ impl KeepablesReport {
             .collect::<Vec<String>>();
         owners.sort_by_key(|owner| owner.to_ascii_lowercase());
         for owner in owners.iter() {
-            text.push_str(&owner);
+            text.push_str(owner);
             text.push('\n');
 
             let max_player_name_length = self

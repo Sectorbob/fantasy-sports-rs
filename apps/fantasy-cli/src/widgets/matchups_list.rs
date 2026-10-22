@@ -1,11 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    io::Stdout,
-};
+use std::collections::{HashMap, HashSet};
 
 use fantasy_sports_core as core;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
@@ -38,9 +34,7 @@ impl MatchupsList {
                             .left
                             .players
                             .iter()
-                            .filter_map(|player| {
-                                players.get(&player.player_id.id).map(core::Player::clone)
-                            })
+                            .filter_map(|player| players.get(&player.player_id.id).cloned())
                             .collect(),
                     },
                     side_2: m.right.as_ref().map_or(
@@ -57,9 +51,7 @@ impl MatchupsList {
                             starters: right
                                 .players
                                 .iter()
-                                .filter_map(|player| {
-                                    players.get(&player.player_id.id).map(core::Player::clone)
-                                })
+                                .filter_map(|player| players.get(&player.player_id.id).cloned())
                                 .collect(),
                         },
                     ),
@@ -201,7 +193,7 @@ impl MatchupsList {
 
         let mut table = Table::new(rows, Vec::<Constraint>::new())
             // .block(Block::default().borders(Borders::ALL).title("Students"))
-            .widths(&col_widths);
+            .widths(col_widths);
         if let Some(header) = header {
             table = table.header(header)
         }

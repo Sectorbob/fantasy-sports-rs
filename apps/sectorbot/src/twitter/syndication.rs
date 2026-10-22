@@ -62,7 +62,7 @@ impl Client {
 
                 Ok(serde_json::from_str::<TimelineResponse>(json_text)?)
             } else {
-                return Err("Failed to find JSON data in the response".into());
+                Err("Failed to find JSON data in the response".into())
             }
         } else {
             Err(format!("Failed to fetch user timeline: {}", res.status()).into())
@@ -157,11 +157,9 @@ mod tests {
                         ResponseTemplate::new(200)
                             .append_header("content-language", "en")
                             .append_header("content-type", "text/html; charset=UTF-8")
-                            .set_body_bytes(
-                                fs::read(test_data_file).await.expect(
-                                    format!("failed to load file: {test_data_file}").as_str(),
-                                ),
-                            ),
+                            .set_body_bytes(fs::read(test_data_file).await.unwrap_or_else(|_| {
+                                panic!("failed to load file: {test_data_file}")
+                            })),
                     ),
             )
             .await;

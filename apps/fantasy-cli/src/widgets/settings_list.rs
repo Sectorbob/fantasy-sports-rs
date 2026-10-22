@@ -1,8 +1,5 @@
-use std::io::Stdout;
-
 use fantasy_sports_core::League;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
@@ -17,7 +14,7 @@ pub struct SettingsListWidget {
 impl SettingsListWidget {
     pub fn from_league(title_override: Option<String>, league: &League) -> Self {
         SettingsListWidget {
-            title_override: title_override,
+            title_override,
             settings: match &league.settings().scoring {
                 Some(scoring_settings) => scoring_settings.formatted_settings(),
                 None => vec![],
@@ -49,7 +46,7 @@ impl SettingsListWidget {
 
         let table = Table::new(rows, Vec::<Constraint>::new())
             // .block(Block::default().borders(Borders::ALL).title("Students"))
-            .widths(&[Constraint::Percentage(60), Constraint::Percentage(40)]);
+            .widths([Constraint::Percentage(60), Constraint::Percentage(40)]);
 
         f.render_widget(table, area);
     }

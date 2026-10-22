@@ -340,19 +340,25 @@ async fn do_feed_fetch(
     let mut new_yt_videos: Vec<yt::Item> = vec![];
 
     for tweet in tweets {
-        if let None = feed
+        if feed
             .entries
             .iter()
             .find(|e| e.id.platform == Some(store::Platform::Twitter) && e.id.id == tweet.id_str)
+            .is_none()
         {
             new_tweets.push(tweet);
         }
     }
     for video in yt_videos {
-        if let None = feed.entries.iter().find(|e| {
-            e.id.platform == Some(store::Platform::Youtube)
-                && e.id.id == video.video_id().unwrap_or_default()
-        }) {
+        if feed
+            .entries
+            .iter()
+            .find(|e| {
+                e.id.platform == Some(store::Platform::Youtube)
+                    && e.id.id == video.video_id().unwrap_or_default()
+            })
+            .is_none()
+        {
             new_yt_videos.push(video);
         }
     }
@@ -500,13 +506,11 @@ impl From<yt::Item> for FeedEntry {
             author_name: video
                 .snippet
                 .as_ref()
-                .map(|snippet| snippet.channel_title.clone())
-                .flatten(),
+                .and_then(|snippet| snippet.channel_title.clone()),
             author_id: video
                 .snippet
                 .as_ref()
-                .map(|snippet| snippet.channel_id.clone())
-                .flatten(),
+                .and_then(|snippet| snippet.channel_id.clone()),
             embed_image_url: video
                 .snippet
                 .as_ref()
@@ -520,7 +524,7 @@ fn feed_cleanup(feed: &mut Feed, store: &DataStore) -> bool {
     let mut unique_entries = feed.entries.clone();
     unique_entries.sort_by_key(|e| e.id.clone()); // sort for deduplication
     unique_entries.dedup_by_key(|e| e.id.clone()); // deduplicate by id
-    unique_entries.sort_by_key(|e| e.source_ts.clone()); // sort by source_ts for save
+    unique_entries.sort_by_key(|e| e.source_ts); // sort by source_ts for save
     log::info!(". Unique Entries: {}", unique_entries.len());
     if unique_entries.len() < feed.entries.len() {
         log::warn!(
@@ -531,7 +535,7 @@ fn feed_cleanup(feed: &mut Feed, store: &DataStore) -> bool {
         );
         // Update the feed with unique entries
         feed.entries = unique_entries;
-        if let Err(e) = store.save_feed(&feed) {
+        if let Err(e) = store.save_feed(feed) {
             log::error!("Failed to save feed {}: {}", feed.name, e);
         } else {
             log::info!("Feed {} saved with unique entries.", feed.name);

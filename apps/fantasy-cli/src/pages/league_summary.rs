@@ -20,22 +20,17 @@ pub struct LeagueSummaryPage<'a> {
 impl<'a> LeagueSummaryPage<'a> {
     pub fn new(league: Option<&'a League>) -> Self {
         LeagueSummaryPage {
-            league: league,
-            scoring_settings_widget: match league {
-                Some(l) => Some(widgets::SettingsListWidget::from_league(
-                    Some(String::from("Scoring Settings")),
-                    l,
-                )),
-                None => None,
-            },
-            draft_picks_widget: match league {
-                Some(l) => Some(widgets::DraftPicksWidget::from_league(
+            league,
+            scoring_settings_widget: league.map(|l| {
+                widgets::SettingsListWidget::from_league(Some(String::from("Scoring Settings")), l)
+            }),
+            draft_picks_widget: league.map(|l| {
+                widgets::DraftPicksWidget::from_league(
                     None,
                     l,
                     widgets::RosterWidget::from_league(l).map(|r| r.roster_id.clone()),
-                )),
-                None => None,
-            },
+                )
+            }),
         }
     }
 
@@ -87,7 +82,7 @@ impl<'a> LeagueSummaryPage<'a> {
                             // Render league details in the first column
                             render_league_details(league, f, row);
                         } else if i == 0 && j == 1 {
-                            if let Some(roster_widget) = widgets::RosterWidget::from_league(&league) {
+                            if let Some(roster_widget) = widgets::RosterWidget::from_league(league) {
                                 // Render roster in the second column
                                 roster_widget.draw(f, row);
                             } else {
@@ -237,7 +232,7 @@ fn render_league_playoff_results(
                     team_id = teams
                         .iter()
                         .find(|t| { t.id == team.id })
-                        .map_or(format!(""), |t| t.team_name.clone())
+                        .map_or(String::new(), |t| t.team_name.clone())
                 )
             })
             .collect::<Vec<_>>();

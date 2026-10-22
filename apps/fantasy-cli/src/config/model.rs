@@ -1,6 +1,6 @@
 use fantasy_sports_core::ExternalId;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct ConfigModel {
     pub landing_page: DefaultLandingPage,
     /// Sleeper user whose leagues are listed; Sleeper is skipped when unset.
@@ -9,15 +9,6 @@ pub struct ConfigModel {
     /// Settings for the league history / owner records page.
     #[serde(default)]
     pub history: HistoryConfig,
-}
-impl Default for ConfigModel {
-    fn default() -> Self {
-        ConfigModel {
-            landing_page: DefaultLandingPage::default(),
-            sleeper_user_id: None,
-            history: HistoryConfig::default(),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, PartialEq)]
@@ -57,14 +48,10 @@ mod tests {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub enum DefaultLandingPage {
+    #[default]
     WelcomePage,
     LeaguesPage,
     LeagueSummary(ExternalId),
-}
-impl Default for DefaultLandingPage {
-    fn default() -> Self {
-        DefaultLandingPage::WelcomePage
-    }
 }

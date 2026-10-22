@@ -64,7 +64,7 @@ async fn do_it(
 
     // let mut errors: Vec<String> = vec![];
 
-    let league_accessor_clone = Arc::clone(&fantasy_league_accessor);
+    let league_accessor_clone = Arc::clone(fantasy_league_accessor);
     let sleeper_user_id = cfg.sleeper_user_id.clone();
     let backend_action_handler = tokio::spawn(async move {
         loop {
@@ -319,97 +319,97 @@ async fn render_loop(
         }
 
         // Exit on 'q'
-        if event::poll(std::time::Duration::from_millis(99))? {
-            if let Event::Key(key) = event::read()? {
-                let handled = match page.clone() {
-                    NaviItem::WelcomePage => false,
-                    NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
-                        pages::KeyHandleResult::NOOP => true,
-                        pages::KeyHandleResult::GoToLeagueSummary => {
-                            // info!("Selected league: {:?}", leagues_page.selected().);
-                            if let Some(selected_league) = leagues_page.selected() {
-                                // Here you can handle the selected league, e.g., navigate to a summary page
-                                // For example, you might want to set the league in a summary page struct
-                                // league_summary_page.set_league(selected_league.clone());
-                                log::info!("Navigating to summary for league: {}", selected_league);
+        if event::poll(std::time::Duration::from_millis(99))?
+            && let Event::Key(key) = event::read()?
+        {
+            let handled = match page.clone() {
+                NaviItem::WelcomePage => false,
+                NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
+                    pages::KeyHandleResult::NOOP => true,
+                    pages::KeyHandleResult::GoToLeagueSummary => {
+                        // info!("Selected league: {:?}", leagues_page.selected().);
+                        if let Some(selected_league) = leagues_page.selected() {
+                            // Here you can handle the selected league, e.g., navigate to a summary page
+                            // For example, you might want to set the league in a summary page struct
+                            // league_summary_page.set_league(selected_league.clone());
+                            log::info!("Navigating to summary for league: {}", selected_league);
 
-                                // Here you can handle the selected league, e.g., navigate to a summary page
-                                navi_stack.push(page);
-                                page = NaviItem::LeagueSummary(selected_league.id().to_string());
-                            } else {
-                                log::error!("No league selected.");
-                            }
-                            // Example: go to a summary page
-                            true
-                        }
-
-                        pages::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
+                            // Here you can handle the selected league, e.g., navigate to a summary page
                             navi_stack.push(page);
-                            page = NaviItem::LeagueHistoryOwnerRecords;
-                            true
-                        }
-                        pages::KeyHandleResult::Unhandled => false,
-                    },
-                    NaviItem::LeagueSummary(league_id) => {
-                        if key.code == KeyCode::Char('m') {
-                            // go to matchups
-                            navi_stack.push(page);
-                            page = NaviItem::LeagueMatchups(league_id.to_string());
-                            true
-                        } else if key.code == KeyCode::Char('t') {
-                            // go to transactions
-                            navi_stack.push(page);
-                            page = NaviItem::TransactionsPage(league_id.to_string());
-                            true
-                        } else if key.code == KeyCode::Char('d') {
-                            // go to draftboard
-                            navi_stack.push(page);
-                            page = NaviItem::LeagueDraftBoardPage(league_id.to_string());
-                            true
-                        } else if key.code == KeyCode::Char('r') {
-                            // refresh league
-
-                            // TODO: check to see if a league refresh is already in progress
-
-                            if let Err(err) = events_tx
-                                .send(events::BackendAction::RefreshLeague(core::ExternalId {
-                                    platform: fantasy_sports_core::Platform::Sleeper,
-                                    id: league_id.to_string(),
-                                }))
-                                .await
-                            {
-                                log::error!("Failed to send refresh league action: {err}");
-                            }
-                            // TODO: make sure to mark league as refresh in progress
-                            true
+                            page = NaviItem::LeagueSummary(selected_league.id().to_string());
                         } else {
-                            false
+                            log::error!("No league selected.");
                         }
+                        // Example: go to a summary page
+                        true
                     }
-                    _ => false,
-                };
 
-                if !handled {
-                    match key.code {
-                        KeyCode::Char('q') => break, // global quit
-                        KeyCode::Char('l') => {
-                            // go to leagues list page
-                            navi_stack.push(page);
-                            page = NaviItem::LeaguesPage;
-                        }
-
-                        KeyCode::Char('w') => {
-                            // go to welcome page
-                            navi_stack.push(page);
-                            page = NaviItem::WelcomePage;
-                        }
-                        KeyCode::Char('b') => match navi_stack.pop() {
-                            // go back
-                            Some(previous) => page = previous,
-                            None => {}
-                        },
-                        _ => {}
+                    pages::KeyHandleResult::GoToLeagueHistoryOwnerRecords => {
+                        navi_stack.push(page);
+                        page = NaviItem::LeagueHistoryOwnerRecords;
+                        true
                     }
+                    pages::KeyHandleResult::Unhandled => false,
+                },
+                NaviItem::LeagueSummary(league_id) => {
+                    if key.code == KeyCode::Char('m') {
+                        // go to matchups
+                        navi_stack.push(page);
+                        page = NaviItem::LeagueMatchups(league_id.to_string());
+                        true
+                    } else if key.code == KeyCode::Char('t') {
+                        // go to transactions
+                        navi_stack.push(page);
+                        page = NaviItem::TransactionsPage(league_id.to_string());
+                        true
+                    } else if key.code == KeyCode::Char('d') {
+                        // go to draftboard
+                        navi_stack.push(page);
+                        page = NaviItem::LeagueDraftBoardPage(league_id.to_string());
+                        true
+                    } else if key.code == KeyCode::Char('r') {
+                        // refresh league
+
+                        // TODO: check to see if a league refresh is already in progress
+
+                        if let Err(err) = events_tx
+                            .send(events::BackendAction::RefreshLeague(core::ExternalId {
+                                platform: fantasy_sports_core::Platform::Sleeper,
+                                id: league_id.to_string(),
+                            }))
+                            .await
+                        {
+                            log::error!("Failed to send refresh league action: {err}");
+                        }
+                        // TODO: make sure to mark league as refresh in progress
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+
+            if !handled {
+                match key.code {
+                    KeyCode::Char('q') => break, // global quit
+                    KeyCode::Char('l') => {
+                        // go to leagues list page
+                        navi_stack.push(page);
+                        page = NaviItem::LeaguesPage;
+                    }
+
+                    KeyCode::Char('w') => {
+                        // go to welcome page
+                        navi_stack.push(page);
+                        page = NaviItem::WelcomePage;
+                    }
+                    KeyCode::Char('b') => match navi_stack.pop() {
+                        // go back
+                        Some(previous) => page = previous,
+                        None => {}
+                    },
+                    _ => {}
                 }
             }
         }
@@ -421,7 +421,7 @@ async fn render_loop(
 
 fn draw_blank_screen_with_q_exit(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-) -> io::Result<CompletedFrame> {
+) -> io::Result<CompletedFrame<'_>> {
     terminal.draw(|f| {
         let size = f.area();
         let block = Block::default()

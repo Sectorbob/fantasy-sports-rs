@@ -101,7 +101,7 @@ mod tests {
             .await
             .expect("unable to read test data file");
         Mock::given(method("GET"))
-            .and(path(format!("/projections/nfl/2025/1")))
+            .and(path("/projections/nfl/2025/1".to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
             .mount(&mock_server)
             .await;
@@ -119,7 +119,7 @@ mod tests {
             .await
             .expect("unable to read test data file");
         Mock::given(method("GET"))
-            .and(path(format!("/stats/nfl/2023/1")))
+            .and(path("/stats/nfl/2023/1".to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(json_body, "application/json"))
             .mount(&mock_server)
             .await;

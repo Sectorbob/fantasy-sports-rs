@@ -125,7 +125,7 @@ impl DataStore {
 
     pub fn save_league(&self, league: &League) -> Result<(), DataStoreError> {
         let data = serde_json::to_vec(league)?;
-        self.leagues.insert(league.guild_id.to_string(), data)?;
+        self.leagues.insert(&league.guild_id, data)?;
         self.leagues.flush()?;
         Ok(())
     }
@@ -138,10 +138,8 @@ impl DataStore {
         db: &sled::Db,
     ) -> Result<Vec<T>, DataStoreError> {
         let mut items = Vec::new();
-        for item in db.iter() {
-            if let Ok((_key, value)) = item {
-                items.push(serde_json::from_slice::<T>(&value)?);
-            }
+        for (_key, value) in db.iter().flatten() {
+            items.push(serde_json::from_slice::<T>(&value)?);
         }
         Ok(items)
     }
@@ -176,10 +174,10 @@ impl DataStore {
 
         let mut league = self.get_league(guild_id)?;
         let changed = if let Some(entry) = league.member_map.get_mut(&member_id) {
-            if let Some(_) = entry.get(platform) {
+            if entry.get(platform).is_some() {
                 // overwrite it
                 let existing_value = entry.insert(platform.clone(), external_user_id.id.clone());
-                existing_value.map_or(true, |v| v != external_user_id.id)
+                existing_value.is_none_or(|v| v != external_user_id.id)
             } else {
                 // insert it
                 entry.insert(platform.clone(), external_user_id.id);
@@ -297,7 +295,7 @@ impl ExternalId {
         self.platform.clone()
     }
     pub fn is_fantasy_platform(&self) -> bool {
-        self.platform.as_ref().map_or(false, |p| match p {
+        self.platform.as_ref().is_some_and(|p| match p {
             Platform::Sleeper => true,
             Platform::Yahoo => true,
             _ => false,
@@ -357,7 +355,7 @@ impl Serialize for ExternalId {
 impl fmt::Display for ExternalId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(platform) = &self.platform {
-            write!(f, "{}:{}", platform.to_string(), self.id)
+            write!(f, "{}:{}", platform, self.id)
         } else {
             write!(f, "{}", self.id)
         }
@@ -463,17 +461,17 @@ impl QuotaKey {
 }
 impl From<QuotaKey> for String {
     fn from(key: QuotaKey) -> Self {
-        format!("{}:{}", key.platform.to_string(), key.date)
+        format!("{}:{}", key.platform, key.date)
     }
 }
 impl From<&QuotaKey> for String {
     fn from(key: &QuotaKey) -> Self {
-        format!("{}:{}", key.platform.to_string(), key.date)
+        format!("{}:{}", key.platform, key.date)
     }
 }
 impl From<Platform> for String {
     fn from(platform: Platform) -> Self {
-        format!("{}:{}", platform.to_string(), today_pacific())
+        format!("{}:{}", platform, today_pacific())
     }
 }
 impl Serialize for QuotaKey {
@@ -481,7 +479,7 @@ impl Serialize for QuotaKey {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("{}:{}", self.platform.to_string(), self.date))
+        serializer.serialize_str(&format!("{}:{}", self.platform, self.date))
     }
 }
 impl<'de> Deserialize<'de> for QuotaKey {
@@ -510,22 +508,17 @@ pub struct League {
 }
 impl League {
     pub fn current_league_id(&self) -> Option<ExternalId> {
-        self.league_id_map
-            .get(&self.current_season)
-            .map(ExternalId::clone)
+        self.league_id_map.get(&self.current_season).cloned()
     }
     pub fn current_user_id<T: Into<String>>(&self, member_id: T) -> Option<ExternalId> {
         self.current_league_id()
-            .map(ExternalId::get_platform)
-            .flatten()
-            .map(|current_league_platform: Platform| {
+            .and_then(ExternalId::get_platform)
+            .and_then(|current_league_platform: Platform| {
                 self.member_map
                     .get(&member_id.into())
-                    .map(|m| m.get(&current_league_platform))
-                    .flatten()
+                    .and_then(|m| m.get(&current_league_platform))
                     .map(|id| ExternalId::new(current_league_platform, id.to_string()))
             })
-            .flatten()
     }
 }
 

@@ -78,7 +78,7 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 
 fn setup_logger() {
     if let Some(hide_ts) = std::env::var_os(ENV_HIDE_LOG_TS) {
-        if hide_ts.to_ascii_uppercase() == "TRUE" {
+        if hide_ts.eq_ignore_ascii_case("TRUE") {
             tracing_subscriber::fmt().without_time().init();
         } else {
             tracing_subscriber::fmt().init();

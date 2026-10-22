@@ -77,7 +77,8 @@ async fn fetch_rss_feed(
         .unwrap_or_default()
         .into_iter()
         .find(|feed| feed_slug(&feed.name) == feed_name || feed.id.to_string() == feed_name);
-    let response = match feed {
+
+    match feed {
         Some(feed) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/rss+xml")
@@ -88,8 +89,7 @@ async fn fetch_rss_feed(
             .header("Content-Type", "text/plain")
             .body("feed not found".to_string())
             .unwrap(),
-    };
-    response
+    }
 }
 
 async fn fetch_leagues(

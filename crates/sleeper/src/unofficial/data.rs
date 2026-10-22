@@ -433,6 +433,8 @@ impl<'de> Deserialize<'de> for PlayerId {
     }
 }
 
+// the variants are Sleeper's own stat key names and are (de)serialized as-is
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, Hash, PartialOrd, Ord)]
 pub enum StatKey {
     adp_dd_ppr,

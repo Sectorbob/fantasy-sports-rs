@@ -31,8 +31,8 @@ pub struct Service {
 impl Service {
     pub async fn new(store_arc: &Arc<DataStore>) -> Result<Self, ECRError> {
         let cache_dir = path::Path::new("fantasy_cache");
-        let sleeper_cache_dir = cache_dir.join("sleeper");
-        let yahoo_cache_dir = cache_dir.join("yahoo");
+        let _sleeper_cache_dir = cache_dir.join("sleeper");
+        let _yahoo_cache_dir = cache_dir.join("yahoo");
         Ok(Service {
             sleeper_cli: fantasy_sports_sleeper::Client::new(), /*.with_cache(sleeper_cache_dir).await?*/
             yahoo_fantasy_cli: fantasy_sports_yahoo::Client::new_from_env()?,
@@ -50,7 +50,7 @@ impl Service {
     ) -> Result<KeepablesContext, ECRError> {
         let ecr_response_future = self.fantasypros_cli.fetch_ecr_half_ppr();
         let league_id: String = league_id.into();
-        let players_future = self.sleeper_cli.fetch_all_players(&sport);
+        let players_future = self.sleeper_cli.fetch_all_players(sport);
         let league_future = self.sleeper_cli.get_league(league_id.clone());
         let rosters_future = self.sleeper_cli.get_rosters_in_league(league_id.clone());
         let users_future = self.sleeper_cli.get_users_for_league(league_id.clone());
@@ -109,8 +109,7 @@ impl Service {
             let user = ctx
                 .users
                 .iter()
-                .find(|u| roster.owner_id.is_some() && roster.owner_id.clone().unwrap() == u.user_id)
-                .map(sleeper::User::clone)
+                .find(|u| roster.owner_id.is_some() && roster.owner_id.clone().unwrap() == u.user_id).cloned()
                 .unwrap_or_else(|| {
                     log::warn!("for some reason, we could not find the user info {user_id:?} for roster({roster_id})",
                         user_id = roster.owner_id,
@@ -207,7 +206,7 @@ impl Service {
         let mut draft_futures = vec![];
         let mut current_league = league;
         while let Some(league_id) = current_league.previous_league_id {
-            if league_id == "" || league_id == "0" {
+            if league_id.is_empty() || league_id == "0" {
                 // end of the line
                 break;
             }
@@ -349,7 +348,7 @@ impl Service {
         let manager_role = self
             .get_existing_or_create(
                 guild_id,
-                &http,
+                http,
                 &mut existing_roles,
                 "manager",
                 0x7E8C54,
@@ -364,7 +363,7 @@ impl Service {
             .await?
             .into_iter()
             .filter(|m| !m.user.bot)
-            .map(|m| (m.user.id.clone(), m))
+            .map(|m| (m.user.id, m))
             .collect::<HashMap<_, _>>();
 
         // check existing member mappings
@@ -400,28 +399,28 @@ impl Service {
             }
 
             // make sure that the usaer's nickname matches what their team display name is in the remote league
-            if let Some(external_manager) = external_manager {
-                if member.display_name() != external_manager.display_name {
-                    let nickname = external_manager.display_name.as_str();
-                    // let's make a nickname
-                    match member
-                        .edit(http, EditMember::new().nickname(nickname))
-                        .await
-                    {
-                        Ok(_) => {
-                            log::info!(
-                                "set {member}'s nickname to {nickname}",
-                                member = member.user.display_name(),
-                            );
-                        }
-                        Err(err) => {
-                            let err_msg = format!(
-                                "failed to set {member}'s nickname to {nickname}: {err}",
-                                member = member.user.display_name(),
-                            );
-                            log::info!("{err_msg}");
-                            // return Err(ECRError::Unknown(err_msg)); don't fail it
-                        }
+            if let Some(external_manager) = external_manager
+                && member.display_name() != external_manager.display_name
+            {
+                let nickname = external_manager.display_name.as_str();
+                // let's make a nickname
+                match member
+                    .edit(http, EditMember::new().nickname(nickname))
+                    .await
+                {
+                    Ok(_) => {
+                        log::info!(
+                            "set {member}'s nickname to {nickname}",
+                            member = member.user.display_name(),
+                        );
+                    }
+                    Err(err) => {
+                        let err_msg = format!(
+                            "failed to set {member}'s nickname to {nickname}: {err}",
+                            member = member.user.display_name(),
+                        );
+                        log::info!("{err_msg}");
+                        // return Err(ECRError::Unknown(err_msg)); don't fail it
                     }
                 }
             }
@@ -443,7 +442,7 @@ impl Service {
         let role_id = if let Some(existing_role) =
             existing_roles.iter().find(|(_id, r)| r.name == role_name)
         {
-            existing_role.0.clone()
+            *existing_role.0
         } else {
             // create it
             let new_role = guild_id
@@ -456,7 +455,7 @@ impl Service {
                         .permissions(permissions),
                 )
                 .await?;
-            let k = new_role.id.clone();
+            let k = new_role.id;
             existing_roles.insert(new_role.id, new_role);
             k
         };
@@ -473,7 +472,7 @@ impl Service {
         let bystander_role = self
             .get_existing_or_create(
                 guild_id,
-                &http,
+                http,
                 &mut existing_roles,
                 "bystander",
                 0x808080,
@@ -484,7 +483,7 @@ impl Service {
         let manager_role = self
             .get_existing_or_create(
                 guild_id,
-                &http,
+                http,
                 &mut existing_roles,
                 "manager",
                 0x7E8C54,

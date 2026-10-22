@@ -1,7 +1,7 @@
 use fantasy_sports_sleeper::custom::Standings;
 use serenity::all::{
     CacheHttp, ChannelId, Colour, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
-    CreateMessage, EventHandler, GuildId, Member,
+    CreateMessage, EventHandler, Member,
 };
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -49,7 +49,7 @@ impl Handler {
             "Youtube credits consumed: {}",
             self.yt_client.credits_consumed()
         );
-        send_as_code(&ctx, &msg, message).await;
+        send_as_code(ctx, msg, message).await;
         Ok(())
     }
 
@@ -60,11 +60,7 @@ impl Handler {
         // let guild = msg.guild(&ctx.cache);
 
         let channel_id = msg.channel_id.to_string();
-        let channel_name = msg
-            .channel_id
-            .name(&ctx.http)
-            .await
-            .map_or(na.clone(), |name| name);
+        let channel_name = msg.channel_id.name(&ctx.http).await.unwrap_or(na.clone());
 
         let guild_id = &msg.guild_id;
         let league_meta_data = guild_id
@@ -86,8 +82,7 @@ impl Handler {
 
         let league_id = league_meta_data
             .as_ref()
-            .map(League::current_league_id)
-            .flatten();
+            .and_then(League::current_league_id);
         let league = match &league_id {
             Some(league_id) => self
                 .ecr_service
@@ -153,8 +148,7 @@ impl Handler {
                 let member_user_id = member.user.id.to_string();
                 let mapped_to = league_meta_data
                     .as_ref()
-                    .map(|l| l.current_user_id(member_user_id.as_str()))
-                    .flatten()
+                    .and_then(|l| l.current_user_id(member_user_id.as_str()))
                     .map_or(String::from("UNMAPPED"), |id| id.to_string());
                 s.push_str(format!("\n - {member_name} ({member_user_id}) {mapped_to}").as_str());
             }
@@ -191,7 +185,7 @@ impl Handler {
             text.push_str(format!("\n - {season}").as_str());
         }
 
-        send_as_code(&ctx, &msg, text).await;
+        send_as_code(ctx, msg, text).await;
         Ok(())
     }
 
@@ -205,7 +199,7 @@ impl Handler {
             .fetch_keepable_context(self.league_id()?, &SPORT)
             .await?;
         let keepables_report = self.ecr_service.get_keepables(&keepables_ctx)?;
-        send_as_code(&ctx, &msg, keepables_report.text_report()).await;
+        send_as_code(ctx, msg, keepables_report.text_report()).await;
         Ok(())
     }
 
@@ -218,7 +212,7 @@ impl Handler {
         let standings = Standings::from_sleeper(league_id).await?;
         let order = standings.randomize_bucketed_draft_order();
         let text_report = Standings::visualize_draft_order(league_id, order).await?;
-        send_as_code(&ctx, &msg, text_report).await;
+        send_as_code(ctx, msg, text_report).await;
         Ok(())
     }
 
@@ -231,7 +225,7 @@ impl Handler {
 
         let command_parts = msg.content.split_ascii_whitespace().collect::<Vec<_>>();
         if command_parts.len() != 3 {
-            send_as_code(&ctx, &msg, "invalid command syntax").await;
+            send_as_code(ctx, msg, "invalid command syntax").await;
             return Ok(());
         }
         let member_id = msg.mentions.first().ok_or(ECRError::Unknown(
@@ -254,7 +248,7 @@ impl Handler {
         let mut response = String::new();
         response.push_str(format!("Content: {}", msg.content).as_str());
 
-        send_as_code(&ctx, &msg, response).await;
+        send_as_code(ctx, msg, response).await;
         Ok(())
     }
 
@@ -267,7 +261,7 @@ impl Handler {
 
         let command_parts = msg.content.split_ascii_whitespace().collect::<Vec<_>>();
         if command_parts.len() != 3 {
-            send_as_code(&ctx, &msg, "invalid command syntax").await;
+            send_as_code(ctx, msg, "invalid command syntax").await;
             return Ok(());
         }
         let season: i32 = command_parts[1]
@@ -289,7 +283,7 @@ impl Handler {
         let mut response = String::new();
         response.push_str(format!("Content: {}", msg.content).as_str());
 
-        send_as_code(&ctx, &msg, response).await;
+        send_as_code(ctx, msg, response).await;
         Ok(())
     }
 
@@ -305,7 +299,6 @@ impl Handler {
             .await
             .inspect_err(|err| {
                 log::warn!("unable to fetch league users: {err}");
-                return;
             })
             .map(|users| {
                 users
@@ -313,7 +306,7 @@ impl Handler {
                     .find(|user| user.display_name == member.user.display_name())
             })?
             .map(ExternalId::from)
-            .ok_or_else(|| ECRError::NotFound(format!("did not match a user in sleeper league")))
+            .ok_or_else(|| ECRError::NotFound("did not match a user in sleeper league".to_string()))
     }
 
     fn is_permitted(&self, msg: &Message) -> bool {
@@ -405,7 +398,7 @@ impl EventHandler for Handler {
             count => {
                 log::info!("Connected to {} guilds.", count);
                 for guild in &ready.guilds {
-                    let guild_id = GuildId::from(guild.id);
+                    let guild_id = guild.id;
                     log::info!("Guild ID: {}", guild.id);
                     if let Some(name) = guild_id.name(&ctx.cache) {
                         log::info!("Guild Name: {}", name);
@@ -441,16 +434,12 @@ impl EventHandler for Handler {
                 let channel_id = ChannelId::new(feed_msg.destination.id.parse().unwrap());
 
                 let mut message: Option<CreateMessage> = None;
-                if let Some(platform) = &feed_msg.entry.id.platform {
-                    if platform == &Platform::Twitter {
-                        if let Ok(tweet_id) = feed_msg.entry.id.id.parse::<u64>() {
-                            if let Ok(tweet) = syndication_client.fetch_tweet(tweet_id).await {
-                                message = Some(
-                                    CreateMessage::new().add_embed(discord_embed_for_tweet(&tweet)),
-                                )
-                            }
-                        }
-                    }
+                if let Some(platform) = &feed_msg.entry.id.platform
+                    && platform == &Platform::Twitter
+                    && let Ok(tweet_id) = feed_msg.entry.id.id.parse::<u64>()
+                    && let Ok(tweet) = syndication_client.fetch_tweet(tweet_id).await
+                {
+                    message = Some(CreateMessage::new().add_embed(discord_embed_for_tweet(&tweet)))
                 }
                 // default formatting if all the optional values are included
                 if message.is_none()
@@ -534,10 +523,10 @@ impl EventHandler for Handler {
                 //             .author(CreateEmbedAuthor::new(author.name.clone()).url(author.url.clone())),
                 //     );
                 // }
-                if let Some(message) = message {
-                    if let Err(e) = channel_id.send_message(&ctx_clone.http, message).await {
-                        log::error!("Failed to send message: {:?}", e);
-                    }
+                if let Some(message) = message
+                    && let Err(e) = channel_id.send_message(&ctx_clone.http, message).await
+                {
+                    log::error!("Failed to send message: {:?}", e);
                 }
             }
         });
@@ -638,10 +627,10 @@ async fn send_as_code<T: Into<String>>(ctx: &Context, msg: &Message, text: T) {
         while line.is_some() && space_left > line_text.len() {
             active_message.push_str(line_text);
             active_message.push('\n');
-            lines = lines + 1;
+            lines += 1;
             space_left = space_left - line_text.len() - 1;
             line = line_iterator.next();
-            if let Some(tmp) = line.clone() {
+            if let Some(tmp) = line {
                 line_text = tmp;
             }
         }
@@ -679,13 +668,11 @@ fn discord_embed_for_youtube(
     let channel_name = video
         .snippet
         .as_ref()
-        .map(|snippet| snippet.channel_title.clone())
-        .flatten()?;
+        .and_then(|snippet| snippet.channel_title.clone())?;
     let channel_id = video
         .snippet
         .as_ref()
-        .map(|snippet| snippet.channel_id.clone())
-        .flatten()?;
+        .and_then(|snippet| snippet.channel_id.clone())?;
     let channel_icon = channel_icons.get(&channel_id).cloned();
     let link = video.link()?;
     let title = video.title();
@@ -694,10 +681,7 @@ fn discord_embed_for_youtube(
         .snippet
         .as_ref()
         .map(|s| s.thumbnails.medium.url.clone());
-    let timestamp = video
-        .snippet
-        .as_ref()
-        .map(|snippet| snippet.published_at.clone())?;
+    let timestamp = video.snippet.as_ref().map(|snippet| snippet.published_at)?;
     let mut embed_author = CreateEmbedAuthor::new(channel_name).url(link.as_str());
     if let Some(channel_icon) = channel_icon {
         embed_author = embed_author.icon_url(channel_icon.as_str());
@@ -909,7 +893,7 @@ mod tests {
     #[tokio::test]
     async fn test_youtube_to_embed() {
         let youtube_playlist_videos_str =
-            tokio::fs::read_to_string(format!("testdata/yt/list_playlist_items.json"))
+            tokio::fs::read_to_string("testdata/yt/list_playlist_items.json".to_string())
                 .await
                 .expect("failed to load test data file");
         let yt_videos_response: yt::Response =
@@ -926,10 +910,10 @@ mod tests {
             discord_embed_for_youtube(&videos[0], &HashMap::new()).expect("no embed created"),
         );
         let expected = to_embed(CreateEmbed::new()
-            .url(format!("https://www.youtube.com/watch?v=exampleVid01")) // I am using x.com instead of fxtwitter.com
+            .url("https://www.youtube.com/watch?v=exampleVid01".to_string()) // I am using x.com instead of fxtwitter.com
             .author(
                 CreateEmbedAuthor::new("Rover Banter")
-                    .url(format!("https://www.youtube.com/watch?v=exampleVid01")),
+                    .url("https://www.youtube.com/watch?v=exampleVid01".to_string()),
                 // no icon: the channel is not in the configured icon map
             ).image("https://img.example.invalid/exampleVid01/medium.jpg")
             .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
