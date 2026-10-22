@@ -19,8 +19,8 @@ impl FantasyMatchup {
     pub fn from_stuff(
         week: usize,
         matchups: &Vec<Matchup>,
-        rosters: &Vec<Roster>,
-        owners: &Vec<User>,
+        rosters: &[Roster],
+        owners: &[User],
     ) -> Result<Vec<FantasyMatchup>, Box<dyn std::error::Error + Send + Sync>> {
         let mut games: Vec<(Matchup, Matchup)> = Vec::with_capacity(matchups.len() / 2);
         let mut wip: Vec<Matchup> = vec![];

@@ -171,8 +171,9 @@ impl YoutubeClient {
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
+// the variants mirror the API's response kinds, which all end in "Response"
+#[allow(clippy::enum_variant_names)]
 #[serde(tag = "kind")]
-
 pub enum Response {
     #[serde(rename = "youtube#searchListResponse")]
     SearchListResponse {

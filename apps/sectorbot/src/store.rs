@@ -295,11 +295,9 @@ impl ExternalId {
         self.platform.clone()
     }
     pub fn is_fantasy_platform(&self) -> bool {
-        self.platform.as_ref().is_some_and(|p| match p {
-            Platform::Sleeper => true,
-            Platform::Yahoo => true,
-            _ => false,
-        })
+        self.platform
+            .as_ref()
+            .is_some_and(|p| matches!(p, Platform::Sleeper | Platform::Yahoo))
     }
 }
 impl<'de> Deserialize<'de> for ExternalId {

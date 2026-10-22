@@ -75,7 +75,7 @@ pub(crate) mod serde_epoch_millis {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let epoch_millis = i64::from_str_radix(s.as_str(), 10).map_err(|_| {
+        let epoch_millis = s.as_str().parse::<i64>().map_err(|_| {
             de::Error::invalid_value(Unexpected::Str(s.as_str()), &"a string \"int64\"")
         })?;
 

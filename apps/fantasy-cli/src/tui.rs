@@ -67,81 +67,77 @@ async fn do_it(
     let league_accessor_clone = Arc::clone(fantasy_league_accessor);
     let sleeper_user_id = cfg.sleeper_user_id.clone();
     let backend_action_handler = tokio::spawn(async move {
-        loop {
-            if let Some(action) = actions_rx.recv().await {
-                match action {
-                    events::BackendAction::RefreshLeague(external_id) => {
-                        let force_update = true;
-                        log::info!("Refreshing league with external_id: {}", external_id);
+        while let Some(action) = actions_rx.recv().await {
+            match action {
+                events::BackendAction::RefreshLeague(external_id) => {
+                    let force_update = true;
+                    log::info!("Refreshing league with external_id: {}", external_id);
 
-                        match league_accessor_clone
-                            .fetch_league_context(&external_id, force_update)
-                            .await
-                        {
-                            Ok(league) => {
+                    match league_accessor_clone
+                        .fetch_league_context(&external_id, force_update)
+                        .await
+                    {
+                        Ok(league) => {
+                            if events_tx
+                                .send(events::Event::LeagueRefreshComplete(league))
+                                .await
+                                .is_err()
+                            {
+                                log::error!("Failed to send league through channel.");
+                            }
+                        }
+                        Err(err) => {
+                            let error_msg =
+                                format!("Error refreshing league {external_id}: {err:?}");
+                            log::error!("{error_msg}");
+                            if events_tx
+                                .send(events::Event::Error(error_msg))
+                                .await
+                                .is_err()
+                            {
+                                log::error!("Failed to send error through channel.");
+                            }
+                        }
+                    }
+                }
+                events::BackendAction::FetchAllLeagues => {
+                    log::info!("Fetching leagues...");
+
+                    match data_fetch::get_all_leagues(
+                        SEASONS_TO_SCAN
+                            .into_iter()
+                            .map(String::from)
+                            .collect::<Vec<String>>(),
+                        &league_accessor_clone,
+                        sleeper_user_id.as_deref(),
+                    )
+                    .await
+                    {
+                        Ok(leagues) => {
+                            for league in leagues {
                                 if events_tx
                                     .send(events::Event::LeagueRefreshComplete(league))
                                     .await
                                     .is_err()
                                 {
-                                    log::error!("Failed to send league through channel.");
-                                }
-                            }
-                            Err(err) => {
-                                let error_msg =
-                                    format!("Error refreshing league {external_id}: {err:?}");
-                                log::error!("{error_msg}");
-                                if events_tx
-                                    .send(events::Event::Error(error_msg))
-                                    .await
-                                    .is_err()
-                                {
-                                    log::error!("Failed to send error through channel.");
+                                    log::error!("Failed to send leagues through channel.");
                                 }
                             }
                         }
-                    }
-                    events::BackendAction::FetchAllLeagues => {
-                        log::info!("Fetching leagues...");
-
-                        match data_fetch::get_all_leagues(
-                            SEASONS_TO_SCAN
-                                .into_iter()
-                                .map(String::from)
-                                .collect::<Vec<String>>(),
-                            &league_accessor_clone,
-                            sleeper_user_id.as_deref(),
-                        )
-                        .await
-                        {
-                            Ok(leagues) => {
-                                for league in leagues {
-                                    if events_tx
-                                        .send(events::Event::LeagueRefreshComplete(league))
-                                        .await
-                                        .is_err()
-                                    {
-                                        log::error!("Failed to send leagues through channel.");
-                                    }
-                                }
+                        Err(err) => {
+                            let error_msg = format!("Error fetching leagues: {:?}", err);
+                            log::error!("{error_msg}");
+                            eprintln!("{error_msg}");
+                            if events_tx
+                                .send(events::Event::Error(error_msg))
+                                .await
+                                .is_err()
+                            {
+                                log::error!("Failed to send error through channel.");
                             }
-                            Err(err) => {
-                                let error_msg = format!("Error fetching leagues: {:?}", err);
-                                log::error!("{error_msg}");
-                                eprintln!("{error_msg}");
-                                if events_tx
-                                    .send(events::Event::Error(error_msg))
-                                    .await
-                                    .is_err()
-                                {
-                                    log::error!("Failed to send error through channel.");
-                                }
-                            }
-                        };
-                    }
+                        }
+                    };
                 }
-            } else {
-                break; // Exit loop if channel is closed
             }
         }
     });
@@ -319,7 +315,7 @@ async fn render_loop(
             let handled = match page.clone() {
                 NaviItem::WelcomePage => false,
                 NaviItem::LeaguesPage => match leagues_page.handle_key(&key.code) {
-                    pages::KeyHandleResult::NOOP => true,
+                    pages::KeyHandleResult::Noop => true,
                     pages::KeyHandleResult::GoToLeagueSummary => {
                         // info!("Selected league: {:?}", leagues_page.selected().);
                         if let Some(selected_league) = leagues_page.selected() {
@@ -398,11 +394,12 @@ async fn render_loop(
                         navi_stack.push(page);
                         page = NaviItem::WelcomePage;
                     }
-                    KeyCode::Char('b') => match navi_stack.pop() {
+                    KeyCode::Char('b') => {
                         // go back
-                        Some(previous) => page = previous,
-                        None => {}
-                    },
+                        if let Some(previous) = navi_stack.pop() {
+                            page = previous;
+                        }
+                    }
                     _ => {}
                 }
             }

@@ -255,25 +255,29 @@ mod tests {
 
     #[test]
     fn test_token_is_expired() {
-        let mut token = Token::default();
-        token.expires_in = 3600;
-        token.ts = Some(
-            Utc::now()
-                .checked_sub_signed(TimeDelta::seconds(3700))
-                .unwrap(),
-        );
+        let token = Token {
+            expires_in: 3600,
+            ts: Some(
+                Utc::now()
+                    .checked_sub_signed(TimeDelta::seconds(3700))
+                    .unwrap(),
+            ),
+            ..Token::default()
+        };
         debug_assert!(token.is_expired(), "token should be expired")
     }
 
     #[test]
     fn test_token_is_not_expired() {
-        let mut token = Token::default();
-        token.expires_in = 3600;
-        token.ts = Some(
-            Utc::now()
-                .checked_sub_signed(TimeDelta::seconds(3500))
-                .unwrap(),
-        );
+        let token = Token {
+            expires_in: 3600,
+            ts: Some(
+                Utc::now()
+                    .checked_sub_signed(TimeDelta::seconds(3500))
+                    .unwrap(),
+            ),
+            ..Token::default()
+        };
         debug_assert!(!token.is_expired(), "token should not be expired")
     }
 }

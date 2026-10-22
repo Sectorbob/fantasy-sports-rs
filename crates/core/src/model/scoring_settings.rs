@@ -1,6 +1,7 @@
 use fantasy_sports_sleeper as sleeper;
 use fantasy_sports_yahoo as yahoo;
 
+#[allow(clippy::large_enum_variant)] // one variant holds a whole league/settings payload; boxing it would complicate the public API
 #[derive(Debug, PartialEq)]
 pub enum ScoringSettings {
     Football {

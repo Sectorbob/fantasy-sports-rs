@@ -3,8 +3,8 @@ use std::{collections::HashSet, ops::IndexMut};
 use crate::{Standings, StandingsEntry};
 
 pub fn build_owner_records(
-    leagues_standings: &Vec<Standings>,
-    owner_id_mapping: &Vec<(&str, Vec<&str>)>,
+    leagues_standings: &[Standings],
+    owner_id_mapping: &[(&str, Vec<&str>)],
 ) -> Vec<StandingsEntry> {
     let owner_ids = leagues_standings
         .iter()
@@ -119,13 +119,13 @@ mod tests {
         let seasons = vec![Standings {
             entries: vec![entry("a", "alex", 5, 9)],
         }];
-        let records = build_owner_records(&seasons, &vec![]);
+        let records = build_owner_records(&seasons, &[]);
         assert_eq!(1, records.len());
         assert_eq!("a", records[0].owner_id);
     }
 
     #[test]
     fn no_standings_means_no_records() {
-        assert!(build_owner_records(&vec![], &vec![("Nobody", vec!["x"])]).is_empty());
+        assert!(build_owner_records(&[], &[("Nobody", vec!["x"])]).is_empty());
     }
 }

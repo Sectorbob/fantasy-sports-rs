@@ -190,9 +190,9 @@ async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport:
 fn determine_weeks_to_scan(league: &League) -> Range<usize> {
     let first_leg = START_WEEK;
     // leg, last_leg, last_scored_leg
-    let last_leg: Option<usize> = league.settings.last_leg.map(|n| n);
-    let leg: Option<usize> = league.settings.leg.map(|n| n);
-    let last_scored_leg: Option<usize> = league.settings.last_scored_leg.map(|n| n);
+    let last_leg: Option<usize> = league.settings.last_leg;
+    let leg: Option<usize> = league.settings.leg;
+    let last_scored_leg: Option<usize> = league.settings.last_scored_leg;
     log::debug!(
         "{} Sleeper League ({}): last_leg: {:?}",
         league.season,

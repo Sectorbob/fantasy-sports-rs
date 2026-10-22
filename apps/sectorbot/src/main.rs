@@ -1,3 +1,6 @@
+// serenity's error type makes ECRError large; boxing it is not worth the churn here
+#![allow(clippy::result_large_err)]
+
 mod bot;
 mod config;
 mod ecr;

@@ -10,6 +10,7 @@ use std::{collections::HashMap, fmt};
 
 const N_A: &str = "N/A";
 
+#[allow(clippy::large_enum_variant)] // one variant holds a whole league/settings payload; boxing it would complicate the public API
 #[derive(Debug, Clone)]
 pub enum League {
     FleaFlicker {
@@ -713,136 +714,6 @@ impl From<&yahoo::League> for LeagueStatus {
                 false => LeagueStatus::InSeason,
             },
             None => LeagueStatus::InComplete,
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[cfg(test)]
-mod tests {
-    use crate::{ExternalId, League, LeagueAccessor};
-    use fantasy_sports_sleeper as sleeper;
-    use fantasy_sports_yahoo as yahoo;
-    use std::{collections::HashMap, ops::Index};
-
-    // #[tokio::test]
-    //TODO: stub out data, vs using cache
-    async fn testme() {
-        let mut accessor = LeagueAccessor::new().with_cache_dir("cache");
-        accessor
-            .init()
-            .await
-            .expect("failed to setup league accessor");
-
-        let l = accessor
-            .fetch_league_context(&ExternalId::try_from("yahoo:359.l.564503").unwrap(), false)
-            .await
-            .unwrap();
-
-        if let League::Yahoo {
-            scoreboards,
-            settings,
-            ..
-        } = l
-        {
-            let matchups = extract_playoffs_into_matchups(&scoreboards, &settings);
-            for matchup in matchups {
-                let team_1 = matchup.2.teams.index(0);
-                let team_2 = matchup.2.teams.index(1);
-                let left_side = format!(
-                    "{} {}",
-                    team_1.name,
-                    team_1
-                        .team_points
-                        .as_ref()
-                        .map_or(0.0, |team_points| team_points.total.unwrap_or(0.0))
-                );
-                let right_side = format!(
-                    "{} {}",
-                    team_2.name,
-                    team_2
-                        .team_points
-                        .as_ref()
-                        .map_or(0.0, |team_points| team_points.total.unwrap_or(0.0))
-                );
-                println!(
-                    "Round: {rd} MatchupId {id} {left_side} vs {right_side}",
-                    rd = matchup.0,
-                    id = matchup.1
-                );
-                println!(
-                    "{:?}",
-                    convert_yahoo_to_sleeper_playoff_bracket(matchup.0, matchup.1, matchup.2),
-                );
-            }
-        }
-        assert!(false)
-    }
-
-    fn extract_playoffs_into_matchups<'a>(
-        scoreboards: &'a Vec<yahoo::Scoreboard>,
-        settings: &yahoo::Settings,
-    ) -> Vec<(u8, u8, &'a yahoo::Matchup)> {
-        let mut matchups = vec![];
-        if settings.uses_playoff
-            && let Some(first_week_of_playoffs) = settings.playoff_start_week
-        {
-            let num_of_playoff_teams = settings.num_playoff_teams;
-            log::warn!(
-                "still need to do a yahoo check for the num of teams allowed in playoffs: {num_of_playoff_teams}"
-            );
-            let mut playoff_rounds: HashMap<u8, &yahoo::Scoreboard> = HashMap::new();
-            let mut rounds = vec![];
-            let mut matchup_counter: u8 = 0;
-            for scoreboard in scoreboards {
-                if scoreboard.week >= first_week_of_playoffs {
-                    // is playoff week
-                    let round: u8 = scoreboard.week as u8 - first_week_of_playoffs as u8 + 1;
-                    playoff_rounds.insert(round, scoreboard);
-                    rounds.push(round);
-                }
-            }
-            rounds.sort();
-            for round in rounds {
-                if let Some(scoreboard) = playoff_rounds.get(&round) {
-                    for matchup in &scoreboard.matchups.matchups {
-                        if matchup.teams.len() != 2 {
-                            continue;
-                        }
-                        // let team_1 = matchup.teams.index(0);
-                        // let team_2 = matchup.teams.index(1);
-                        matchup_counter += 1;
-                        matchups.push((round, matchup_counter, matchup));
-                    }
-                }
-            }
-        }
-        matchups
-    }
-
-    fn convert_yahoo_to_sleeper_playoff_bracket(
-        round: u8,
-        matchup_id: u8,
-        matchup: &yahoo::Matchup,
-    ) -> sleeper::PlayoffBracketEntry {
-        sleeper::PlayoffBracketEntry {
-            round,
-            matchup_id,
-            team_1_roster_id: matchup.teams.first().map(|t| t.team_id as u8),
-            team_2_roster_id: matchup.teams.get(1).map(|t| t.team_id as u8),
-            winner_roster_id: matchup.winner_team_key.as_ref().map(|k| k.team_id as u8),
-            loser_roster_id: matchup
-                .winner_team_key
-                .as_ref()
-                .and_then(|winner_team_key| {
-                    if Some(winner_team_key.team_id) == matchup.teams.first().map(|t| t.team_id) {
-                        matchup.teams.get(1).map(|t| t.team_id as u8)
-                    } else {
-                        matchup.teams.first().map(|t| t.team_id as u8)
-                    }
-                }),
-            team_1_from: None,
-            team_2_from: None,
         }
     }
 }

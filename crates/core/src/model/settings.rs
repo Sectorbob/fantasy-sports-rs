@@ -325,6 +325,8 @@ impl From<sleeper::LeagueSettings> for TradeRatifyType {
     }
 }
 
+// roster positions are conventionally upper case (QB, WR, DEF, ...)
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 pub enum RosterSpot {
     QB,

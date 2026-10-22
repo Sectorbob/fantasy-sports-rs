@@ -16,7 +16,7 @@ pub struct Draft {
     pub draft_order: Option<Vec<Option<String>>>,
 }
 impl Draft {
-    pub fn check_for_valid_draft(drafts: &Vec<sleeper::Draft>) -> Option<sleeper::Draft> {
+    pub fn check_for_valid_draft(drafts: &[sleeper::Draft]) -> Option<sleeper::Draft> {
         match drafts.len() {
             0 => None,
             1 => Some(drafts[0].clone()),
@@ -451,16 +451,10 @@ pub enum PlayerMove {
 }
 impl PlayerMove {
     pub fn is_add(self: &&Self) -> bool {
-        match self {
-            PlayerMove::Add { .. } => true,
-            _ => false,
-        }
+        matches!(self, PlayerMove::Add { .. })
     }
     pub fn is_drop(self: &&Self) -> bool {
-        match self {
-            PlayerMove::Drop { .. } => true,
-            _ => false,
-        }
+        matches!(self, PlayerMove::Drop { .. })
     }
     pub fn dest(&self) -> RosterSpot {
         match self {

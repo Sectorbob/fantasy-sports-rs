@@ -33,8 +33,5 @@ pub(crate) fn null_to_false<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,
 {
-    Option::deserialize(deserializer).map(|opt| match opt {
-        Some(true) => true,
-        _ => false,
-    })
+    Option::deserialize(deserializer).map(|opt| opt == Some(true))
 }

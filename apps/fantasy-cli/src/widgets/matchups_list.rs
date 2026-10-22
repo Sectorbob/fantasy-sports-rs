@@ -16,7 +16,7 @@ pub struct MatchupsList {
 impl MatchupsList {
     pub fn from(
         title_override: Option<String>,
-        matchups: &Vec<core::Matchup>,
+        matchups: &[core::Matchup],
         players: &HashMap<String, core::Player>,
     ) -> Self {
         MatchupsList {

@@ -2,7 +2,7 @@ use crate::ecr::service::DraftResult;
 use fantasy_sports_sleeper::DraftPick;
 use std::collections::{HashMap, HashSet};
 
-pub fn get_keeper_status<T: Into<String>>(player_id: T, picks: &Vec<DraftPick>) -> KeeperStatus {
+pub fn get_keeper_status<T: Into<String>>(player_id: T, picks: &[DraftPick]) -> KeeperStatus {
     let player_id: String = player_id.into();
     if let Some(pick) = picks.iter().find(|p| p.player_id == player_id) {
         KeeperStatus {
@@ -246,6 +246,6 @@ mod tests {
 
     #[test]
     fn keeper_status_reflects_the_draft_pick() {
-        assert!(!get_keeper_status("9999", &vec![]).was_drafted);
+        assert!(!get_keeper_status("9999", &[]).was_drafted);
     }
 }

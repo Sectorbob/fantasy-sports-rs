@@ -173,14 +173,9 @@ pub struct League {
 }
 impl League {
     pub fn has_previous_league(&self) -> bool {
-        match &self.previous_league_id {
-            Some(previous_league_id) => match previous_league_id.as_str() {
-                "" => false,
-                "0" => false,
-                _ => true,
-            },
-            None => false,
-        }
+        self.previous_league_id
+            .as_deref()
+            .is_some_and(|id| !matches!(id, "" | "0"))
     }
 }
 

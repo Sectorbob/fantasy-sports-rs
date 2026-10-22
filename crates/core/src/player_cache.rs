@@ -242,10 +242,7 @@ impl Error {
         Error::DevError(msg.into())
     }
     pub fn is_none(&self) -> bool {
-        match self {
-            Error::NotFound => true,
-            _ => false,
-        }
+        matches!(self, Error::NotFound)
     }
 }
 impl From<fantasy_sports_cache::Error> for Error {

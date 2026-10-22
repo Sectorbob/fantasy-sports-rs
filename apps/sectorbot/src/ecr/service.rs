@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     path,
     sync::Arc,
-    u64,
 };
 
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
@@ -183,8 +182,7 @@ impl Service {
             k.owner_id
                 .parse::<u64>()
                 .unwrap_or(u64::MIN)
-                .checked_add(k.round as u64)
-                .unwrap_or(u64::MAX)
+                .saturating_add(k.round as u64)
         });
 
         Ok(KeepablesReport {

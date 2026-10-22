@@ -56,7 +56,7 @@ pub async fn get_all_leagues(
     log::info!("Total leagues fetched: {}", leagues.len());
 
     // Sort leagues by season in descending order
-    leagues.sort_by(|a, b| b.season().cmp(&a.season()));
+    leagues.sort_by_key(|league| std::cmp::Reverse(league.season()));
 
     Ok(leagues)
 }

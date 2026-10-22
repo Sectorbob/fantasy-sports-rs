@@ -320,11 +320,7 @@ mod tests {
         serde_json::from_str(json.as_str()).expect("failed to deserialize league users json")
     }
 
-    fn team_name_for_roster(
-        roster_id: u8,
-        rosters: &Vec<Roster>,
-        users: &Vec<User>,
-    ) -> Option<String> {
+    fn team_name_for_roster(roster_id: u8, rosters: &[Roster], users: &[User]) -> Option<String> {
         let owner_id = rosters
             .iter()
             .find(|r| r.roster_id == roster_id)

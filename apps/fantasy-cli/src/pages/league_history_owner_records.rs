@@ -22,7 +22,7 @@ impl LeagueHistoryOwnerRecordsPage {
             owner_records: vec![],
         }
     }
-    pub fn from_leagues(leagues: &Vec<core::League>, history: &HistoryConfig) -> Self {
+    pub fn from_leagues(leagues: &[core::League], history: &HistoryConfig) -> Self {
         let leagues_standings = leagues
             .iter()
             .filter(|l| {

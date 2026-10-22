@@ -53,6 +53,7 @@ pub struct LeagueActivityItem {
     pub details: LeagueActivityItemDetails,
 }
 
+#[allow(clippy::large_enum_variant)] // one variant holds a whole league/settings payload; boxing it would complicate the public API
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum LeagueActivityItemDetails {

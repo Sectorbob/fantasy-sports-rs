@@ -117,13 +117,13 @@ impl<'a> LeaguesPage {
                 if self.selected < self.leagues.len() - 1 {
                     self.selected += 1;
                 }
-                KeyHandleResult::NOOP
+                KeyHandleResult::Noop
             }
             KeyCode::Up => {
                 if self.selected > 0 {
                     self.selected -= 1;
                 }
-                KeyHandleResult::NOOP
+                KeyHandleResult::Noop
             }
             KeyCode::Enter => {
                 // Here you can handle the Enter key, e.g., show league details
@@ -137,7 +137,7 @@ impl<'a> LeaguesPage {
 
 pub enum KeyHandleResult {
     Unhandled,
-    NOOP,
+    Noop,
     GoToLeagueSummary,
     GoToLeagueHistoryOwnerRecords,
 }

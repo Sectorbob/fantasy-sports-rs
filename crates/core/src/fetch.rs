@@ -289,7 +289,7 @@ unsafe impl Send for LeagueAccessor {
 
 pub(crate) async fn fetch_fleaflicker_leagues_for_user(
     fleaflicker_client: &fleaflicker::Client,
-    seasons: &Vec<String>,
+    seasons: &[String],
     fleaflicker_email: &String,
     sport: &fleaflicker::Sport,
 ) -> Result<Vec<ExternalId>, Error> {
@@ -763,7 +763,7 @@ pub(crate) async fn fetch_yahoo_league_context(
 
 pub(crate) async fn fetch_sleeper_league_ids_for_user(
     sleeper_client: &sleeper::Client,
-    seasons: &Vec<String>,
+    seasons: &[String],
     sleeper_user_id: &String,
     sport: &sleeper::Sport,
 ) -> Result<Vec<ExternalId>, Error> {
@@ -817,7 +817,7 @@ impl Sport {
 
 async fn fetch_yahoo_league_keys_for_user(
     yahoo_client: &fantasy_sports_yahoo::Client,
-    seasons: &Vec<String>,
+    seasons: &[String],
     yahoo_game_code: yahoo::GameCode,
 ) -> Result<Vec<ExternalId>, Error> {
     let games = yahoo_client
