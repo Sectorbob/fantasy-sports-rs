@@ -718,6 +718,28 @@ fn discord_embed_for_youtube(video: &yt::Item) -> Option<CreateEmbed> {
     Some(embed)
 }
 
+/// Retweet and like counts as intent links, using only the counts the payload provides.
+fn engagement_line(tweet: &twitter::TweetResponse) -> Option<String> {
+    let mut parts = vec![];
+    if let Some(retweets) = tweet.retweet_count {
+        parts.push(format!(
+            "[🔁](https://x.com/intent/retweet?tweet_id={}) {retweets}",
+            tweet.id_str
+        ));
+    }
+    if let Some(likes) = tweet.favorite_count {
+        parts.push(format!(
+            "[❤\u{fe0f}](https://x.com/intent/like?tweet_id={}) {likes}",
+            tweet.id_str
+        ));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(format!("\n\n**{}\u{2002}**", parts.join("\u{2002}")))
+    }
+}
+
 fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
     let link = format!("https://x.com{}", tweet.link());
     let mut description = encode_text(tweet.text().as_str());
@@ -735,7 +757,9 @@ fn discord_embed_for_tweet(tweet: &twitter::TweetResponse) -> CreateEmbed {
             .as_str(),
         );
         description.push_str(encode_text(&quoted.text()).as_str());
-        description.push_str(format!("\n\n**[🔁](https://x.com/intent/retweet?tweet_id={tweet_id}) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id={tweet_id}) 19\u{2002}👁\u{fe0f} 720\u{2002}**", tweet_id = tweet.id_str).as_str());
+    }
+    if let Some(stats) = engagement_line(tweet) {
+        description.push_str(&stats);
     }
 
     let mut embed = CreateEmbed::new()
@@ -811,8 +835,7 @@ mod tests {
             ).image("https://pbs.example.invalid/media/sample001.jpg")
             .footer(CreateEmbedFooter::new("FxTwitter").icon_url("https://assets.fxembed.com/logos/fxtwitter-pride64.png"))
             .colour(Colour(6513919))
-            // NOTE: the engagement counts (2 / 19 / 720) are hardcoded in discord_embed_for_tweet (known bug, see PLAN.md)
-            .description("If rookie Riley Rookie hits for the Rovers \\-\\- and not just in a down the line kinda way \\-\\- extend the OL coach immediately.\n\u{fe00}\u{fe00}The Rovers have been desperate for a Day 3 OL draft hit since Pat Anchor \\(Lee Backup I guess\\).\n\n> **[Quoting](https://x.com/alexquote/status/1800000000000000099) Alex Quote \\([@alexquote](https://x.com/alexquote)\\)**\n> \u{fe00}\n> \u{2066}@RileyRookie\u{2069} has reason to smile. He continues to handle his business and held his own at right tackle with the first team https://t.example.invalid/pic001\n\n**[🔁](https://x.com/intent/retweet?tweet_id=1800000000000000101) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=1800000000000000101) 19\u{2002}👁\u{fe0f} 720\u{2002}**"),
+            .description("If rookie Riley Rookie hits for the Rovers \\-\\- and not just in a down the line kinda way \\-\\- extend the OL coach immediately.\n\u{fe00}\u{fe00}The Rovers have been desperate for a Day 3 OL draft hit since Pat Anchor \\(Lee Backup I guess\\).\n\n> **[Quoting](https://x.com/alexquote/status/1800000000000000099) Alex Quote \\([@alexquote](https://x.com/alexquote)\\)**\n> \u{fe00}\n> \u{2066}@RileyRookie\u{2069} has reason to smile. He continues to handle his business and held his own at right tackle with the first team https://t.example.invalid/pic001\n\n**[🔁](https://x.com/intent/retweet?tweet_id=1800000000000000101) 7\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=1800000000000000101) 212\u{2002}**"),
         );
         debug_assert_eq!(expected.author, embed.author, "embed author is not right");
         debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
@@ -822,6 +845,33 @@ mod tests {
             expected.description, embed.description,
             "embed description is not right"
         );
+    }
+
+    fn tweet_with_counts(counts: &str) -> TweetResponse {
+        serde_json::from_str(&format!(
+            r#"{{"id_str":"42","text":"hi","lang":"en","created_at":"2025-01-15T17:13:22.000Z",
+                "user":{{"id_str":"1","name":"Sam Sample","screen_name":"SampleScribe","profile_image_url_https":"https://pbs.example.invalid/a.jpg"}}{counts}}}"#
+        ))
+        .expect("valid tweet json")
+    }
+
+    #[test]
+    fn test_engagement_line_uses_the_counts_in_the_payload() {
+        let both = engagement_line(&tweet_with_counts(r#","retweet_count":3,"favorite_count":15"#)).unwrap();
+        assert!(both.contains("tweet_id=42) 3"), "{both}");
+        assert!(both.contains("like?tweet_id=42) 15"), "{both}");
+
+        let likes_only = engagement_line(&tweet_with_counts(r#","favorite_count":15"#)).unwrap();
+        assert!(!likes_only.contains("retweet"), "{likes_only}");
+        assert!(likes_only.contains(") 15"), "{likes_only}");
+
+        assert_eq!(None, engagement_line(&tweet_with_counts("")));
+    }
+
+    #[test]
+    fn test_plain_tweet_embed_also_shows_counts() {
+        let embed = to_embed(discord_embed_for_tweet(&tweet_with_counts(r#","favorite_count":15"#)));
+        assert!(embed.description.unwrap().ends_with(") 15\u{2002}**"));
     }
 
     fn to_embed(create_embed: CreateEmbed) -> Embed {

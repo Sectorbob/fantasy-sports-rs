@@ -13,6 +13,8 @@ pub struct TweetResponse {
     pub created_at: DateTime<FixedOffset>,
     pub(crate) full_text: Option<String>, // full tweet text, when the payload provides it
     pub lang: String,
+    pub favorite_count: Option<u64>,
+    pub retweet_count: Option<u64>,
     pub(crate) permalink: Option<String>, //"/SampleScribe/status/1800000000000000050",
     pub quoted_tweet: Option<Box<TweetResponse>>,
     #[serde(rename = "mediaDetails")]

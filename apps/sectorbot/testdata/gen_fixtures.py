@@ -106,7 +106,7 @@ def tweet_with_quote_and_media():
     q["lang"] = "en"
     text = ("If rookie Riley Rookie hits for the Rovers -- and not just in a down the line kinda way -- extend the OL coach immediately.\n"
             "The Rovers have been desperate for a Day 3 OL draft hit since Pat Anchor (Lee Backup I guess).")
-    return tweet("1800000000000000101", "2025-01-15T17:13:22.000Z", SAM, text, quoted=q)
+    return tweet("1800000000000000101", "2025-01-15T17:13:22.000Z", SAM, text, quoted=q, extra={"retweet_count": 7})
 
 
 def tweet_response_fixture():

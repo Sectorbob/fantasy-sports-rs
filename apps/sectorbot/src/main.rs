@@ -534,6 +534,8 @@ mod tests {
                 profile_image_url_https: "".to_string(),
             },
             lang: "en-us".to_string(),
+            favorite_count: None,
+            retweet_count: None,
             quoted_tweet: None,
             media_details: None,
         };
