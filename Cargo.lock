@@ -900,6 +900,14 @@ dependencies = [
 [[package]]
 name = "fantasy-sports"
 version = "0.1.0"
+dependencies = [
+ "fantasy-sports-cache",
+ "fantasy-sports-core",
+ "fantasy-sports-fleaflicker",
+ "fantasy-sports-sleeper",
+ "fantasy-sports-yahoo",
+ "tokio",
+]
 
 [[package]]
 name = "fantasy-sports-cache"

@@ -7,3 +7,16 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "Fantasy sports SDK: Sleeper, Yahoo and Fleaflicker behind one data model"
+keywords = ["fantasy", "sports", "sleeper", "yahoo", "fleaflicker"]
+categories = ["api-bindings", "caching"]
+readme = "README.md"
+
+[dependencies]
+fantasy-sports-cache.workspace = true
+fantasy-sports-core.workspace = true
+fantasy-sports-fleaflicker.workspace = true
+fantasy-sports-sleeper.workspace = true
+fantasy-sports-yahoo.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
