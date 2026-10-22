@@ -9,6 +9,8 @@ mod data_fetch;
 mod events;
 mod helpers;
 mod pages;
+#[cfg(test)]
+mod test_util;
 mod tui;
 mod widgets;
 mod yahoo_utils;

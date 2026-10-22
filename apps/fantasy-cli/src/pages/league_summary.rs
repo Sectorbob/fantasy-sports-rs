@@ -1,9 +1,7 @@
-use std::io::{self, Stdout};
-
 use fantasy_sports_core::League;
 use ratatui::{
     CompletedFrame, Terminal,
-    backend::CrosstermBackend,
+    backend::Backend,
     layout::{Constraint, Direction, Layout},
     style::Style,
     text::Text,
@@ -38,10 +36,10 @@ impl<'a> LeagueSummaryPage<'a> {
     //     self.league = Some(league);
     // }
 
-    pub fn draw(
+    pub fn draw<B: Backend>(
         &'a mut self,
-        terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
-    ) -> io::Result<CompletedFrame<'a>> {
+        terminal: &'a mut Terminal<B>,
+    ) -> Result<CompletedFrame<'a>, B::Error> {
         let num_of_columns = 3; // Number of columns to split the screen into
         let num_of_rows = 2;
 

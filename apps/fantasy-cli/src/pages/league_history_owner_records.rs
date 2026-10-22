@@ -1,11 +1,10 @@
 use ratatui::{
     CompletedFrame, Terminal,
-    backend::CrosstermBackend,
+    backend::Backend,
     layout::Constraint,
     style::Style,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
-use std::io::{self, Stdout};
 
 use fantasy_sports_core::{self as core};
 
@@ -51,10 +50,10 @@ impl LeagueHistoryOwnerRecordsPage {
         }
     }
 
-    pub fn draw<'a>(
+    pub fn draw<'a, B: Backend>(
         &'a mut self,
-        terminal: &'a mut Terminal<CrosstermBackend<Stdout>>,
-    ) -> io::Result<CompletedFrame<'a>> {
+        terminal: &'a mut Terminal<B>,
+    ) -> Result<CompletedFrame<'a>, B::Error> {
         terminal.draw(|f| {
             let size = f.area();
             let title: String = if let Some(title_override) = self.title_override.clone() {
@@ -110,5 +109,60 @@ impl LeagueHistoryOwnerRecordsPage {
             f.render_widget(table, block.inner(size));
             f.render_widget(block.clone(), size);
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::{contains, screen, terminal};
+
+    fn entry(team: &str, owner: &str, wins: u64, losses: u64) -> core::StandingsEntry {
+        core::StandingsEntry {
+            roster_id: "1".into(),
+            team_name: team.into(),
+            owner_name: owner.into(),
+            owner_id: "id".into(),
+            wins,
+            losses,
+            ties: 0,
+        }
+    }
+
+    #[test]
+    fn renders_a_title_a_header_and_one_row_per_owner() {
+        let mut page = LeagueHistoryOwnerRecordsPage {
+            title_override: None,
+            owner_records: vec![
+                entry("Swift Falcons", "Sam Sample", 18, 10),
+                entry("Iron Titans", "Alex Quote", 9, 19),
+            ],
+        };
+        let mut terminal = terminal(80, 10);
+        page.draw(&mut terminal).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        assert!(contains(buffer, "League History Owner Records"));
+        assert!(contains(buffer, "Team Name"), "{:#?}", screen(buffer));
+        let row = screen(buffer)
+            .into_iter()
+            .find(|r| r.contains("Swift Falcons"))
+            .expect("first owner is listed");
+        assert!(
+            row.contains("Sam Sample") && row.contains("18") && row.contains("10"),
+            "{row}"
+        );
+        assert!(contains(buffer, "Iron Titans"));
+    }
+
+    #[test]
+    fn a_title_override_replaces_the_default_title() {
+        let mut page = LeagueHistoryOwnerRecordsPage::new();
+        page.title_override = Some("  Loading...  ".into());
+        let mut terminal = terminal(60, 6);
+        page.draw(&mut terminal).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(contains(buffer, "Loading..."));
+        assert!(!contains(buffer, "League History Owner Records"));
     }
 }

@@ -1,10 +1,8 @@
-use std::io::{self, Stdout};
-
 use crossterm::event::KeyCode;
 use fantasy_sports_core::League;
 use ratatui::{
     CompletedFrame, Terminal,
-    backend::CrosstermBackend,
+    backend::Backend,
     style::{Modifier, Style},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
@@ -58,11 +56,10 @@ impl<'a> LeaguesPage {
         }
     }
 
-    pub fn draw(
+    pub fn draw<B: Backend>(
         &'a mut self,
-        terminal: &'a mut Terminal<CrosstermBackend<Stdout>>, // items: &Vec<ListItem<'a>>,
-                                                              // selected: usize,
-    ) -> io::Result<CompletedFrame<'a>> {
+        terminal: &'a mut Terminal<B>,
+    ) -> Result<CompletedFrame<'a>, B::Error> {
         let title = "Fantasy Leagues (↑/↓, 'q' to quit, 'w' to welcome)";
 
         if self.leagues.is_empty() {
@@ -145,6 +142,15 @@ pub enum KeyHandleResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::{contains, terminal};
+
+    #[test]
+    fn an_empty_list_still_renders_its_title_and_key_help() {
+        let mut page = LeaguesPage::new();
+        let mut terminal = terminal(80, 6);
+        page.draw(&mut terminal).unwrap();
+        assert!(contains(terminal.backend().buffer(), "Fantasy Leagues"));
+    }
 
     #[test]
     fn navigating_an_empty_list_does_not_panic_or_select_anything() {

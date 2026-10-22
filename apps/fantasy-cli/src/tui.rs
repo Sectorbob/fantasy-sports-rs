@@ -7,7 +7,7 @@ use crossterm::{
 use fantasy_sports_core::{self as core};
 use ratatui::{
     CompletedFrame, Terminal,
-    backend::CrosstermBackend,
+    backend::{Backend, CrosstermBackend},
     style::{Color, Style},
     widgets::{Block, Borders},
 };
@@ -410,9 +410,9 @@ async fn render_loop(
     Ok(())
 }
 
-fn draw_blank_screen_with_q_exit(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-) -> io::Result<CompletedFrame<'_>> {
+fn draw_blank_screen_with_q_exit<B: Backend>(
+    terminal: &mut Terminal<B>,
+) -> Result<CompletedFrame<'_>, B::Error> {
     terminal.draw(|f| {
         let size = f.area();
         let block = Block::default()
@@ -432,4 +432,20 @@ enum NaviItem {
     LeagueHistoryOwnerRecords,
     TransactionsPage(String),
     LeagueDraftBoardPage(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::{contains, terminal};
+
+    #[test]
+    fn the_welcome_screen_says_how_to_quit_and_list() {
+        let mut terminal = terminal(60, 5);
+        draw_blank_screen_with_q_exit(&mut terminal).unwrap();
+        assert!(contains(
+            terminal.backend().buffer(),
+            "Press 'q' to quit, 'l' to list"
+        ));
+    }
 }
