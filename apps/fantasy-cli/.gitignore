@@ -1,0 +1,7 @@
+/target
+
+# Private files
+.env
+.token.json
+
+*.log

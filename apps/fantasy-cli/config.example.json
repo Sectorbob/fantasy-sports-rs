@@ -1,0 +1,11 @@
+{
+  "landing_page": "LeaguesPage",
+  "sleeper_user_id": "862237889002904882",
+  "history": {
+    "league_name": "Synthetic League",
+    "owners": [
+      { "name": "Cosmic Titans 23", "ids": ["SAMPLEYAHOOGUID00000000001", "862237889002904882"] },
+      { "name": "Golden Titans 86", "ids": ["202154581990700081"] }
+    ]
+  }
+}
