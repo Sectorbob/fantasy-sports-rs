@@ -20,3 +20,4 @@ tokio = { version = "1.47.1", features = ["fs", "io-util"] }
 base64 = "0.22.1"
 tempfile = "3.22.0"
 tokio = { version = "1.47.1", features = ["macros", "rt"] }
+wiremock = "0.6.5"

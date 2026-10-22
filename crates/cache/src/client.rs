@@ -107,7 +107,11 @@ impl Client {
                 }
             }
             reqwest::StatusCode::NOT_FOUND => Err(Error::NotFound(url)),
-            code => Err(Error::from(code)),
+            status => {
+                // keep the body: APIs such as Yahoo's put the reason for a 401 in it
+                let body = resp.text().await.unwrap_or_default();
+                Err(Error::ClientError { status, body })
+            }
         }
     }
 
@@ -202,8 +206,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("cache error: {0}")]
     CacheError(std::io::Error),
-    #[error("client error: {0}")]
-    ClientError(reqwest::StatusCode),
+    #[error("client error: {status}")]
+    ClientError {
+        status: reqwest::StatusCode,
+        body: String,
+    },
     #[error("dev error: {0}")]
     DevError(String),
     #[error("http error: {0}")]
@@ -221,11 +228,6 @@ impl Error {
         Error::CacheError(err)
     }
 }
-impl From<reqwest::StatusCode> for Error {
-    fn from(value: reqwest::StatusCode) -> Self {
-        Error::ClientError(value)
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum SerdeError {
@@ -237,8 +239,91 @@ pub enum SerdeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::Client;
-    use serde_json::Value;
+    use crate::{Client, Error, RequestContext};
+    use serde_json::{Value, json};
+    use tempfile::TempDir;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+
+    fn ctx(url: &str) -> RequestContext<'static> {
+        RequestContext {
+            url: url.to_string(),
+            filters: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn non_success_responses_keep_the_status_and_body() {
+        let server = MockServer::start().await;
+        Mock::given(matchers::path("/denied"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("token_expired"))
+            .mount(&server)
+            .await;
+        let client = Client::new(server.uri());
+
+        let err = client
+            .build_request::<Value>(ctx("/denied"), false, None)
+            .send()
+            .await
+            .unwrap_err();
+
+        match err {
+            Error::ClientError { status, body } => {
+                assert_eq!(401, status.as_u16());
+                assert_eq!("token_expired", body);
+            }
+            other => panic!("expected ClientError, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn not_found_maps_to_not_found() {
+        let server = MockServer::start().await;
+        Mock::given(matchers::path("/missing"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        let client = Client::new(server.uri());
+
+        let err = client
+            .build_request::<Value>(ctx("/missing"), false, None)
+            .send()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::NotFound(url) if url.ends_with("/missing")));
+    }
+
+    #[tokio::test]
+    async fn second_request_is_served_from_the_cache_unless_forced() {
+        let server = MockServer::start().await;
+        Mock::given(matchers::path("/thing"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"n": 1}))
+                    .insert_header("content-type", "application/json"),
+            )
+            .mount(&server)
+            .await;
+        let dir = TempDir::new().unwrap();
+        let client = Client::new(server.uri()).with_cache(dir.path()).unwrap();
+
+        for _ in 0..2 {
+            let v: Value = client
+                .build_request(ctx("/thing"), false, None)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(json!({"n": 1}), v);
+        }
+        assert_eq!(1, client.request_count(), "second call should hit the cache");
+
+        let _: Value = client
+            .build_request(ctx("/thing"), false, None)
+            .force_update()
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(2, client.request_count(), "force_update bypasses the cache");
+    }
 
     #[test]
     fn test_build_request() {
