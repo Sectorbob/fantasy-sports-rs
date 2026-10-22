@@ -84,12 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_handle = tokio::spawn({
         let app_context_clone = app_context.clone();
         async move {
-            if let Err(e) = server::setup_and_listen(
+            let addr = std::net::SocketAddr::new(
+                app_context_clone.config.http_bind_address,
                 app_context_clone.config.http_server_port,
-                app_context_clone,
-            )
-            .await
-            {
+            );
+            if let Err(e) = server::setup_and_listen(addr, app_context_clone).await {
                 log::error!("Failed to start server: {}", e);
             }
         }
