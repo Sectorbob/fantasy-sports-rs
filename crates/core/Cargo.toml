@@ -25,3 +25,6 @@ thiserror.workspace = true
 tokio.workspace = true
 walkdir.workspace = true
 fantasy-sports-yahoo.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true

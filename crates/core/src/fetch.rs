@@ -867,3 +867,174 @@ impl Error {
         Error::DevError(msg.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use wiremock::{
+        Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path_regex},
+    };
+
+    const LEAGUE_ID: &str = "164974877262287888";
+    const DRAFT_ID: &str = "685822547406541191";
+
+    fn fixture(rel: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../sleeper/testdata")
+            .join(rel)
+    }
+
+    /// Serves the sleeper crate's recorded (pseudonymized) responses for one league, keyed by the
+    /// request path. Weeks and transaction legs without a recording are empty, like a quiet week.
+    struct SleeperFixtures;
+    impl Respond for SleeperFixtures {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            let path = req.url.path();
+            let json = |rel: String| match std::fs::read_to_string(fixture(&rel)) {
+                Ok(body) => ResponseTemplate::new(200).set_body_raw(body, "application/json"),
+                Err(_) => ResponseTemplate::new(404),
+            };
+            let league = format!("/league/{LEAGUE_ID}");
+            match path {
+                p if p == league => json(format!("v1/league/{LEAGUE_ID}.json")),
+                p if p == format!("{league}/users") => {
+                    json(format!("v1/league/{LEAGUE_ID}/users.json"))
+                }
+                p if p == format!("{league}/rosters") => {
+                    json(format!("v1/league/{LEAGUE_ID}/rosters.json"))
+                }
+                p if p == format!("{league}/drafts") => {
+                    json(format!("v1/league/{LEAGUE_ID}/drafts.json"))
+                }
+                p if p == format!("{league}/traded_picks") => {
+                    json(format!("v1/league/{LEAGUE_ID}/traded_picks.json"))
+                }
+                p if p == format!("{league}/winners_bracket") => {
+                    json(format!("v1/league/{LEAGUE_ID}/winners_bracket.json"))
+                }
+                p if p == format!("{league}/losers_bracket") => {
+                    json(format!("v1/league/{LEAGUE_ID}/losers_bracket.json"))
+                }
+                p if p == format!("{league}/matchups/1") => {
+                    json("league_matchups_1.json".to_string())
+                }
+                p if p.starts_with(&format!("{league}/matchups/")) => {
+                    ResponseTemplate::new(200).set_body_string("[]")
+                }
+                p if p.starts_with(&format!("{league}/transactions/")) => {
+                    ResponseTemplate::new(200).set_body_string("[]")
+                }
+                p if p == format!("/draft/{DRAFT_ID}") => json(format!("v1/draft/{DRAFT_ID}.json")),
+                p if p == format!("/draft/{DRAFT_ID}/picks") => {
+                    json(format!("v1/draft/{DRAFT_ID}/picks.json"))
+                }
+                "/players/nfl" => ResponseTemplate::new(200)
+                    .set_body_raw(
+                        std::fs::read(fixture("players_nfl.json.gz")).unwrap(),
+                        "application/json",
+                    )
+                    .insert_header("Content-Encoding", "gzip"),
+                _ => ResponseTemplate::new(404),
+            }
+        }
+    }
+
+    async fn sleeper_client() -> (sleeper::Client, MockServer) {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(".*"))
+            .respond_with(SleeperFixtures)
+            .mount(&server)
+            .await;
+        (sleeper::Client::new().with_base_url(server.uri()), server)
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_league_is_assembled_from_the_api_responses() {
+        let (cli, server) = sleeper_client().await;
+
+        let league = fetch_sleeper_league_context_by_id(&cli, &None, LEAGUE_ID, false)
+            .await
+            .expect("league should be fetched");
+
+        assert_eq!("Rapid League 17", league.name());
+        assert_eq!("2019", league.season());
+        assert_eq!(12, league.rosters().len());
+        assert_eq!(12, league.standings().entries.len());
+        assert_eq!(
+            204,
+            league.draft().expect("the league has a draft").picks.len()
+        );
+        assert!(
+            league.transactions().is_empty(),
+            "no transactions were recorded"
+        );
+
+        // one scoreboard per regular season week; week 1 is the recorded matchups, 6 games for 12 teams
+        let scoreboards = league.scoreboards();
+        assert_eq!(16, scoreboards.len());
+        assert_eq!(6, scoreboards[0].matchups.len());
+        assert_eq!(1, scoreboards[0].matchups[0].week);
+        // always in season order, however the weeks were collected
+        let weeks: Vec<u32> = scoreboards
+            .iter()
+            .filter_map(|s| s.matchups.first().map(|m| m.week))
+            .collect();
+        assert!(weeks.is_sorted(), "{weeks:?}");
+
+        // everything the context needs was requested, each endpoint through the client
+        let requested: Vec<String> = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.url.path().to_string())
+            .collect();
+        let base = format!("/league/{LEAGUE_ID}");
+        for expected in [
+            base.clone(),
+            format!("{base}/users"),
+            format!("{base}/rosters"),
+            format!("{base}/drafts"),
+            format!("{base}/winners_bracket"),
+            format!("{base}/losers_bracket"),
+            format!("/draft/{DRAFT_ID}/picks"),
+            "/players/nfl".to_string(),
+        ] {
+            assert!(
+                requested.contains(&expected),
+                "{expected} was not requested: {requested:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unknown_sleeper_league_is_an_error() {
+        let (cli, _server) = sleeper_client().await;
+        let result = fetch_sleeper_league_context_by_id(&cli, &None, "999", false).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn fetching_from_a_platform_that_is_not_configured_says_so() {
+        // a LeagueAccessor that has not been init()ed has no clients
+        let accessor = LeagueAccessor::new();
+        for (id, platform) in [
+            ("sleeper:1", "sleeper"),
+            ("fleaflicker:1", "fleaflicker"),
+            ("yahoo:359.l.1", "yahoo"),
+        ] {
+            let err = accessor
+                .fetch_league_context(&ExternalId::try_from(id).unwrap(), false)
+                .await
+                .expect_err("no client is configured");
+            assert!(
+                err.to_string()
+                    .contains(&format!("{platform} cli not configured")),
+                "{err}"
+            );
+        }
+    }
+}
