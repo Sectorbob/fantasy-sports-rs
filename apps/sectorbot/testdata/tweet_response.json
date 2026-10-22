@@ -1,0 +1,152 @@
+{
+ "__typename": "Tweet",
+ "lang": "en",
+ "favorite_count": 212,
+ "created_at": "2024-01-01T21:01:16.000Z",
+ "display_text_range": [
+  0,
+  115
+ ],
+ "entities": {
+  "hashtags": [
+   {
+    "indices": [
+     104,
+     111
+    ],
+    "text": "Rovers"
+   }
+  ],
+  "urls": [],
+  "user_mentions": [],
+  "symbols": []
+ },
+ "id_str": "1800000000000000050",
+ "text": "I have to be the first person in Sample Takes history to be on the good end of one of these right??\nLFG #Rovers !!!",
+ "user": {
+  "id_str": "1000000001",
+  "name": "Sam Sample",
+  "screen_name": "SampleScribe",
+  "is_blue_verified": true,
+  "profile_image_shape": "Circle",
+  "verified": false,
+  "profile_image_url_https": "https://pbs.example.invalid/profile_images/1000000001/avatar_normal.jpg"
+ },
+ "edit_control": {
+  "edit_tweet_ids": [
+   "1800000000000000050"
+  ],
+  "editable_until_msecs": "1700000000000",
+  "is_edit_eligible": true,
+  "edits_remaining": "5"
+ },
+ "conversation_count": 14,
+ "news_action_type": "conversation",
+ "isEdited": false,
+ "isStaleEdit": false,
+ "quoted_tweet": {
+  "__typename": "Tweet",
+  "lang": "zxx",
+  "favorite_count": 212,
+  "created_at": "2024-01-01T20:49:05.000Z",
+  "display_text_range": [
+   0,
+   32
+  ],
+  "entities": {
+   "hashtags": [],
+   "urls": [],
+   "user_mentions": [],
+   "symbols": [],
+   "media": [
+    {
+     "display_url": "pic.example.invalid/pic002",
+     "expanded_url": "https://x.example.invalid/alexquote/status/1800000000000000040/photo/1",
+     "indices": [
+      0,
+      23
+     ],
+     "url": "https://t.example.invalid/pic002"
+    }
+   ]
+  },
+  "id_str": "1800000000000000040",
+  "text": "https://t.example.invalid/pic002",
+  "user": {
+   "id_str": "1000000002",
+   "name": "Alex Quote",
+   "screen_name": "alexquote",
+   "is_blue_verified": true,
+   "profile_image_shape": "Circle",
+   "verified": false,
+   "profile_image_url_https": "https://pbs.example.invalid/profile_images/1000000002/avatar_normal.jpg"
+  },
+  "edit_control": {
+   "edit_tweet_ids": [
+    "1800000000000000040"
+   ],
+   "editable_until_msecs": "1700000000000",
+   "is_edit_eligible": true,
+   "edits_remaining": "5"
+  },
+  "conversation_count": 14,
+  "news_action_type": "conversation",
+  "isEdited": false,
+  "isStaleEdit": false,
+  "mediaDetails": [
+   {
+    "display_url": "pic.example.invalid/pic002",
+    "expanded_url": "https://x.example.invalid/alexquote/status/1800000000000000040/photo/1",
+    "indices": [
+     0,
+     23
+    ],
+    "url": "https://t.example.invalid/pic002",
+    "ext_media_availability": {
+     "status": "Available"
+    },
+    "media_url_https": "https://pbs.example.invalid/media/sample002.jpg",
+    "original_info": {
+     "height": 900,
+     "width": 600,
+     "focus_rects": []
+    },
+    "sizes": {
+     "large": {
+      "h": 900,
+      "resize": "fit",
+      "w": 600
+     },
+     "medium": {
+      "h": 900,
+      "resize": "fit",
+      "w": 600
+     },
+     "small": {
+      "h": 680,
+      "resize": "fit",
+      "w": 383
+     },
+     "thumb": {
+      "h": 150,
+      "resize": "crop",
+      "w": 150
+     }
+    },
+    "type": "photo"
+   }
+  ],
+  "photos": [
+   {
+    "expandedUrl": "https://x.example.invalid/alexquote/status/1800000000000000040/photo/1",
+    "url": "https://pbs.example.invalid/media/sample002.jpg",
+    "width": 600,
+    "height": 900
+   }
+  ]
+ },
+ "place": {
+  "full_name": "Exampleton, EX",
+  "id": "0000000000000001"
+ }
+}

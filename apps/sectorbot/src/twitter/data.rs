@@ -11,9 +11,9 @@ pub struct TweetResponse {
     pub user: User,
     #[serde(deserialize_with = "parse_custom_datetime")]
     pub created_at: DateTime<FixedOffset>,
-    pub(crate) full_text: Option<String>, // "Kurt Warner described this as the \"best throw in Super Bowl history\" and he's RIGHT\n\nIf the ball has any less velocity, it's incomplete. An inch left? Incomplete. An inch right? Interception\n\nCapped off a playoff run where he threw 11 TDs to 1 INT and nearly 300 YPG\n\n#GiantsPride",
+    pub(crate) full_text: Option<String>, // full tweet text, when the payload provides it
     pub lang: String,
-    pub(crate) permalink: Option<String>, //"/DanSchneierNFL/status/1220109293313282051",
+    pub(crate) permalink: Option<String>, //"/SampleScribe/status/1800000000000000050",
     pub quoted_tweet: Option<Box<TweetResponse>>,
     #[serde(rename = "mediaDetails")]
     pub media_details: Option<Vec<MediaDetails>>,

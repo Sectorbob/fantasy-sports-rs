@@ -567,28 +567,28 @@ mod tests {
     fn test_feed_entry_deserilization() {
         let json = r#"
         {
-        "id":7301820310883384255,
-        "title":"I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!",
-        "link":"https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255",
+        "id":1800000000000000050,
+        "title":"I have to be the first person in Sample Takes history to be on the good end of one of these right??\nLFG #Rovers !!!",
+        "link":"https://fxtwitter.com/SampleScribe/status/1800000000000000050",
         "source_ts":"2023-01-01T21:01:16Z",
-        "content":"I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!",
+        "content":"I have to be the first person in Sample Takes history to be on the good end of one of these right??\nLFG #Rovers !!!",
         "published_at":null
         }
         "#;
         let entry: crate::store::FeedEntry = serde_json::from_str(json).unwrap();
         assert_eq!(entry.id.platform, None);
-        assert_eq!(entry.id.id, "7301820310883384255");
+        assert_eq!(entry.id.id, "1800000000000000050");
         assert_eq!(
             entry.title,
-            "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!"
+            "I have to be the first person in Sample Takes history to be on the good end of one of these right??\nLFG #Rovers !!!"
         );
         assert_eq!(
             entry.link,
-            "https://fxtwitter.com/DanSchneierNFL/status/7301820310883384255"
+            "https://fxtwitter.com/SampleScribe/status/1800000000000000050"
         );
         assert_eq!(
             entry.content,
-            "I have to be the first person in Freezing Cold Takes history to be on the good end of one of these right??\nLFG #Giants !!!"
+            "I have to be the first person in Sample Takes history to be on the good end of one of these right??\nLFG #Rovers !!!"
         );
     }
 }

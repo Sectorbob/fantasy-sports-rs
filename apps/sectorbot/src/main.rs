@@ -552,48 +552,48 @@ mod tests {
             "id": "VVVKNUp4ZFhRNnhoNDhHTDhrR1FKVDB3LkxXZUs4akpwSzNz",
             "snippet": {
                 "publishedAt": "2025-07-27T21:18:21Z",
-                "channelId": "UCJ5JxdXQ6xh48GL8kGQJT0w",
-                "title": "Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ",
-                "description": "Dan and Nick break down the last two Giants practices and discuss the moment Malik Nabers said Ah ha with Russ Wilson based on a coverage Russ diagnosed pre snap, they also discuss Jaxson Dart’s best practice and break down the video clips of his throws, plus Russ 50 yard bomb to Nabers, the Slayton one handed catch and two insanely skilled pass rushing moves by Abdul Carter. That and a whole lot more!\n\n#Giants #nyg #newyorkgiants #football #giantsfootball #nfceast #maliknabers #russellwilson #bluewirevideo #bigblue #newyorkcity #trainingcamp",
+                "channelId": "UCexampleRoverBanter0001",
+                "title": "Rovers Camp: rookie delivers + big play in practice",
+                "description": "Sam and Alex break down the last two Rovers practices and a deep ball. That and a whole lot more!\n\n#Rovers #football #camp",
                 "thumbnails": {
                 "default": {
-                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/default.jpg",
+                    "url": "https://i.ytimg.com/vi/exampleVid01/default.jpg",
                     "width": 120,
                     "height": 90
                 },
                 "medium": {
-                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/mqdefault.jpg",
+                    "url": "https://i.ytimg.com/vi/exampleVid01/mqdefault.jpg",
                     "width": 320,
                     "height": 180
                 },
                 "high": {
-                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/hqdefault.jpg",
+                    "url": "https://i.ytimg.com/vi/exampleVid01/hqdefault.jpg",
                     "width": 480,
                     "height": 360
                 },
                 "standard": {
-                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/sddefault.jpg",
+                    "url": "https://i.ytimg.com/vi/exampleVid01/sddefault.jpg",
                     "width": 640,
                     "height": 480
                 },
                 "maxres": {
-                    "url": "https://i.ytimg.com/vi/LWeK8jJpK3s/maxresdefault.jpg",
+                    "url": "https://i.ytimg.com/vi/exampleVid01/maxresdefault.jpg",
                     "width": 1280,
                     "height": 720
                 }
                 },
-                "channelTitle": "Big Blue Banter",
-                "playlistId": "UUJ5JxdXQ6xh48GL8kGQJT0w",
+                "channelTitle": "Rover Banter",
+                "playlistId": "UUexampleRoverBanter0001",
                 "position": 0,
                 "resourceId": {
                     "kind": "youtube#video",
-                    "videoId": "LWeK8jJpK3s"
+                    "videoId": "exampleVid01"
                 },
-                "videoOwnerChannelTitle": "Big Blue Banter",
-                "videoOwnerChannelId": "UCJ5JxdXQ6xh48GL8kGQJT0w"
+                "videoOwnerChannelTitle": "Rover Banter",
+                "videoOwnerChannelId": "UCexampleRoverBanter0001"
             },
             "contentDetails": {
-                "videoId": "LWeK8jJpK3s",
+                "videoId": "exampleVid01",
                 "videoPublishedAt": "2025-07-27T21:18:21Z"
             }
         }
@@ -602,16 +602,16 @@ mod tests {
         let video: yt::Item = serde_json::from_str(playlist_item_json).unwrap();
         // assert_eq!(video.clone().snippet.unwrap().resource_id.unwrap(), ItemId::Obj {
         //     kind: yt::ItemKind::Video,
-        //     video_id: Some("LWeK8jJpK3s".to_string()),
+        //     video_id: Some("exampleVid01".to_string()),
         //     channel_id: None,
         // }); // FIXME: this fails for some reason, the deserialization isn't working
         let entry: FeedEntry = video.into();
-        assert_eq!(entry.id.id, "LWeK8jJpK3s");
+        assert_eq!(entry.id.id, "exampleVid01");
         assert_eq!(
             entry.title,
-            "Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ"
+            "Rovers Camp: rookie delivers + big play in practice"
         );
-        assert_eq!(entry.link, "https://www.youtube.com/watch?v=LWeK8jJpK3s");
+        assert_eq!(entry.link, "https://www.youtube.com/watch?v=exampleVid01");
     }
 
     // #[tokio::test]

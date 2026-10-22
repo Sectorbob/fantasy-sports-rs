@@ -522,7 +522,7 @@ mod tests {
             .await;
         // 3. Act: Create a YoutubeClient and perform the search
         let client = YoutubeClient::new("", Some(mock_server.uri()));
-        let response = client.search_channels("Big Blue Banter").await.unwrap();
+        let response = client.search_channels("Rover Banter").await.unwrap();
 
         // 4. Assert: Check the response
         if let Response::SearchListResponse {
@@ -536,22 +536,22 @@ mod tests {
             assert_eq!(items.len(), 5);
             let bbb_channel = items
                 .iter()
-                .find(|item| item.is_search_result() && item.title() == "Big Blue Banter");
+                .find(|item| item.is_search_result() && item.title() == "Rover Banter");
             assert!(
                 bbb_channel.is_some(),
-                "Big Blue Banter channel not found in search results"
+                "Rover Banter channel not found in search results"
             );
             let bbb_channel = bbb_channel.unwrap();
             if let Some(snippet) = &bbb_channel.snippet {
-                assert_eq!(snippet.title, "Big Blue Banter");
+                assert_eq!(snippet.title, "Rover Banter");
                 assert_eq!(
                     snippet.channel_id,
-                    Some("UCJ5JxdXQ6xh48GL8kGQJT0w".to_string())
+                    Some("UCexampleRoverBanter0001".to_string())
                 );
-                assert_eq!(snippet.channel_title, Some("Big Blue Banter".to_string()));
+                assert_eq!(snippet.channel_title, Some("Rover Banter".to_string()));
                 assert_eq!(
                     snippet.description,
-                    "Welcome to Big Blue Banter! Dan Schneier and Nick Falato of the Big Blue Banter podcast are here to break down All-22 game ..."
+                    "Sam and Alex of the Rover Banter podcast break down All-22 game film. (synthetic)"
                 );
                 assert_eq!(
                     snippet.published_at,
@@ -579,10 +579,10 @@ mod tests {
         assert_eq!(0, client.credits_consumed());
         let response = client
             .list_channels(vec![
-                String::from("UC2uN7halHCl7g2GW_r7p6DA"),
-                String::from("UCF_O9xJbBoQ0D7x8Q8F0mAA"),
-                String::from("UC-AfHSMCZfj9_SB__lDiVGQ"),
-                String::from("UCJ5JxdXQ6xh48GL8kGQJT0w"),
+                String::from("UCexampleRoversCollect01"),
+                String::from("UCexampleRoverRadio00001"),
+                String::from("UCexampleRoverInsider001"),
+                String::from("UCexampleRoverBanter0001"),
             ])
             .await
             .unwrap();
@@ -611,44 +611,44 @@ mod tests {
             );
             let bbb_channel = items
                 .iter()
-                .find(|item| item.is_channel() && item.title() == "Big Blue Banter")
-                .expect("Big Blue Banter channel not found in search results");
-            assert_eq!(bbb_channel.id.id(), "UCJ5JxdXQ6xh48GL8kGQJT0w");
+                .find(|item| item.is_channel() && item.title() == "Rover Banter")
+                .expect("Rover Banter channel not found in search results");
+            assert_eq!(bbb_channel.id.id(), "UCexampleRoverBanter0001");
             assert_eq!(
                 bbb_channel.link(),
-                Some("https://www.youtube.com/@bigbluebanter1108".to_string())
+                Some("https://www.youtube.com/@roverbanter".to_string())
             );
             assert_eq!(
                 bbb_channel.uploads_playlist_id(),
-                Some("UUJ5JxdXQ6xh48GL8kGQJT0w".to_string())
+                Some("UUexampleRoverBanter0001".to_string())
             );
 
             let tgi_channel = items
                 .iter()
-                .find(|item| item.is_channel() && item.title() == "The Giant Insider")
-                .expect("The Giant Insider channel not found in search results");
-            assert_eq!(tgi_channel.id.id(), "UC-AfHSMCZfj9_SB__lDiVGQ");
+                .find(|item| item.is_channel() && item.title() == "The Rover Insider")
+                .expect("The Rover Insider channel not found in search results");
+            assert_eq!(tgi_channel.id.id(), "UCexampleRoverInsider001");
             assert_eq!(
                 tgi_channel.link(),
-                Some("https://www.youtube.com/@thegiantinsider".to_string())
+                Some("https://www.youtube.com/@theroverinsider".to_string())
             );
             assert_eq!(
                 tgi_channel.uploads_playlist_id(),
-                Some("UU-AfHSMCZfj9_SB__lDiVGQ".to_string())
+                Some("UUexampleRoverInsider001".to_string())
             );
 
             let gcoll_channel = items
                 .iter()
-                .find(|item| item.is_channel() && item.title() == "Giants Collective")
-                .expect("Giants Collective channel not found in search results");
-            assert_eq!(gcoll_channel.id.id(), "UC2uN7halHCl7g2GW_r7p6DA");
+                .find(|item| item.is_channel() && item.title() == "Rovers Collective")
+                .expect("Rovers Collective channel not found in search results");
+            assert_eq!(gcoll_channel.id.id(), "UCexampleRoversCollect01");
             assert_eq!(
                 gcoll_channel.link(),
-                Some("https://www.youtube.com/@giantscollective".to_string())
+                Some("https://www.youtube.com/@roverscollective".to_string())
             );
             assert_eq!(
                 gcoll_channel.uploads_playlist_id(),
-                Some("UU2uN7halHCl7g2GW_r7p6DA".to_string())
+                Some("UUexampleRoversCollect01".to_string())
             );
         } else {
             panic!("Expected ChannelListResponse but got {:?}", response);
@@ -668,7 +668,7 @@ mod tests {
         let client = YoutubeClient::new("", Some(mock_server.uri()));
         assert_eq!(0, client.credits_consumed());
         let response = client
-            .list_playlist_items("UUJ5JxdXQ6xh48GL8kGQJT0w")
+            .list_playlist_items("UUexampleRoverBanter0001")
             .await
             .unwrap();
 
@@ -683,13 +683,13 @@ mod tests {
         {
             // println!("PageInfo: {:#?}", page_info);
             println!("Items: {:#?}", items);
-            assert_eq!(items.len(), 25);
+            assert_eq!(items.len(), 5);
             assert_eq!(
                 items
                     .iter()
                     .filter(|item| Item::is_playlist_item(item))
                     .count(),
-                25
+                5
             );
             assert_eq!(
                 items

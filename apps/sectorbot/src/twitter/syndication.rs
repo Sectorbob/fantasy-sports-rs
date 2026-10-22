@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_timeline() {
-        let twitter_user = "DanSchneierNFL";
+        let twitter_user = "SampleScribe";
         let test_data_file = "testdata/timeline.html";
 
         // setup
@@ -179,7 +179,7 @@ mod tests {
             "mock not called"
         );
         debug_assert_eq!(
-            101,
+            5,
             timeline.props.page_props.timeline.entries.len(),
             "did not receive the expected number of tweets"
         );
@@ -203,7 +203,7 @@ mod tests {
             let tweet_response: TweetResponse = serde_json::from_str(tweet_response_json.as_str())
                 .expect("failed to deserialize tweet");
             assert_eq!(
-                DateTime::parse_from_rfc3339("2023-01-01T21:01:16.000Z").unwrap(),
+                DateTime::parse_from_rfc3339("2024-01-01T21:01:16.000Z").unwrap(),
                 tweet_response.created_at
             )
         }

@@ -177,4 +177,71 @@ pub struct PlayerHistorySeason {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    fn history(entries: &[(&str, bool, u8)]) -> HashMap<String, PlayerHistorySeason> {
+        entries
+            .iter()
+            .map(|(season, kept, rd)| {
+                (
+                    season.to_string(),
+                    PlayerHistorySeason {
+                        season: season.to_string(),
+                        drafted: !kept,
+                        kept: *kept,
+                        rd: Some(*rd),
+                        roster_id: 1,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn keepable(history: HashMap<String, PlayerHistorySeason>) -> Keepable {
+        Keepable {
+            owner_id: "1".into(),
+            owner_name: "owner".into(),
+            was_keeper_last_year: false,
+            player_id: "9001".into(),
+            player_name: "Casey Catcher".into(),
+            position: "WR".into(),
+            round: 3,
+            history,
+            player_rank: None,
+        }
+    }
+
+    #[test]
+    fn cost_is_draft_round_the_first_time_a_player_is_kept() {
+        let k = keepable(history(&[("2024", false, 7)]));
+        assert_eq!(Some("7".to_string()), k.cost("2025"));
+    }
+
+    #[test]
+    fn cost_is_round_of_first_keep_in_current_streak() {
+        // drafted 2023 (rd 5), kept 2024 (rd 4)
+        let k = keepable(history(&[("2023", false, 5), ("2024", true, 4)]));
+        assert_eq!(Some("4".to_string()), k.cost("2025"));
+    }
+
+    #[test]
+    fn cost_resets_to_adp_after_three_straight_keeps() {
+        let k = keepable(history(&[("2022", true, 3), ("2023", true, 3), ("2024", true, 3)]));
+        assert_eq!(Some("ADP".to_string()), k.cost("2025"));
+        // two straight keeps is still priced by the original round
+        let k = keepable(history(&[("2023", true, 3), ("2024", true, 3)]));
+        assert_eq!(Some("3".to_string()), k.cost("2025"));
+    }
+
+    #[test]
+    fn cost_is_none_when_not_drafted_last_year() {
+        let k = keepable(history(&[("2022", false, 9)]));
+        assert_eq!(None, k.cost("2025"));
+    }
+
+    #[test]
+    fn keeper_status_reflects_the_draft_pick() {
+        assert!(!get_keeper_status("9999", &vec![]).was_drafted);
+    }
+}

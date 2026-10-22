@@ -1,0 +1,152 @@
+{
+ "kind": "youtube#searchListResponse",
+ "etag": "etagSearchList",
+ "nextPageToken": "SYNTHETICTOKEN",
+ "regionCode": "US",
+ "pageInfo": {
+  "totalResults": 12,
+  "resultsPerPage": 5
+ },
+ "items": [
+  {
+   "kind": "youtube#searchResult",
+   "etag": "etagSearch0",
+   "id": {
+    "kind": "youtube#channel",
+    "channelId": "UCexampleRoverBanter0001"
+   },
+   "snippet": {
+    "publishedAt": "2021-02-13T23:01:14Z",
+    "channelId": "UCexampleRoverBanter0001",
+    "title": "Rover Banter",
+    "description": "Sam and Alex of the Rover Banter podcast break down All-22 game film. (synthetic)",
+    "thumbnails": {
+     "default": {
+      "url": "https://img.example.invalid/UCexampleRoverBanter0001/default.jpg"
+     },
+     "medium": {
+      "url": "https://img.example.invalid/UCexampleRoverBanter0001/medium.jpg"
+     },
+     "high": {
+      "url": "https://img.example.invalid/UCexampleRoverBanter0001/high.jpg"
+     }
+    },
+    "channelTitle": "Rover Banter",
+    "liveBroadcastContent": "none",
+    "publishTime": "2021-02-13T23:01:14Z"
+   }
+  },
+  {
+   "kind": "youtube#searchResult",
+   "etag": "etagSearch1",
+   "id": {
+    "kind": "youtube#channel",
+    "channelId": "UCexampleRoverInsider001"
+   },
+   "snippet": {
+    "publishedAt": "2021-03-01T10:00:00Z",
+    "channelId": "UCexampleRoverInsider001",
+    "title": "The Rover Insider",
+    "description": "The latest news on everything Example Rovers. (synthetic)",
+    "thumbnails": {
+     "default": {
+      "url": "https://img.example.invalid/UCexampleRoverInsider001/default.jpg"
+     },
+     "medium": {
+      "url": "https://img.example.invalid/UCexampleRoverInsider001/medium.jpg"
+     },
+     "high": {
+      "url": "https://img.example.invalid/UCexampleRoverInsider001/high.jpg"
+     }
+    },
+    "channelTitle": "The Rover Insider",
+    "liveBroadcastContent": "none",
+    "publishTime": "2021-03-01T10:00:00Z"
+   }
+  },
+  {
+   "kind": "youtube#searchResult",
+   "etag": "etagSearch2",
+   "id": {
+    "kind": "youtube#channel",
+    "channelId": "UCexampleRoversCollect01"
+   },
+   "snippet": {
+    "publishedAt": "2022-03-02T10:00:00Z",
+    "channelId": "UCexampleRoversCollect01",
+    "title": "Rovers Collective",
+    "description": "Fan-run Example Rovers community channel. (synthetic)",
+    "thumbnails": {
+     "default": {
+      "url": "https://img.example.invalid/UCexampleRoversCollect01/default.jpg"
+     },
+     "medium": {
+      "url": "https://img.example.invalid/UCexampleRoversCollect01/medium.jpg"
+     },
+     "high": {
+      "url": "https://img.example.invalid/UCexampleRoversCollect01/high.jpg"
+     }
+    },
+    "channelTitle": "Rovers Collective",
+    "liveBroadcastContent": "none",
+    "publishTime": "2022-03-02T10:00:00Z"
+   }
+  },
+  {
+   "kind": "youtube#searchResult",
+   "etag": "etagSearch3",
+   "id": {
+    "kind": "youtube#channel",
+    "channelId": "UCexampleRoverRadio00001"
+   },
+   "snippet": {
+    "publishedAt": "2023-03-03T10:00:00Z",
+    "channelId": "UCexampleRoverRadio00001",
+    "title": "Rover Radio",
+    "description": "Talk radio for Example Rovers fans. (synthetic)",
+    "thumbnails": {
+     "default": {
+      "url": "https://img.example.invalid/UCexampleRoverRadio00001/default.jpg"
+     },
+     "medium": {
+      "url": "https://img.example.invalid/UCexampleRoverRadio00001/medium.jpg"
+     },
+     "high": {
+      "url": "https://img.example.invalid/UCexampleRoverRadio00001/high.jpg"
+     }
+    },
+    "channelTitle": "Rover Radio",
+    "liveBroadcastContent": "none",
+    "publishTime": "2023-03-03T10:00:00Z"
+   }
+  },
+  {
+   "kind": "youtube#searchResult",
+   "etag": "etagSearch4",
+   "id": {
+    "kind": "youtube#channel",
+    "channelId": "UCexampleRoverFilm000001"
+   },
+   "snippet": {
+    "publishedAt": "2024-03-04T10:00:00Z",
+    "channelId": "UCexampleRoverFilm000001",
+    "title": "Rover Film Room",
+    "description": "Film study for Example Rovers. (synthetic)",
+    "thumbnails": {
+     "default": {
+      "url": "https://img.example.invalid/UCexampleRoverFilm000001/default.jpg"
+     },
+     "medium": {
+      "url": "https://img.example.invalid/UCexampleRoverFilm000001/medium.jpg"
+     },
+     "high": {
+      "url": "https://img.example.invalid/UCexampleRoverFilm000001/high.jpg"
+     }
+    },
+    "channelTitle": "Rover Film Room",
+    "liveBroadcastContent": "none",
+    "publishTime": "2024-03-04T10:00:00Z"
+   }
+  }
+ ]
+}

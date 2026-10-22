@@ -77,6 +77,11 @@ impl Service {
     }
 
     pub fn get_keepables(&self, ctx: &KeepablesContext) -> Result<KeepablesReport, ECRError> {
+        Self::compute_keepables(ctx)
+    }
+
+    /// Pure calculation over an already-fetched context; needs no clients or datastore.
+    pub fn compute_keepables(ctx: &KeepablesContext) -> Result<KeepablesReport, ECRError> {
         let num_teams = ctx.current_league.settings.num_teams;
         let mut keepables = vec![];
         let current_season = ctx.current_league.season.clone();
@@ -576,94 +581,63 @@ pub enum ECRError {
 
 #[cfg(test)]
 mod tests {
-    use flate2::read::GzDecoder;
     use std::error::Error;
     use std::fs::File;
     use std::io::{self, BufReader};
-    use std::sync::Arc;
     use tokio::fs::{self};
 
-    use crate::config;
     use crate::ecr::keepers::Keepable;
     use crate::ecr::service::{KeepablesContext, LEAGUE_ID, SPORT, Service};
-    use crate::store::DataStore;
 
-    #[tokio::test]
-    async fn test_get_keepables_report() {
-        let _config = config::load_config().expect("config couldn't load");
-        let store = Arc::new(DataStore::new());
-        let svc = Service::new(&store).await.expect("failed to create service");
-        // FIXME: this fucked up, need to find a way to not blow up if I am not using yahoo
+    #[test]
+    fn test_compute_keepables_report() {
+        let keepables_context = load_keepables_context_testdata().expect("failed to load context test data file");
 
-        let keepables_context: KeepablesContext = load_keepables_context_testdata()
-            .await
-            .expect("failed to load context test data file");
-        // let keepables_context: KeepablesContext = fetch_and_save_ctx(&svc, "keepables_ctx.json")
-        //     .await
-        //     .expect("failed to fetch live context");
+        assert_eq!(3, keepables_context.draft_history.len());
+        assert_eq!(10, keepables_context.players.len());
+        assert_eq!(4, keepables_context.rosters.len());
+        assert_eq!(4, keepables_context.users.len());
 
-        assert_eq!(6, keepables_context.draft_history.len());
-        assert_eq!(476, keepables_context.players.len());
-        assert_eq!(12, keepables_context.rosters.len());
-        assert_eq!(12, keepables_context.users.len());
+        let keepables = Service::compute_keepables(&keepables_context).expect("report calculation failed");
 
-        // do it
-        let keepables = svc
-            .get_keepables(&keepables_context)
-            .expect("report calculation failed");
+        // Dana Dasher (9005) is on a roster but was never drafted, so she is not a keepable
+        assert_eq!(4, keepables.keepables.len(), "expecting 4 keepables in the league");
+        let find = |owner: &str, player: &str| -> &Keepable {
+            keepables
+                .keepables
+                .iter()
+                .find(|k| k.owner_name == owner && k.player_name == player)
+                .unwrap_or_else(|| panic!("{player} should be a keepable for {owner}"))
+        };
+        assert_eq!(3, keepables.keepables.iter().filter(|k| k.owner_name == "SampleOwner").count());
 
-        // // some report debugging
-        // println!("{}", keepables.text_report());
-        // assert!(false);
-        debug_assert_eq!(
-            151,
-            keepables.keepables.len(),
-            "expecting 151 total keepables in the league"
-        );
-        let sectorbob_keepables: Vec<&Keepable> = keepables
-            .keepables
-            .iter()
-            .filter(|k| k.owner_name == "Sectorbob")
-            .collect();
-        debug_assert_eq!(
-            15,
-            sectorbob_keepables.len(),
-            "expecting 15 total keepables for Sectorbob's roster"
-        );
-        debug_assert_eq!(
+        assert_eq!(
             Some(String::from("ADP")),
-            sectorbob_keepables
-                .iter()
-                .find(|k| k.player_name == "Ja'Marr Chase")
-                .map(|k| k.cost("2025"))
-                .flatten(),
-            "expecting Ja'Marr Chase's keeper cost to be at ADP"
+            find("SampleOwner", "Casey Catcher").cost("2025"),
+            "kept three straight seasons: contract is renegotiated at ADP"
         );
-        debug_assert_eq!(
+        assert_eq!(
             Some(String::from("2")),
-            sectorbob_keepables
-                .iter()
-                .find(|k| k.player_name == "Malik Nabers")
-                .map(|k| k.cost("2025"))
-                .flatten(),
-            "expecting Malik Nabers' keeper cost to be a second round pick"
+            find("SampleOwner", "Nico Nimble").cost("2025"),
+            "drafted in the second round last year"
         );
-        debug_assert_eq!(
+        assert_eq!(
             Some(String::from("10")),
-            sectorbob_keepables
-                .iter()
-                .find(|k| k.player_name == "Caleb Williams")
-                .map(|k| k.cost("2025"))
-                .flatten(),
-            "expecting Caleb Williams' keeper cost to be a 10th round pick"
+            find("SampleOwner", "Will Wheeler").cost("2025"),
+            "drafted in the tenth round last year"
         );
+        assert_eq!(
+            Some(String::from("4")),
+            find("ManagerBeta", "Rex Runner").cost("2025"),
+            "first kept last year: costs the round he was kept in"
+        );
+        // ECR rank 1 in a 4 team league => round 1, pick 2
+        assert_eq!(Some(String::from("1.2")), find("SampleOwner", "Casey Catcher").player_rank);
     }
 
-    async fn load_keepables_context_testdata() -> Result<KeepablesContext, io::Error> {
-        let file_path = "testdata/ecr/keepables_ctx.json.gz"; // Replace with your file path
-        let file = File::open(file_path)?;
-        let decoder = GzDecoder::new(BufReader::new(file));
-        serde_json::from_reader(BufReader::new(decoder)).map_err(|json_error| json_error.into())
+    fn load_keepables_context_testdata() -> Result<KeepablesContext, io::Error> {
+        let file = File::open("testdata/ecr/keepables_ctx.json")?;
+        serde_json::from_reader(BufReader::new(file)).map_err(|json_error| json_error.into())
     }
 
     #[allow(dead_code)]

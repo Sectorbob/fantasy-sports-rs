@@ -88,7 +88,7 @@ mod tests {
         mock_server
             .register(setup_mock(
                 "/nfl/rankings/half-point-ppr-cheatsheets.php",
-                "testdata/fantasypros/fantasy_pros_nfl_rankings_half_ppr.html.gz",
+                "testdata/fantasypros/synthetic_rankings_half_ppr.html.gz",
             ))
             .await;
         let client = Client::new_with_base_url(mock_server.uri());
@@ -97,8 +97,8 @@ mod tests {
         let resp = client.fetch_ecr_half_ppr().await.expect("request failed");
 
         // assert
-        debug_assert_eq!(545, resp.players.len());
-        assert_eq!(1754497145, resp.last_updated_ts);
+        debug_assert_eq!(10, resp.players.len());
+        assert_eq!(1736943600, resp.last_updated_ts);
     }
 
     fn setup_mock(path: &str, data_file: &str) -> Mock {

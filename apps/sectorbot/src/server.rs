@@ -214,7 +214,7 @@ mod tests {
             },
             title: "Test Entry".to_string(),
             link: "http://example.com/test-entry".to_string(),
-            content: "- It’s Malik Nabers’ world &amp; we’re just living in it".to_string(),
+            content: "- It’s Casey Catcher’s world &amp; we’re just living in it".to_string(),
             source_ts: DateTime::parse_from_rfc3339("2023-10-01T12:00:00Z")
                 .unwrap()
                 .with_timezone(&Utc),
@@ -242,7 +242,7 @@ mod tests {
         assert!(!rss_channel.items.is_empty());
         assert_eq!(1, rss_channel.items.len());
         assert_eq!(
-            "- It’s Malik Nabers’ world & we’re just living in it",
+            "- It’s Casey Catcher’s world & we’re just living in it",
             &rss_channel.items[0].description.clone().unwrap()
         );
     }

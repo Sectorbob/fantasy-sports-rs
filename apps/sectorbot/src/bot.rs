@@ -697,25 +697,6 @@ fn discord_embed_for_youtube(video: &yt::Item) -> Option<CreateEmbed> {
         .snippet
         .as_ref()
         .map(|snippet| snippet.published_at.clone())?;
-
-    // if let Some(quoted) = &tweet.quoted_tweet {
-    //     description.push_str("\n\n> **[Quoting](https://x.com");
-    //     description.push_str(&quoted.link());
-    //     description.push_str(") ");
-    //     description.push_str(&quoted.user.name);
-    //     description.push_str(
-    //         format!(
-    //             " \\([@{screen_name}](https://x.com/{screen_name})\\)**\n> \u{fe00}\n> ",
-    //             screen_name = quoted.user.screen_name
-    //         )
-    //         .as_str(),
-    //     );
-    //     description.push_str(encode_text(&quoted.text()).as_str());
-    //     description.push_str(format!("\n\n**[🔁](https://x.com/intent/retweet?tweet_id={tweet_id}) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id={tweet_id}) 19\u{2002}👁\u{fe0f} 720\u{2002}**", tweet_id = tweet.id_str).as_str());
-
-    //     // "\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"
-    // }
-
     let mut embed_author = CreateEmbedAuthor::new(channel_name).url(link.as_str());
     if let Some(channel_icon) = channel_icon {
         embed_author = embed_author.icon_url(channel_icon.as_str());
@@ -813,7 +794,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tweet_to_embed() {
-        let tweet_id: u64 = 7294395550069598126;
+        let tweet_id: u64 = 1800000000000000101;
         let tweet_str =
             tokio::fs::read_to_string(format!("testdata/twitter/tweet_{tweet_id}.json"))
                 .await
@@ -822,17 +803,16 @@ mod tests {
             serde_json::from_str(tweet_str.as_str()).expect("failed to deserialize tweet json");
         let embed = to_embed(discord_embed_for_tweet(&tweet));
         let expected = to_embed(CreateEmbed::new()
-            .url(format!("https://x.com/DanSchneierNFL/status/{tweet_id}")) // I am using x.com instead of fxtwitter.com
+            .url(format!("https://x.com/SampleScribe/status/{tweet_id}")) // I am using x.com instead of fxtwitter.com
             .author(
-                CreateEmbedAuthor::new("Dan Schneier (@DanSchneierNFL)")
-                    .url(format!("https://x.com/DanSchneierNFL/status/{tweet_id}"))
-                    .icon_url(
-                        "https://pbs.twimg.com/profile_images/7587230746533314994/U99feYNK_normal.jpg", // FIXME: adjusted to _normal from _200x200.jpg
-                    ),
-            ).image("https://pbs.twimg.com/media/GyPznmKWYAEOe0l.jpg")
+                CreateEmbedAuthor::new("Sam Sample (@SampleScribe)")
+                    .url(format!("https://x.com/SampleScribe/status/{tweet_id}"))
+                    .icon_url("https://pbs.example.invalid/profile_images/1000000001/avatar_normal.jpg"),
+            ).image("https://pbs.example.invalid/media/sample001.jpg")
             .footer(CreateEmbedFooter::new("FxTwitter").icon_url("https://assets.fxembed.com/logos/fxtwitter-pride64.png"))
             .colour(Colour(6513919))
-            .description("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**"),
+            // NOTE: the engagement counts (2 / 19 / 720) are hardcoded in discord_embed_for_tweet (known bug, see PLAN.md)
+            .description("If rookie Riley Rookie hits for the Rovers \\-\\- and not just in a down the line kinda way \\-\\- extend the OL coach immediately.\n\u{fe00}\u{fe00}The Rovers have been desperate for a Day 3 OL draft hit since Pat Anchor \\(Lee Backup I guess\\).\n\n> **[Quoting](https://x.com/alexquote/status/1800000000000000099) Alex Quote \\([@alexquote](https://x.com/alexquote)\\)**\n> \u{fe00}\n> \u{2066}@RileyRookie\u{2069} has reason to smile. He continues to handle his business and held his own at right tackle with the first team https://t.example.invalid/pic001\n\n**[🔁](https://x.com/intent/retweet?tweet_id=1800000000000000101) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=1800000000000000101) 19\u{2002}👁\u{fe0f} 720\u{2002}**"),
         );
         debug_assert_eq!(expected.author, embed.author, "embed author is not right");
         debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
@@ -842,11 +822,6 @@ mod tests {
             expected.description, embed.description,
             "embed description is not right"
         );
-
-        // left: Some("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}[@MarcusMbow](https://x.com/MarcusMbow)\u{2069} has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**")
-        //right: Some("If Marcus Mbow hits for the Giants, and not just in a down the line kinda way \\-\\- but as in 2025 games \\-\\- EXTEND OL coach Carmen Bricillo immediately\\.\n\u{fe00}\u{fe00}The Giants have been DESPERATE for a Day 2, let alone a Day 3 \\(Round 5\\) OL draft hit since David Diehl \\(Will Beatty I guess\\)\\.\n\n> **[Quoting](https://x.com/art_stapleton/status/6633249929708266176) Art Stapleton \\([@art_stapleton](https://x.com/art_stapleton)\\)**\n> \u{fe00}\n> \u{2066}@MarcusMbow\u{2069}^^^^^^^^^^^^^^^^^^^^^^^^^^^^ has reason to smile\\. He continues to handle his business and the rookie held his own at right tackle with the first team as Jermaine Eluemunor spends the day with his family welcoming their second child https://t\\.co/uTPhhvGpCm\n\n**[🔁](https://x.com/intent/retweet?tweet_id=7294395550069598126) 2\u{2002}[❤\u{fe0f}](https://x.com/intent/like?tweet_id=7294395550069598126) 19\u{2002}👁\u{fe0f} 720\u{2002}**")
-        // debug_assert_eq!(expected, embed, "blarg");
-        // debug_assert_eq!(expected)
     }
 
     fn to_embed(create_embed: CreateEmbed) -> Embed {
@@ -872,18 +847,16 @@ mod tests {
 
         let embed = to_embed(discord_embed_for_youtube(&videos[0]).expect("no embed created"));
         let expected = to_embed(CreateEmbed::new()
-            .url(format!("https://www.youtube.com/watch?v=LWeK8jJpK3s")) // I am using x.com instead of fxtwitter.com
+            .url(format!("https://www.youtube.com/watch?v=exampleVid01")) // I am using x.com instead of fxtwitter.com
             .author(
-                CreateEmbedAuthor::new("Big Blue Banter")
-                    .url(format!("https://www.youtube.com/watch?v=LWeK8jJpK3s"))
-                    .icon_url(
-                        "https://yt3.ggpht.com/ytc/AIdro_lzKU60jKmyyAQsfIY5qke_sjpRbIJ6jYt3O8T2gpv5IA=s88-c-k-c0x00ffffff-no-r",
-                    ),
-            ).image("https://i.ytimg.com/vi/LWeK8jJpK3s/mqdefault.jpg")
+                CreateEmbedAuthor::new("Rover Banter")
+                    .url(format!("https://www.youtube.com/watch?v=exampleVid01")),
+                // no icon: the synthetic channel is not in channel_icon_url_for's table
+            ).image("https://img.example.invalid/exampleVid01/medium.jpg")
             .footer(CreateEmbedFooter::new("Youtube").icon_url(FOOTER_YOUTUBE_ICON))
             .colour(Colour(6513919))
-            .title("Giants Camp: Dart delivers + Nabers pinpoints “Eureka moment” with Russ")
-            .description("Dan and Nick break down the last two Giants practices and discuss the moment Malik Nabers said Ah ha with Russ Wilson based on a coverage Russ diagnosed pre snap, they also discuss Jaxson Dart’s best practice and break down the video clips of his throws, plus Russ 50 yard bomb to Nabers, the Slayton one handed catch and two insanely skilled pass rushing moves by Abdul Carter. That and a whole lot more!\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}\\#Giants \\#nyg \\#newyorkgiants \\#football \\#giantsfootball \\#nfceast \\#maliknabers \\#russellwilson \\#bluewirevideo \\#bigblue \\#newyorkcity \\#trainingcamp")
+            .title("Rovers Camp: rookie delivers + big play in practice")
+            .description("Sam and Alex break down the last two Rovers practices and a deep ball. That and a whole lot more!\n\u{fe00}\u{fe00}\n\u{fe00}\u{fe00}\\#Rovers \\#football \\#camp")
         );
         debug_assert_eq!(expected.author, embed.author, "embed author is not right");
         debug_assert_eq!(expected.kind, embed.kind, "embed type is not right");
