@@ -538,6 +538,10 @@ pub(crate) async fn fetch_sleeper_league_context(
                 }
             }
         }
+    } else {
+        // without a player cache every player the league uses has to come from the downloaded
+        // player universe; this used to leave the league without any players
+        player_cache_misses = player_id_set;
     }
 
     // if we have cache missed and a sleep player update request is not yet in flight, then fetch players
@@ -1097,5 +1101,178 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("abc"), "{err}");
+    }
+
+    async fn sleeper_league() -> crate::League {
+        let (cli, _server) = sleeper_client().await;
+        fetch_sleeper_league_context_by_id(&cli, &None, LEAGUE_ID, false)
+            .await
+            .unwrap()
+    }
+
+    async fn fleaflicker_league() -> crate::League {
+        let (cli, _server) = fleaflicker_client().await;
+        fetch_fleaflicker_league_context(&cli, &None, "1".to_string(), false)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_league_describes_itself() {
+        let league = sleeper_league().await;
+
+        assert_eq!(format!("sleeper:{LEAGUE_ID}"), league.id().to_string());
+        assert_eq!("Sleeper", league.platform());
+        assert_eq!(crate::LeagueStatus::Complete, league.status());
+        assert_eq!(12, league.teams().len());
+        assert!(league.raw().starts_with("Raw:") && league.raw().contains("playoff_week_start"));
+
+        let settings = league.settings();
+        assert!(settings.has_playoffs);
+        assert_eq!(14, settings.playoff_start_week);
+        assert_eq!(6, settings.num_playoff_teams);
+        assert_eq!(17, settings.draft_rounds);
+        assert!(settings.scoring.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_league_knows_its_players() {
+        // no player cache is configured here; the league must still get its players
+        let league = sleeper_league().await;
+        let players = league.players();
+        assert!(players.len() > 300, "only {} players", players.len());
+
+        let missing: Vec<String> = league
+            .rosters()
+            .iter()
+            .flat_map(|r| r.player_ids.clone())
+            .filter(|id| !players.contains_key(id))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "rostered players without data: {missing:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn sleeper_standings_and_rosters_come_back_in_a_stable_order() {
+        let league = sleeper_league().await;
+
+        let standings = league.standings().entries;
+        assert_eq!(12, standings.len());
+        // best record first
+        assert!(
+            standings.windows(2).all(|w| w[0].wins >= w[1].wins),
+            "{standings:#?}"
+        );
+        assert_eq!("10-3-0", league.record_for_roster("1".to_string()));
+
+        let rosters = league.rosters();
+        let ids: Vec<u32> = rosters.iter().map(|r| r.id.parse().unwrap()).collect();
+        assert_eq!((1..=12).collect::<Vec<u32>>(), ids);
+
+        // the rosters are kept in a HashMap; the order must not depend on its iteration order
+        for _ in 0..10 {
+            let again: Vec<String> = sleeper_league_standings_order(&league);
+            assert_eq!(
+                standings
+                    .iter()
+                    .map(|e| e.roster_id.clone())
+                    .collect::<Vec<_>>(),
+                again
+            );
+        }
+    }
+
+    fn sleeper_league_standings_order(league: &crate::League) -> Vec<String> {
+        league
+            .standings()
+            .entries
+            .into_iter()
+            .map(|e| e.roster_id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_leagues_playoff_results_follow_the_bracket() {
+        let league = sleeper_league().await;
+        let results = league
+            .playoff_results()
+            .expect("the league has a winners bracket");
+        assert_eq!("7", results[&1].roster_id, "champion");
+        assert_eq!("9", results[&2].roster_id, "runner-up");
+        assert_eq!("4", results[&3].roster_id, "third place");
+    }
+
+    #[tokio::test]
+    async fn selecting_an_owner_picks_out_their_team_and_record() {
+        let league = sleeper_league().await;
+        assert_eq!(None, league.selected_owner_id());
+        assert!(league.team().is_none());
+        assert_eq!("N/A", league.record());
+
+        let owner = league
+            .standings()
+            .entries
+            .into_iter()
+            .find(|e| e.roster_id == "1")
+            .unwrap();
+        let league =
+            league.with_owner_id(ExternalId::new(Platform::Sleeper, owner.owner_id.clone()));
+
+        assert_eq!(Some(owner.owner_id.clone()), league.selected_owner_id());
+        let team = league.team().expect("the owner has a team in this league");
+        assert_eq!(owner.owner_id, team.owner_id.unwrap());
+        assert_eq!(owner.team_name, league.team_name());
+        assert_eq!(
+            format!("{}-{}-{}", owner.wins, owner.losses, owner.ties),
+            league.record()
+        );
+        // roster 1 scored 1716 points and ten hundredths
+        assert!(
+            (league.total_points() - 1716.10).abs() < 1e-9,
+            "{}",
+            league.total_points()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_fleaflicker_league_describes_itself() {
+        let league = fleaflicker_league().await;
+        assert_eq!(crate::LeagueStatus::PreDraft, league.status());
+        assert_eq!("FleaFlicker", league.platform());
+        assert!(league.id().to_string().starts_with("fleaflicker:"));
+        assert!(league.raw().len() > 1000);
+        assert_eq!(12, league.teams().len());
+        assert!(
+            league.draft().is_none(),
+            "the fixture league has not drafted"
+        );
+        assert!(league.scoreboards().is_empty());
+        assert!(league.playoff_results().is_none());
+        assert!(league.settings().has_playoffs);
+    }
+
+    #[tokio::test]
+    async fn fleaflicker_standings_survive_unowned_and_unnamed_teams() {
+        // open slots have no owner and may have no name; the standings used to unwrap both
+        let mut league = fleaflicker_league().await;
+        if let crate::League::FleaFlicker { standings, .. } = &mut league {
+            for division in &mut standings.divisions {
+                for team in &mut division.teams {
+                    team.owners = None;
+                    team.name = None;
+                }
+            }
+        }
+
+        let entries = league.standings().entries;
+
+        assert_eq!(12, entries.len());
+        for entry in entries {
+            assert_eq!(format!("Team {}", entry.roster_id), entry.team_name);
+            assert_eq!(format!("Team {}", entry.roster_id), entry.owner_name);
+            assert_eq!("", entry.owner_id);
+        }
     }
 }

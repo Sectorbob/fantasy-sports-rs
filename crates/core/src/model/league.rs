@@ -187,25 +187,31 @@ impl League {
                             .teams
                             .iter()
                             .map(|team| {
-                                // TODO: theree are alot of panicable things here
-                                let owner = team.owners.as_ref().unwrap().first().unwrap();
+                                // teams can be unowned or unnamed, so every field has a fallback
+                                let owner = team.owners.as_ref().and_then(|owners| owners.first());
+                                let id = team.id.map(|id| id.to_string()).unwrap_or_default();
                                 let wins = team
                                     .record_overall
                                     .as_ref()
-                                    .map_or(0, |r| r.win.map_or(0, |v| v.try_into().unwrap()));
-                                let losses = team
-                                    .record_overall
-                                    .as_ref()
-                                    .map_or(0, |r| r.losses.map_or(0, |v| v.try_into().unwrap()));
+                                    .map_or(0, |r| r.win.map_or(0, |v| v.try_into().unwrap_or(0)));
+                                let losses = team.record_overall.as_ref().map_or(0, |r| {
+                                    r.losses.map_or(0, |v| v.try_into().unwrap_or(0))
+                                });
                                 let ties = team
                                     .record_overall
                                     .as_ref()
-                                    .map_or(0, |r| r.ties.map_or(0, |v| v.try_into().unwrap()));
+                                    .map_or(0, |r| r.ties.map_or(0, |v| v.try_into().unwrap_or(0)));
                                 StandingsEntry {
-                                    roster_id: team.id.unwrap().to_string(),
-                                    team_name: team.name.clone().unwrap().to_string(),
-                                    owner_name: owner.display_name.clone(),
-                                    owner_id: owner.id.to_string(),
+                                    team_name: team
+                                        .name
+                                        .clone()
+                                        .unwrap_or_else(|| format!("Team {id}")),
+                                    owner_name: owner.map_or_else(
+                                        || format!("Team {id}"),
+                                        |o| o.display_name.clone(),
+                                    ),
+                                    owner_id: owner.map_or_else(String::new, |o| o.id.to_string()),
+                                    roster_id: id,
                                     wins,
                                     losses,
                                     ties,
@@ -217,8 +223,8 @@ impl League {
             },
             League::Sleeper {
                 rosters, owners, ..
-            } => Standings {
-                entries: rosters
+            } => {
+                let mut entries: Vec<StandingsEntry> = rosters
                     .iter()
                     .map(|(id, roster)| {
                         let wins = roster
@@ -250,8 +256,17 @@ impl League {
                             ties,
                         }
                     })
-                    .collect(),
-            },
+                    .collect();
+                // best record first; the rosters live in a HashMap, so break ties by id
+                entries.sort_by_key(|e| {
+                    (
+                        std::cmp::Reverse(e.wins),
+                        e.losses,
+                        e.roster_id.parse::<u64>().unwrap_or(u64::MAX),
+                    )
+                });
+                Standings { entries }
+            }
             League::Yahoo { standings, .. } => Standings {
                 entries: standings
                     .teams
@@ -272,12 +287,13 @@ impl League {
                             .as_ref()
                             .map(|s| s.outcome_totals.ties as u64)
                             .unwrap_or_default();
-                        let manager = team.managers().first().unwrap();
+                        let manager = team.managers().first();
                         StandingsEntry {
                             roster_id: team.team_key.to_string(),
                             team_name: team.name.clone(),
-                            owner_name: manager.nickname.clone(),
-                            owner_id: manager.guid.clone(),
+                            owner_name: manager
+                                .map_or_else(|| team.name.clone(), |m| m.nickname.clone()),
+                            owner_id: manager.map_or_else(String::new, |m| m.guid.clone()),
                             wins,
                             losses,
                             ties,
@@ -447,17 +463,26 @@ impl League {
             League::FleaFlicker { .. } => 0.0,
             League::Sleeper {
                 rosters, user_id, ..
-            } => match rosters
-                .iter()
-                .find(|(_, r)| r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id)
-            {
-                Some((_, roster)) => roster
-                    .settings
-                    .get("points")
-                    .and_then(|p| p.as_f64())
-                    .unwrap_or(-2.0),
-                None => -1.0,
-            },
+            } => {
+                match rosters.iter().find(|(_, r)| {
+                    r.owner_id.is_some() && user_id.is_some() && &r.owner_id == user_id
+                }) {
+                    // sleeper keeps the whole points in `fpts` and the hundredths in `fpts_decimal`
+                    Some((_, roster)) => roster
+                        .settings
+                        .get("fpts")
+                        .and_then(Number::as_f64)
+                        .map_or(-2.0, |whole| {
+                            let hundredths = roster
+                                .settings
+                                .get("fpts_decimal")
+                                .and_then(Number::as_f64)
+                                .unwrap_or_default();
+                            whole + hundredths / 100.0
+                        }),
+                    None => -1.0,
+                }
+            }
             League::Yahoo {
                 standings, team, ..
             } => match standings
@@ -621,15 +646,22 @@ impl League {
             League::FleaFlicker { rosters, .. } => rosters.iter().map(Roster::from).collect(),
             League::Sleeper {
                 rosters, owners, ..
-            } => rosters
-                .iter()
-                .map(|r| r.1)
-                .map(|r| Roster::from((r, owners)))
-                .collect(),
-            League::Yahoo { rosters, teams, .. } => rosters
-                .iter()
-                .map(|(roster_id, roster)| Roster::from((roster_id, roster, teams)))
-                .collect(),
+            } => {
+                let mut by_id: Vec<_> = rosters.iter().collect();
+                by_id.sort_by_key(|(roster_id, _)| **roster_id);
+                by_id
+                    .into_iter()
+                    .map(|(_, r)| Roster::from((r, owners)))
+                    .collect()
+            }
+            League::Yahoo { rosters, teams, .. } => {
+                let mut by_id: Vec<_> = rosters.iter().collect();
+                by_id.sort_by_key(|(roster_id, _)| **roster_id);
+                by_id
+                    .into_iter()
+                    .map(|(roster_id, roster)| Roster::from((roster_id, roster, teams)))
+                    .collect()
+            }
         }
     }
     pub fn transactions(&self) -> Vec<Transaction> {
