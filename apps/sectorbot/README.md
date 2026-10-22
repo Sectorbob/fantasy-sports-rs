@@ -58,7 +58,9 @@ Secrets are never read from the repository or baked into the container image.
 ## Feeds
 
 A feed is a list of sources (`twitter:<handle>` or `youtube:<channel id>`), a Discord destination
-(`discord:<channel id>`), a polling interval in seconds and a quiet-hours window. Copy
+(`discord:<channel id>`), a polling interval in seconds and a quiet-hours window
+(`"HH:MM-HH:MM"` in US Pacific time, which may wrap past midnight such as `"22:00-06:00"`; the
+feed is not polled during it, and an empty window means never quiet). Copy
 `feeds.example.json` to `feeds.json`, edit it and point `FEEDS_FILE` at it. Feeds already in the
 data store (and their entries) are left alone.
 
