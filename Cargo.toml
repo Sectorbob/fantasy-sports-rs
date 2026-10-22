@@ -1,0 +1,63 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# let-chains (stable in 1.88) are used throughout
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/Sectorbob/fantasy-sports-rs"
+authors = ["Kyle Heide <dev@sectorbob.net>"]
+
+[workspace.dependencies]
+# workspace members
+cached-client-rs = { path = "crates/cache", version = "0.1.0" }
+sleeper-fantasy-rs = { path = "crates/sleeper", version = "0.1.0" }
+yahoo-fantasy-rs = { path = "crates/yahoo", version = "0.1.0" }
+fleaflicker-fantasy-rs = { path = "crates/fleaflicker", version = "0.1.0" }
+fantasy-core-rs = { path = "crates/core", version = "0.1.0" }
+
+# third party (single place to bump versions)
+async-trait = "0.1.89"
+axum = "0.8.4"
+base64 = "0.22.1"
+chrono = "0.4.42"
+chrono-tz = "0.10.4"
+crossterm = "0.29.0"
+directories = "6.0.0"
+dirs = "6.0.0"
+dotenv = "0.15.0"
+flate2 = "1.1.2"
+flexi_logger = "0.30.1"
+futures = "0.3.31"
+html-escape = "0.2.13"
+itertools = "0.14.0"
+log = "0.4.28"
+num = "0.4.3"
+num-traits = "0.2.19"
+pkce = "0.2.0"
+quick-xml = "0.38.3"
+radix_fmt = "1.0.0"
+rand = "0.9.2"
+regex = "1.11.1"
+reqwest = { version = "0.12.23", default-features = false }
+rmp-serde = "1.3.0"
+rss = "2.0.12"
+scraper = "0.23.1"
+serde = "1.0.219"
+serde-xml-rs = "0.8.0"
+serde_assert = "0.8.0"
+serde_json = "1.0.143"
+serde_repr = "0.1.20"
+serenity = "0.12.4"
+sha2 = "0.10.9"
+sled = "0.34.7"
+tempfile = "3.22.0"
+thiserror = "2.0.16"
+tokio = "1.47.1"
+tracing-subscriber = "0.3.19"
+tui = "0.19.0"
+walkdir = "2.5.0"
+wiremock = "0.6.5"

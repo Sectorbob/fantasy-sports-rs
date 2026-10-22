@@ -1,27 +1,28 @@
 [package]
 name = "sleeper-fantasy-rs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Rust client for the Sleeper fantasy sports API"
 
 [dependencies]
-cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
-chrono = { version = "0.4.41", features = ["serde"] }
-directories = "6.0.0"
-log = "0.4.27"
-rand = "0.9.2"
-reqwest = { version = "0.12.15", features = [
-    "gzip",
-    "json",
-    "rustls-tls",
-], default-features = false }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.140" }
-serde_repr = "0.1.20"
-tokio = { version = "1.45.0", features = ["full"] }
+cached-client-rs.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+directories.workspace = true
+log.workspace = true
+rand.workspace = true
+reqwest = { workspace = true, features = ["gzip", "json", "rustls-tls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_repr.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+flate2.workspace = true
+wiremock.workspace = true
 
 [features]
 default = []
-
-[dev-dependencies]
-flate2 = "1.1.1"
-wiremock = "0.6.3"

@@ -1,19 +1,24 @@
 [package]
 name = "fantasy-core-rs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Platform-independent fantasy sports data model over Sleeper, Yahoo and Fleaflicker"
 
 [dependencies]
-cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
-chrono = "0.4.41"
-fleaflicker-fantasy-rs = { version = "0.1.0", path = "../fleaflicker-fantasy-rs" }
-futures = "0.3.31"
-log = "0.4.27"
-serde = "1.0.219"
-serde_json = "1.0.142"
-sled = "0.34.7"
-sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
-thiserror = "2.0.14"
-tokio = "1.47.1"
-walkdir = "2.5.0"
-yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }
+cached-client-rs.workspace = true
+chrono.workspace = true
+fleaflicker-fantasy-rs.workspace = true
+futures.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sled.workspace = true
+sleeper-fantasy-rs.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+walkdir.workspace = true
+yahoo-fantasy-rs.workspace = true

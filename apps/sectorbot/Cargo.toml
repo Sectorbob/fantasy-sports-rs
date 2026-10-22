@@ -1,35 +1,41 @@
 [package]
 name = "sectorbot"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Discord bot that posts feeds and fantasy league reports"
+publish = false  # decided before the first release
 
 [dependencies]
-axum = "0.8.4"
-cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
-chrono = "0.4.41"
-chrono-tz = "0.10.4"
-dotenv = "0.15.0"
-fantasy-core-rs = { version = "0.1.0", path = "../fantasy-core-rs" }
-html-escape = "0.2.13"
-log = "0.4.27"
-num = "0.4.3"
-num-traits = "0.2.19"
-radix_fmt = "1.0.0"
-regex = "1.11.1"
-reqwest = { version = "0.12.22", features = ["json", "rustls-tls"], default-features = false }
-rss = "2.0.12"
-scraper = "0.23.1"
-serde =  { version = "1.0.219", features = ["derive", "alloc"] }
-serde_json = "1.0.140"
-serenity = "0.12.4"
-sled = "0.34.7"
-sleeper-fantasy-rs = { version = "0.1.0", path = "../sleeper-fantasy-rs" }
-thiserror = "2.0.12"
-tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread"] }
-tracing-subscriber = "0.3.19"
-yahoo-fantasy-rs = { version = "0.1.0", path = "../yahoo-fantasy-rs" }
+axum.workspace = true
+cached-client-rs.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+dotenv.workspace = true
+fantasy-core-rs.workspace = true
+html-escape.workspace = true
+log.workspace = true
+num.workspace = true
+num-traits.workspace = true
+radix_fmt.workspace = true
+regex.workspace = true
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+rss.workspace = true
+scraper.workspace = true
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_json.workspace = true
+serenity.workspace = true
+sled.workspace = true
+sleeper-fantasy-rs.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber.workspace = true
+yahoo-fantasy-rs.workspace = true
 
 [dev-dependencies]
-flate2 = "1.1.2"
-serde_assert = "0.8.0"
-wiremock = "0.6.4"
+flate2.workspace = true
+serde_assert.workspace = true
+wiremock.workspace = true

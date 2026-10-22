@@ -1,24 +1,29 @@
 [package]
 name = "fleaflicker-fantasy-rs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Rust client for the Fleaflicker fantasy sports API"
 
 [dependencies]
-async-trait = "0.1.89"
-cached-client-rs = { version = "0.1.0", path = "../cached-client-rs" }
-chrono = { version = "0.4.41", features = ["serde"] }
-directories = "6.0.0"
-log = "0.4.27"
-reqwest = { version = "0.12.15", features = [ "gzip", "json", "rustls-tls" ], default-features = false }
-serde = { version = "1.0.219", features = [ "derive" ] }
-serde_json = { version = "1.0.140" }
-sha2 = "0.10.9"
-thiserror = "2.0.12"
-tokio = { version = "1.45.0", features = [ "full" ] }
+async-trait.workspace = true
+cached-client-rs.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+directories.workspace = true
+log.workspace = true
+reqwest = { workspace = true, features = ["gzip", "json", "rustls-tls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+flate2.workspace = true
+wiremock.workspace = true
 
 [features]
 default = []
-
-[dev-dependencies]
-flate2 = "1.1.1"
-wiremock = "0.6.5"

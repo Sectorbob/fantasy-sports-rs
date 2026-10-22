@@ -1,0 +1,11 @@
+/target
+# local configuration and secrets
+.env
+.env.*
+!.env.example
+*.log
+# runtime data
+data_store/
+fantasy_cache/
+feeds.json
+.token.json
