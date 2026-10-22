@@ -1,14 +1,18 @@
 use std::{
-    collections::{HashMap, HashSet}, env::VarError, path, sync::Arc, u64
+    collections::{HashMap, HashSet},
+    env::VarError,
+    path,
+    sync::Arc,
+    u64,
 };
 
-use fantasy_sports_cache::Error as CachedClientError;
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
+use fantasy_sports_cache::Error as CachedClientError;
+use fantasy_sports_sleeper as sleeper;
 use serde::{Deserialize, Serialize};
 use serenity::all::{
     Colour, EditMember, EditRole, GuildId, Http, Member, Permissions, Role, RoleId, UserId,
 };
-use fantasy_sports_sleeper as sleeper;
 
 use crate::{
     ecr::keepers::{Keepable, KeepablesReport, get_keeper_status, get_player_history},
@@ -30,10 +34,10 @@ impl Service {
         let sleeper_cache_dir = cache_dir.join("sleeper");
         let yahoo_cache_dir = cache_dir.join("yahoo");
         Ok(Service {
-            sleeper_cli: fantasy_sports_sleeper::Client::new()/*.with_cache(sleeper_cache_dir).await?*/,
+            sleeper_cli: fantasy_sports_sleeper::Client::new(), /*.with_cache(sleeper_cache_dir).await?*/
             yahoo_fantasy_cli: fantasy_sports_yahoo::Client::new_from_env()?,
-                // .with_cache_dir(yahoo_cache_dir).await?
-                // .with_token_file::<String>(None).await?,
+            // .with_cache_dir(yahoo_cache_dir).await?
+            // .with_token_file::<String>(None).await?,
             fantasypros_cli: fantasypros::Client::new(),
             store: Arc::clone(store_arc),
         })
@@ -136,7 +140,10 @@ impl Service {
                         |player| {
                             (
                                 player.to_string(),
-                                player.position.clone().map_or(String::new(), |v| v.to_string()),
+                                player
+                                    .position
+                                    .clone()
+                                    .map_or(String::new(), |v| v.to_string()),
                                 player.team.clone().unwrap_or_default(),
                             )
                         },
@@ -318,11 +325,8 @@ impl Service {
         season: i32,
         external_id: ExternalId,
     ) -> Result<(), DataStoreError> {
-        self.store.set_league_season_mapping(
-            guild_id.into(),
-            season,
-            external_id,
-        )
+        self.store
+            .set_league_season_mapping(guild_id.into(), season, external_id)
     }
 
     pub async fn synchronize_manager_role(
@@ -590,17 +594,23 @@ mod tests {
 
     #[test]
     fn test_compute_keepables_report() {
-        let keepables_context = load_keepables_context_testdata().expect("failed to load context test data file");
+        let keepables_context =
+            load_keepables_context_testdata().expect("failed to load context test data file");
 
         assert_eq!(3, keepables_context.draft_history.len());
         assert_eq!(10, keepables_context.players.len());
         assert_eq!(4, keepables_context.rosters.len());
         assert_eq!(4, keepables_context.users.len());
 
-        let keepables = Service::compute_keepables(&keepables_context).expect("report calculation failed");
+        let keepables =
+            Service::compute_keepables(&keepables_context).expect("report calculation failed");
 
         // Dana Dasher (9005) is on a roster but was never drafted, so she is not a keepable
-        assert_eq!(4, keepables.keepables.len(), "expecting 4 keepables in the league");
+        assert_eq!(
+            4,
+            keepables.keepables.len(),
+            "expecting 4 keepables in the league"
+        );
         let find = |owner: &str, player: &str| -> &Keepable {
             keepables
                 .keepables
@@ -608,7 +618,14 @@ mod tests {
                 .find(|k| k.owner_name == owner && k.player_name == player)
                 .unwrap_or_else(|| panic!("{player} should be a keepable for {owner}"))
         };
-        assert_eq!(3, keepables.keepables.iter().filter(|k| k.owner_name == "SampleOwner").count());
+        assert_eq!(
+            3,
+            keepables
+                .keepables
+                .iter()
+                .filter(|k| k.owner_name == "SampleOwner")
+                .count()
+        );
 
         assert_eq!(
             Some(String::from("ADP")),
@@ -631,7 +648,10 @@ mod tests {
             "first kept last year: costs the round he was kept in"
         );
         // ECR rank 1 in a 4 team league => round 1, pick 2
-        assert_eq!(Some(String::from("1.2")), find("SampleOwner", "Casey Catcher").player_rank);
+        assert_eq!(
+            Some(String::from("1.2")),
+            find("SampleOwner", "Casey Catcher").player_rank
+        );
     }
 
     fn load_keepables_context_testdata() -> Result<KeepablesContext, io::Error> {

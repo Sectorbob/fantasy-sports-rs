@@ -1,12 +1,12 @@
 use std::{fmt, str::FromStr};
 
 use fantasy_sports_fleaflicker as fleaflicker;
+use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, Visitor},
 };
-use fantasy_sports_sleeper as sleeper;
-use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExternalId {

@@ -2,9 +2,9 @@ use crate::{ExternalId, Player, PlayerPosition};
 use chrono::{DateTime, Utc};
 use fantasy_sports_fleaflicker as fleaflicker;
 use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use fantasy_sports_yahoo as yahoo;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -844,8 +844,8 @@ mod tests {
     use crate as core;
     use chrono::DateTime;
     use fantasy_sports_sleeper as sleeper;
-    use std::collections::HashMap;
     use fantasy_sports_yahoo as yahoo;
+    use std::collections::HashMap;
 
     #[test]
     fn test_convert_yahoo_transaction() {

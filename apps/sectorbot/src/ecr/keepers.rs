@@ -227,7 +227,11 @@ mod tests {
 
     #[test]
     fn cost_resets_to_adp_after_three_straight_keeps() {
-        let k = keepable(history(&[("2022", true, 3), ("2023", true, 3), ("2024", true, 3)]));
+        let k = keepable(history(&[
+            ("2022", true, 3),
+            ("2023", true, 3),
+            ("2024", true, 3),
+        ]));
         assert_eq!(Some("ADP".to_string()), k.cost("2025"));
         // two straight keeps is still priced by the original round
         let k = keepable(history(&[("2023", true, 3), ("2024", true, 3)]));

@@ -322,7 +322,11 @@ impl Standings {
             .into_iter()
             .map(|u| (u.user_id.clone(), u))
             .collect::<HashMap<String, User>>();
-        Ok(format_draft_order(&draft_order_roster_ids, &roster_map, &user_map))
+        Ok(format_draft_order(
+            &draft_order_roster_ids,
+            &roster_map,
+            &user_map,
+        ))
     }
 }
 
@@ -480,7 +484,10 @@ mod custom_tests {
         )
         .unwrap();
         let winners_bracket: Vec<PlayoffBracketEntry> = serde_json::from_str(
-            &fs::read_to_string(format!("testdata/v1/league/{league_id}/winners_bracket.json")).unwrap(),
+            &fs::read_to_string(format!(
+                "testdata/v1/league/{league_id}/winners_bracket.json"
+            ))
+            .unwrap(),
         )
         .unwrap();
         Standings::new(league.settings, winners_bracket, None)
@@ -501,23 +508,47 @@ mod custom_tests {
             assert_eq!((1..=12).collect::<Vec<u8>>(), sorted);
 
             // non-playoff teams draft first, playoff teams last
-            let first_playoff_slot = order.iter().position(|r| playoff_teams.contains(r)).unwrap();
+            let first_playoff_slot = order
+                .iter()
+                .position(|r| playoff_teams.contains(r))
+                .unwrap();
             assert_eq!(12 - playoff_teams.len(), first_playoff_slot);
-            assert!(order[first_playoff_slot..].iter().all(|r| playoff_teams.contains(r)));
+            assert!(
+                order[first_playoff_slot..]
+                    .iter()
+                    .all(|r| playoff_teams.contains(r))
+            );
         }
     }
 
     #[test]
     fn test_format_draft_order_falls_back_to_the_roster_id_for_unknown_owners() {
-        let users: Vec<User> = serde_json::from_str(&fs::read_to_string("testdata/league_users.json").unwrap()).unwrap();
-        let rosters: Vec<Roster> = serde_json::from_str(&fs::read_to_string("testdata/league_rosters.json").unwrap()).unwrap();
-        let user_map = users.into_iter().map(|u| (u.user_id.clone(), u)).collect::<HashMap<_, _>>();
-        let mut roster_map = rosters.into_iter().map(|r| (r.roster_id, r)).collect::<HashMap<_, _>>();
+        let users: Vec<User> =
+            serde_json::from_str(&fs::read_to_string("testdata/league_users.json").unwrap())
+                .unwrap();
+        let rosters: Vec<Roster> =
+            serde_json::from_str(&fs::read_to_string("testdata/league_rosters.json").unwrap())
+                .unwrap();
+        let user_map = users
+            .into_iter()
+            .map(|u| (u.user_id.clone(), u))
+            .collect::<HashMap<_, _>>();
+        let mut roster_map = rosters
+            .into_iter()
+            .map(|r| (r.roster_id, r))
+            .collect::<HashMap<_, _>>();
         let known = *roster_map.keys().min().unwrap();
         let owner = roster_map[&known].owner_id.clone().unwrap();
         let expected_name = user_map[&owner].display_name.clone();
         roster_map.get_mut(&known).unwrap().owner_id = Some(owner);
-        roster_map.insert(99, Roster { roster_id: 99, owner_id: None, ..roster_map[&known].clone() });
+        roster_map.insert(
+            99,
+            Roster {
+                roster_id: 99,
+                owner_id: None,
+                ..roster_map[&known].clone()
+            },
+        );
 
         let text = format_draft_order(&[known, 99], &roster_map, &user_map);
         assert_eq!(format!("1: {expected_name}\n2: Roster 99\n"), text);

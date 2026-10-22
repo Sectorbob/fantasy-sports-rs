@@ -1,15 +1,15 @@
 use crate::{constants, helpers};
 use fantasy_sports_core::{self as core, PlayerMove};
-use std::{
-    collections::{HashMap, HashSet},
-    io::Stdout,
-};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::Style,
-    text::{Span, Line},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
+};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Stdout,
 };
 
 const NA: &str = "N/A";

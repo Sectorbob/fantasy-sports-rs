@@ -93,8 +93,15 @@ mod tests {
     #[test]
     fn records_of_one_person_with_several_ids_are_merged() {
         let seasons = vec![
-            Standings { entries: vec![entry("sleeper-id", "sam", 10, 4), entry("other", "alex", 3, 11)] },
-            Standings { entries: vec![entry("yahoo-guid", "Sam S.", 8, 6)] },
+            Standings {
+                entries: vec![
+                    entry("sleeper-id", "sam", 10, 4),
+                    entry("other", "alex", 3, 11),
+                ],
+            },
+            Standings {
+                entries: vec![entry("yahoo-guid", "Sam S.", 8, 6)],
+            },
         ];
         let mapping = vec![("Sam Sample", vec!["sleeper-id", "yahoo-guid"])];
 
@@ -109,7 +116,9 @@ mod tests {
 
     #[test]
     fn unmapped_owners_keep_their_own_records() {
-        let seasons = vec![Standings { entries: vec![entry("a", "alex", 5, 9)] }];
+        let seasons = vec![Standings {
+            entries: vec![entry("a", "alex", 5, 9)],
+        }];
         let records = build_owner_records(&seasons, &vec![]);
         assert_eq!(1, records.len());
         assert_eq!("a", records[0].owner_id);

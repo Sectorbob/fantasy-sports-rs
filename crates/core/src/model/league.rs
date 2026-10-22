@@ -3,10 +3,10 @@ use crate::{
     StandingsEntry, Team, Transaction, data::Scoreboard,
 };
 use fantasy_sports_fleaflicker as fleaflicker;
-use serde_json::Number;
 use fantasy_sports_sleeper as sleeper;
-use std::{collections::HashMap, fmt};
 use fantasy_sports_yahoo as yahoo;
+use serde_json::Number;
+use std::{collections::HashMap, fmt};
 
 const N_A: &str = "N/A";
 
@@ -758,8 +758,8 @@ impl From<&yahoo::League> for LeagueStatus {
 mod tests {
     use crate::{ExternalId, League, LeagueAccessor};
     use fantasy_sports_sleeper as sleeper;
-    use std::{collections::HashMap, ops::Index};
     use fantasy_sports_yahoo as yahoo;
+    use std::{collections::HashMap, ops::Index};
 
     // #[tokio::test]
     //TODO: stub out data, vs using cache

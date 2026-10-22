@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use fantasy_sports_core::{self as core, ExternalId};
-use futures::{TryStreamExt, stream::FuturesUnordered};
 use fantasy_sports_sleeper::{self as sleeper};
 use fantasy_sports_yahoo::{self as yahoo};
+use futures::{TryStreamExt, stream::FuturesUnordered};
 
 pub async fn get_all_leagues(
     seasons: Vec<String>,
@@ -18,7 +18,13 @@ pub async fn get_all_leagues(
     let sleeper_leagues_future = async {
         match sleeper_user_id {
             Some(user_id) => {
-                get_sleeper_leagues(league_accessor, &seasons, &user_id.to_string(), &sleeper_sport).await
+                get_sleeper_leagues(
+                    league_accessor,
+                    &seasons,
+                    &user_id.to_string(),
+                    &sleeper_sport,
+                )
+                .await
             }
             None => {
                 log::info!("sleeper_user_id is not configured, skipping Sleeper leagues");

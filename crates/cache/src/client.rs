@@ -281,7 +281,11 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(matchers::path("/secure"))
             .and(matchers::header("authorization", "Bearer s3cret"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})).insert_header("content-type", "application/json"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"ok": true}))
+                    .insert_header("content-type", "application/json"),
+            )
             .mount(&server)
             .await;
         Mock::given(matchers::path("/secure"))
@@ -345,7 +349,11 @@ mod tests {
                 .unwrap();
             assert_eq!(json!({"n": 1}), v);
         }
-        assert_eq!(1, client.request_count(), "second call should hit the cache");
+        assert_eq!(
+            1,
+            client.request_count(),
+            "second call should hit the cache"
+        );
 
         let _: Value = client
             .build_request(ctx("/thing"), false, None)

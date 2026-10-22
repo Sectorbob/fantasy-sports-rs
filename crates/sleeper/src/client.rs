@@ -103,7 +103,10 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific league.
-    pub async fn get_league<T: Id>(&self, league_id: T) -> Result<League, fantasy_sports_cache::Error> {
+    pub async fn get_league<T: Id>(
+        &self,
+        league_id: T,
+    ) -> Result<League, fantasy_sports_cache::Error> {
         let league_id: String = league_id.to_string();
         self.get_league_request(league_id.as_str()).send().await
     }
@@ -214,7 +217,10 @@ impl Client {
     }
 
     /// This endpoint retrieves a specific draft.
-    pub async fn get_draft<T: Id>(&self, draft_id: T) -> Result<Draft, fantasy_sports_cache::Error> {
+    pub async fn get_draft<T: Id>(
+        &self,
+        draft_id: T,
+    ) -> Result<Draft, fantasy_sports_cache::Error> {
         let draft_id = draft_id.to_string();
         self.get_draft_request(draft_id.as_str()).send().await
     }
@@ -327,7 +333,6 @@ impl Client {
             },
             false,
             Some(fantasy_sports_cache::ResponseBodyFormat::JSON),
-
         )
     }
 

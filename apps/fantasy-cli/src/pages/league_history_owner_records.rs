@@ -1,12 +1,11 @@
-use std::io::{self, Stdout};
 use ratatui::{
-    Terminal,
+    CompletedFrame, Terminal,
     backend::CrosstermBackend,
     layout::Constraint,
     style::Style,
-    CompletedFrame,
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
+use std::io::{self, Stdout};
 
 use fantasy_sports_core::{self as core};
 
@@ -37,7 +36,12 @@ impl LeagueHistoryOwnerRecordsPage {
         let owner_id_mapping = history
             .owners
             .iter()
-            .map(|owner| (owner.name.as_str(), owner.ids.iter().map(String::as_str).collect()))
+            .map(|owner| {
+                (
+                    owner.name.as_str(),
+                    owner.ids.iter().map(String::as_str).collect(),
+                )
+            })
             .collect::<Vec<(&str, Vec<&str>)>>();
         let owner_records =
             core::history::build_owner_records(&leagues_standings, &owner_id_mapping);

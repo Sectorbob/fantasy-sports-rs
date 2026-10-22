@@ -1,6 +1,6 @@
 use fantasy_sports_sleeper as sleeper;
-use std::{collections::HashMap, fmt};
 use fantasy_sports_yahoo as yahoo;
+use std::{collections::HashMap, fmt};
 
 #[derive(Debug, Clone)]
 pub struct Team {

@@ -1,14 +1,14 @@
 use fantasy_sports_core::LeagueAccessor;
+use fantasy_sports_yahoo::{
+    Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
+    Team, TeamStandings, Token, Transaction,
+};
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
     io::{Error as IOError, ErrorKind},
 };
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
-use fantasy_sports_yahoo::{
-    Client, Error as YahooError, GameCode, GameKey, LeagueKey, PlayerPosition, PlayerPositions,
-    Team, TeamStandings, Token, Transaction,
-};
 
 pub async fn exec(league_accessor: LeagueAccessor) -> Result<(), fantasy_sports_yahoo::Error> {
     let enable_check_users = false;

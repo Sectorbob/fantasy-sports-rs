@@ -1,7 +1,7 @@
-use futures::FutureExt;
 use fantasy_sports_sleeper::{
     Client, League, Matchup, Player, Roster, Sport, Transaction, User, custom::FantasyMatchup,
 };
+use futures::FutureExt;
 use std::{collections::HashMap, error::Error, ops::Range};
 
 const START_WEEK: usize = 1;
@@ -126,7 +126,12 @@ async fn check_trending_players(players: &HashMap<String, Player>, client: &Clie
     println!("Player Count: {}", players.iter().count());
 
     let trending_players = client
-        .get_trending_players(&sport, fantasy_sports_sleeper::TrendType::ADD, None, Some(100))
+        .get_trending_players(
+            &sport,
+            fantasy_sports_sleeper::TrendType::ADD,
+            None,
+            Some(100),
+        )
         .await
         .unwrap();
     println!("Trending Count: {}", trending_players.iter().count());

@@ -195,9 +195,18 @@ async fn setup_discord_bot(
 fn seed_feeds(store: &DataStore, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     for feed in config::load_feeds_file(path)?.feeds {
         if store.get_feed(feed.id).is_some() {
-            log::debug!("Feed {} ({}) already exists, not seeding", feed.id, feed.name);
+            log::debug!(
+                "Feed {} ({}) already exists, not seeding",
+                feed.id,
+                feed.name
+            );
         } else {
-            log::info!("Seeding feed {} ({}) from {}", feed.id, feed.name, path.display());
+            log::info!(
+                "Seeding feed {} ({}) from {}",
+                feed.id,
+                feed.name,
+                path.display()
+            );
             store.save_feed(&feed)?;
         }
     }

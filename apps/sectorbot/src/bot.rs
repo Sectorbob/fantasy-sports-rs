@@ -1,3 +1,4 @@
+use fantasy_sports_sleeper::custom::Standings;
 use serenity::all::{
     CacheHttp, ChannelId, Colour, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
     CreateMessage, EventHandler, GuildId, Member,
@@ -5,7 +6,6 @@ use serenity::all::{
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
-use fantasy_sports_sleeper::custom::Standings;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -16,7 +16,6 @@ use crate::store::{self, ExternalId, FeedEvent, League, Platform};
 use crate::twitter::syndication;
 use crate::yt::{self, YoutubeClient};
 use crate::{ecr, twitter};
-
 
 pub struct AppContext {
     pub config: Config,
@@ -859,7 +858,10 @@ mod tests {
 
     #[test]
     fn test_engagement_line_uses_the_counts_in_the_payload() {
-        let both = engagement_line(&tweet_with_counts(r#","retweet_count":3,"favorite_count":15"#)).unwrap();
+        let both = engagement_line(&tweet_with_counts(
+            r#","retweet_count":3,"favorite_count":15"#,
+        ))
+        .unwrap();
         assert!(both.contains("tweet_id=42) 3"), "{both}");
         assert!(both.contains("like?tweet_id=42) 15"), "{both}");
 
@@ -872,7 +874,9 @@ mod tests {
 
     #[test]
     fn test_plain_tweet_embed_also_shows_counts() {
-        let embed = to_embed(discord_embed_for_tweet(&tweet_with_counts(r#","favorite_count":15"#)));
+        let embed = to_embed(discord_embed_for_tweet(&tweet_with_counts(
+            r#","favorite_count":15"#,
+        )));
         assert!(embed.description.unwrap().ends_with(") 15\u{2002}**"));
     }
 
@@ -883,8 +887,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_youtube_embed_uses_the_configured_channel_icon() {
-        let json = tokio::fs::read_to_string("testdata/yt/list_playlist_items.json").await.unwrap();
-        let yt::Response::PlaylistItemListResponse { items, .. } = serde_json::from_str(&json).unwrap() else {
+        let json = tokio::fs::read_to_string("testdata/yt/list_playlist_items.json")
+            .await
+            .unwrap();
+        let yt::Response::PlaylistItemListResponse { items, .. } =
+            serde_json::from_str(&json).unwrap()
+        else {
             panic!("expected a playlist item response");
         };
         let icons = HashMap::from([(
@@ -914,7 +922,9 @@ mod tests {
         }
         .expect("no videos loaded");
 
-        let embed = to_embed(discord_embed_for_youtube(&videos[0], &HashMap::new()).expect("no embed created"));
+        let embed = to_embed(
+            discord_embed_for_youtube(&videos[0], &HashMap::new()).expect("no embed created"),
+        );
         let expected = to_embed(CreateEmbed::new()
             .url(format!("https://www.youtube.com/watch?v=exampleVid01")) // I am using x.com instead of fxtwitter.com
             .author(

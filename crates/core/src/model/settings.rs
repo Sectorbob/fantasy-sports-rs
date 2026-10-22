@@ -1,8 +1,8 @@
 use crate::ScoringSettings;
 use chrono::{DateTime, NaiveDate, Utc};
 use fantasy_sports_sleeper as sleeper;
-use std::fmt;
 use fantasy_sports_yahoo as yahoo;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct LeagueSettings {

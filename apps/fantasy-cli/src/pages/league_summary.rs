@@ -2,11 +2,10 @@ use std::io::{self, Stdout};
 
 use fantasy_sports_core::League;
 use ratatui::{
-    Terminal,
+    CompletedFrame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::Style,
-    CompletedFrame,
     text::Text,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -142,11 +141,7 @@ impl<'a> LeagueSummaryPage<'a> {
     }
 }
 
-fn render_league_details(
-    league: &League,
-    f: &mut ratatui::Frame<'_>,
-    row: &ratatui::layout::Rect,
-) {
+fn render_league_details(league: &League, f: &mut ratatui::Frame<'_>, row: &ratatui::layout::Rect) {
     let title = "Summary";
 
     let settings = league.settings();
@@ -201,11 +196,7 @@ fn render_league_details(
     f.render_widget(paragraph, *row);
 }
 
-fn render_league_teams(
-    league: &League,
-    f: &mut ratatui::Frame<'_>,
-    row: &ratatui::layout::Rect,
-) {
+fn render_league_teams(league: &League, f: &mut ratatui::Frame<'_>, row: &ratatui::layout::Rect) {
     let teams = league.teams();
     let title = format!("Teams ({})", teams.len(),);
     let lines = teams

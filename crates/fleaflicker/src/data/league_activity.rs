@@ -129,8 +129,7 @@ impl fmt::Display for TransactionType {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum TradeType {
     #[default]
     TradeAccepted,

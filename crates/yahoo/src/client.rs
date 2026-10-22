@@ -7,9 +7,9 @@ use crate::{
     },
     token,
 };
-use fantasy_sports_cache::{Request, RequestContext, ResponseBodyFormat};
 use chrono::{NaiveDate, Utc};
 use core::str;
+use fantasy_sports_cache::{Request, RequestContext, ResponseBodyFormat};
 use itertools::join;
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::{
@@ -58,14 +58,16 @@ impl Client {
                 .user_agent(USER_AGENT)
                 .build()
                 .expect("dev error creating auth url http client for yahoo client"),
-            cached_client: fantasy_sports_cache::Client::new(YAHOO_FANTASY_API_BASE_URL.to_string())
-                .with_http_client(
-                    reqwest::Client::builder()
-                        .user_agent(USER_AGENT)
-                        .default_headers(default_headers)
-                        .build()
-                        .expect("dev error creating http client for yahoo client"),
-                ),
+            cached_client: fantasy_sports_cache::Client::new(
+                YAHOO_FANTASY_API_BASE_URL.to_string(),
+            )
+            .with_http_client(
+                reqwest::Client::builder()
+                    .user_agent(USER_AGENT)
+                    .default_headers(default_headers)
+                    .build()
+                    .expect("dev error creating http client for yahoo client"),
+            ),
             client_no_redirects: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
                 .redirect(reqwest::redirect::Policy::none())
@@ -339,7 +341,10 @@ impl Client {
                     Error::UnknownError(format!("failed got reqwest error: {error:?}"))
                 }
 
-                fantasy_sports_cache::Error::ClientError { status: status_code, body } => {
+                fantasy_sports_cache::Error::ClientError {
+                    status: status_code,
+                    body,
+                } => {
                     let yahoo_error = serde_xml_rs::from_str::<crate::data::Error>(&body)
                         .inspect_err(|err| {
                             log::warn!(
@@ -399,9 +404,9 @@ impl Client {
                 }
 
                 fantasy_sports_cache::Error::NotFound(_) => Error::NotFound,
-                fantasy_sports_cache::Error::SerdeError(serde_error) => Error::UnknownError(format!(
-                    "failed to deserialize response body: {serde_error:?}"
-                )),
+                fantasy_sports_cache::Error::SerdeError(serde_error) => Error::UnknownError(
+                    format!("failed to deserialize response body: {serde_error:?}"),
+                ),
             }
         })
     }

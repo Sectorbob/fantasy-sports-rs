@@ -1,14 +1,14 @@
 use fantasy_sports_core::{League, Player, PlayerPosition};
 use fantasy_sports_sleeper::User;
-use std::{collections::HashMap, io::Stdout};
+use fantasy_sports_yahoo as yahoo;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{self, Rect},
     style::Style,
-    text::{Span, Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use fantasy_sports_yahoo as yahoo;
+use std::{collections::HashMap, io::Stdout};
 
 use crate::{constants, helpers};
 
@@ -85,7 +85,10 @@ impl RosterWidget {
                 .collect::<Vec<Player>>(),
         }
     }
-    pub fn from_yahoo(team: &fantasy_sports_yahoo::Team, roster: &fantasy_sports_yahoo::Roster) -> Self {
+    pub fn from_yahoo(
+        team: &fantasy_sports_yahoo::Team,
+        roster: &fantasy_sports_yahoo::Roster,
+    ) -> Self {
         RosterWidget {
             roster_id: team.team_key.to_string(),
             team_name: team.name.clone(),

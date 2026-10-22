@@ -67,12 +67,7 @@ impl MatchupsList {
                 .collect(),
         }
     }
-    pub fn draw<'a>(
-        &self,
-        f: &mut ratatui::Frame<'a>,
-        rect: &Rect,
-        for_team: Option<&String>,
-    ) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect, for_team: Option<&String>) {
         let team_mode = for_team.is_some();
         let title: String = if let Some(title_override) = self.title_override.clone() {
             title_override.trim().to_string()
@@ -192,7 +187,10 @@ impl MatchupsList {
         let header = if team_mode {
             Some(
                 Row::new(vec!["Week", "Opponent", "Result"])
-                    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD))
+                    .style(
+                        ratatui::style::Style::default()
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    )
                     .style(Style::default().fg(Color::Yellow)),
             )
         } else {

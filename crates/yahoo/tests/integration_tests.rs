@@ -17,7 +17,10 @@ async fn live_get_games() {
         .expect("failed to load the token file (YAHOO_TOKEN_FILE)");
 
     // only refreshes when the token is about to expire
-    client.refresh_token(false).await.expect("failed to refresh token");
+    client
+        .refresh_token(false)
+        .await
+        .expect("failed to refresh token");
 
     let games = client
         .get_games(vec![GameCode::NFL], vec!["2019"])

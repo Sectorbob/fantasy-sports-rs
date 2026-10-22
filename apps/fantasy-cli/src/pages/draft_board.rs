@@ -1,12 +1,12 @@
 use fantasy_sports_core::{self as core, DraftType};
-use std::io::Stdout;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    text::{Span, Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
+use std::io::Stdout;
 
 use crate::{constants, helpers};
 

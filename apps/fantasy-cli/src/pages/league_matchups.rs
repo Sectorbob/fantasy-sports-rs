@@ -13,12 +13,7 @@ use crate::{constants, widgets};
 
 pub struct LeagueMatchupsPage {}
 impl LeagueMatchupsPage {
-    pub fn draw<'a>(
-        &self,
-        f: &mut ratatui::Frame<'a>,
-        rect: &Rect,
-        league: &League,
-    ) {
+    pub fn draw<'a>(&self, f: &mut ratatui::Frame<'a>, rect: &Rect, league: &League) {
         let block = Block::default()
             .title(format!(
                 "{name} ({season}) - Matchups",

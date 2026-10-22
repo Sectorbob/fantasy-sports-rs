@@ -24,9 +24,7 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     setup_logger();
 
     let http_server_port = match std::env::var("HTTP_SERVER_PORT") {
-        Ok(port_str) => port_str
-            .parse::<u16>()
-            .unwrap_or(DEFAULT_HTTP_SERVER_PORT),
+        Ok(port_str) => port_str.parse::<u16>().unwrap_or(DEFAULT_HTTP_SERVER_PORT),
         Err(_) => DEFAULT_HTTP_SERVER_PORT,
     };
 
@@ -54,12 +52,15 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
                 .into());
             }
         },
-        sleeper_league_id: std::env::var(ENV_SLEEPER_LEAGUE_ID).ok().filter(|v| !v.is_empty()),
+        sleeper_league_id: std::env::var(ENV_SLEEPER_LEAGUE_ID)
+            .ok()
+            .filter(|v| !v.is_empty()),
         admin_discord_user_id: match std::env::var(ENV_ADMIN_DISCORD_USER_ID) {
-            Ok(id) if !id.is_empty() => Some(
-                id.parse::<u64>()
-                    .map_err(|e| format!("{ENV_ADMIN_DISCORD_USER_ID} is not a valid user id: {e}"))?,
-            ),
+            Ok(id) if !id.is_empty() => {
+                Some(id.parse::<u64>().map_err(|e| {
+                    format!("{ENV_ADMIN_DISCORD_USER_ID} is not a valid user id: {e}")
+                })?)
+            }
             _ => None,
         },
         feeds_file: std::env::var_os(ENV_FEEDS_FILE).map(PathBuf::from),
@@ -110,8 +111,10 @@ pub struct FeedsFile {
 }
 
 pub fn load_feeds_file(path: &Path) -> Result<FeedsFile, Box<dyn std::error::Error>> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    Ok(serde_json::from_str(&text).map_err(|e| format!("invalid feeds file {}: {e}", path.display()))?)
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    Ok(serde_json::from_str(&text)
+        .map_err(|e| format!("invalid feeds file {}: {e}", path.display()))?)
 }
 
 #[cfg(test)]
@@ -120,7 +123,8 @@ mod tests {
 
     #[test]
     fn example_feeds_file_parses() {
-        let file = load_feeds_file(Path::new("feeds.example.json")).expect("example feeds file should parse");
+        let file = load_feeds_file(Path::new("feeds.example.json"))
+            .expect("example feeds file should parse");
         assert_eq!(2, file.feeds.len());
         assert_eq!("Rovers News", file.feeds[0].name);
         assert!(file.feeds.iter().all(|f| !f.sources.is_empty()));
@@ -128,7 +132,9 @@ mod tests {
 
     #[test]
     fn missing_feeds_file_is_a_readable_error() {
-        let err = load_feeds_file(Path::new("does-not-exist.json")).unwrap_err().to_string();
+        let err = load_feeds_file(Path::new("does-not-exist.json"))
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("does-not-exist.json"), "{err}");
     }
 }

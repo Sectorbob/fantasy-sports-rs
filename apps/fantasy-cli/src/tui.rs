@@ -5,19 +5,18 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use fantasy_sports_core::{self as core};
+use ratatui::{
+    CompletedFrame, Terminal,
+    backend::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders},
+};
 use std::{
     io::{self, Stdout},
     sync::Arc,
     time::Duration,
 };
 use tokio::time::sleep;
-use ratatui::{
-    Terminal,
-    backend::CrosstermBackend,
-    style::{Color, Style},
-    CompletedFrame,
-    widgets::{Block, Borders},
-};
 
 const CHAN_BUF_LEN: usize = 100;
 

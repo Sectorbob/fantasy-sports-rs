@@ -1,10 +1,10 @@
 use crate as core;
 use chrono::{DateTime, Duration, Utc};
+use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use fantasy_sports_sleeper as sleeper;
 use std::path::Path;
-use fantasy_sports_yahoo as yahoo;
 
 const SLEEPER_PLAYER_TTL: Duration = Duration::hours(24);
 const DEFAULT_CACHE_DIR: &'static str = "players";
@@ -269,9 +269,10 @@ impl From<fantasy_sports_cache::Error> for Error {
             fantasy_sports_cache::Error::CacheError(cache_err) => {
                 Error::DevError(format!("cache error: {cache_err:?}"))
             }
-            fantasy_sports_cache::Error::ClientError { status: status_code, .. } => {
-                Error::DevError(format!("http client error: {status_code}"))
-            }
+            fantasy_sports_cache::Error::ClientError {
+                status: status_code,
+                ..
+            } => Error::DevError(format!("http client error: {status_code}")),
             fantasy_sports_cache::Error::DevError(msg) => Error::DevError(msg),
             fantasy_sports_cache::Error::ReqwestError(error) => {
                 Error::DevError(format!("reqwest error: {error:?}"))

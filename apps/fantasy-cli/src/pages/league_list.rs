@@ -3,10 +3,9 @@ use std::io::{self, Stdout};
 use crossterm::event::KeyCode;
 use fantasy_sports_core::League;
 use ratatui::{
-    Terminal,
+    CompletedFrame, Terminal,
     backend::CrosstermBackend,
     style::{Modifier, Style},
-    CompletedFrame,
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
@@ -42,7 +41,11 @@ impl<'a> LeaguesPage {
     }
 
     pub fn select_by_league_id(&mut self, league_id: String) {
-        if let Some(index) = self.leagues.iter().position(|l| l.id().to_string() == league_id) {
+        if let Some(index) = self
+            .leagues
+            .iter()
+            .position(|l| l.id().to_string() == league_id)
+        {
             self.selected = index
         }
     }

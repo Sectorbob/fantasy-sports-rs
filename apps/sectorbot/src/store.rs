@@ -1,9 +1,9 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::US::Pacific;
 use core::fmt;
+use fantasy_sports_sleeper::User as SleeperUser;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use fantasy_sports_sleeper::User as SleeperUser;
 use std::collections::HashMap;
 use std::str::FromStr;
 

@@ -5,11 +5,12 @@ use crate::{
     sleeper_utils,
 };
 use fantasy_sports_fleaflicker as fleaflicker;
+use fantasy_sports_sleeper as sleeper;
+use fantasy_sports_yahoo as yahoo;
 use futures::{
     StreamExt, TryStreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
 };
-use fantasy_sports_sleeper as sleeper;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -17,7 +18,6 @@ use std::{
 };
 use tokio::io;
 use walkdir::WalkDir;
-use fantasy_sports_yahoo as yahoo;
 
 pub struct LeagueAccessor {
     pub fleaflicker_cli: Option<fleaflicker::Client>,
