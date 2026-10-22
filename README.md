@@ -1,5 +1,8 @@
 # fantasy-sports-rs
 
+[![CI](https://github.com/Sectorbob/fantasy-sports-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Sectorbob/fantasy-sports-rs/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+
 A Rust SDK for fantasy sports platforms, and two applications built on it.
 
 Yahoo, Sleeper and Fleaflicker all expose similar data (leagues, rosters, drafts, matchups,
@@ -40,7 +43,8 @@ The `fantasy-sports` crate is a facade that re-exports all of the above. See
 | [`fantasy-sports-cli`](apps/fantasy-cli) | `fantasy-cli`, a terminal UI over the core crate |
 | [`sectorbot`](apps/sectorbot) | A Discord bot: league reports, keeper costs, RSS and feed posting |
 
-The crates are `0.1.0` and not yet published to crates.io.
+The crates are `0.1.0` and not yet published to crates.io. See the [changelog](CHANGELOG.md), and
+[CONTRIBUTING.md](CONTRIBUTING.md) if you want to help.
 
 ## Using the library
 
