@@ -66,6 +66,7 @@ async fn do_it(
     // let mut errors: Vec<String> = vec![];
 
     let league_accessor_clone = Arc::clone(&fantasy_league_accessor);
+    let sleeper_user_id = cfg.sleeper_user_id.clone();
     let backend_action_handler = tokio::spawn(async move {
         loop {
             if let Some(action) = actions_rx.recv().await {
@@ -115,6 +116,7 @@ async fn do_it(
                                 .map(String::from)
                                 .collect::<Vec<String>>(),
                             &league_accessor_clone,
+                            sleeper_user_id.as_deref(),
                         )
                         .await
                         {
@@ -170,7 +172,7 @@ async fn render_loop(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut page: NaviItem = match cfg.landing_page {
+    let mut page: NaviItem = match cfg.landing_page.clone() {
         config::DefaultLandingPage::WelcomePage => NaviItem::WelcomePage,
         config::DefaultLandingPage::LeaguesPage => NaviItem::LeaguesPage,
         config::DefaultLandingPage::LeagueSummary(external_id) => {
@@ -198,7 +200,10 @@ async fn render_loop(
                 events::Event::LeagueRefreshComplete(league) => {
                     leagues_page.add_league(league);
                     league_history_owner_records_page =
-                        pages::LeagueHistoryOwnerRecordsPage::from_leagues(&leagues_page.leagues);
+                        pages::LeagueHistoryOwnerRecordsPage::from_leagues(
+                            &leagues_page.leagues,
+                            &cfg.history,
+                        );
                 }
                 events::Event::Error(err) => {
                     log::warn!("Error event received in render loop: {err}");
@@ -218,7 +223,7 @@ async fn render_loop(
             }
             NaviItem::LeagueSummary(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
-                    if &selected.id() != league_id {
+                    if &selected.id().to_string() != league_id {
                         leagues_page.select_by_league_id(league_id.clone());
                     }
                 } else {
@@ -232,7 +237,7 @@ async fn render_loop(
             }
             NaviItem::LeagueMatchups(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
-                    if &selected.id() != league_id {
+                    if &selected.id().to_string() != league_id {
                         leagues_page.select_by_league_id(league_id.clone());
                     }
                 } else {
@@ -254,7 +259,7 @@ async fn render_loop(
             }
             NaviItem::TransactionsPage(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
-                    if &selected.id() != league_id {
+                    if &selected.id().to_string() != league_id {
                         leagues_page.select_by_league_id(league_id.clone());
                     }
                 } else {
@@ -289,7 +294,7 @@ async fn render_loop(
             }
             NaviItem::LeagueDraftBoardPage(league_id) => {
                 if let Some(selected) = leagues_page.selected() {
-                    if &selected.id() != league_id {
+                    if &selected.id().to_string() != league_id {
                         leagues_page.select_by_league_id(league_id.clone());
                     }
                 } else {
@@ -331,7 +336,7 @@ async fn render_loop(
 
                                 // Here you can handle the selected league, e.g., navigate to a summary page
                                 navi_stack.push(page);
-                                page = NaviItem::LeagueSummary(selected_league.id());
+                                page = NaviItem::LeagueSummary(selected_league.id().to_string());
                             } else {
                                 log::error!("No league selected.");
                             }

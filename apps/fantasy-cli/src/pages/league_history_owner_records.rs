@@ -10,7 +10,7 @@ use tui::{
 
 use fantasy_core_rs::{self as core};
 
-use crate::constants;
+use crate::{config::HistoryConfig, constants};
 
 pub struct LeagueHistoryOwnerRecordsPage {
     title_override: Option<String>,
@@ -23,74 +23,22 @@ impl LeagueHistoryOwnerRecordsPage {
             owner_records: vec![],
         }
     }
-    pub fn from_leagues(leagues: &Vec<core::League>) -> Self {
-        let ecr_leagues = leagues
+    pub fn from_leagues(leagues: &Vec<core::League>, history: &HistoryConfig) -> Self {
+        let leagues_standings = leagues
             .iter()
-            .filter(|l| l.name() == "Rapid League 17")
-            .collect::<Vec<_>>();
-        let leagues_standings = ecr_leagues
-            .iter()
+            .filter(|l| {
+                history
+                    .league_name
+                    .as_ref()
+                    .map_or(true, |name| l.name() == name.as_str())
+            })
             .map(|l| l.standings())
             .collect::<Vec<_>>();
-        let owner_id_mapping = vec![
-            (
-                "Kyle Heide",
-                vec!["GGQ52IUUT34FUMAXVLVIZ6V2QP", "727598467304811923"],
-            ),
-            (
-                "ManagerGolden74",
-                vec!["REIST2RMJAWUUGJITSTEBVQVXI", "484883887154522157"],
-            ),
-            (
-                "ManagerGolden89",
-                vec!["ENEDP3KTK5BRSZV2IUIMX33DJN", "309251795699782577"],
-            ),
-            (
-                "ManagerRapid69",
-                vec!["OBHLQUILSDMZP5V2VN43JWFM6D", "314885799278160790"],
-            ),
-            (
-                "ManagerStormy75",
-                vec!["SQMZ2IRSENZ62CKW2N2WEPHVI4", "774067826420676378"],
-            ),
-            (
-                "ManagerGolden82",
-                vec!["X7WQ2EOSE73UD27GVPUEJWAQ7G", "529096176700349825"],
-            ),
-            ("ManagerWild47", vec!["592316633898074561"]),
-            ("ManagerMighty50", vec!["109948207775581082", "--"]),
-            (
-                "ManagerMighty19",
-                vec!["YKTFV3WMRHTM6CUQ75IWHKRVMC", "193976103221158331"],
-            ),
-            (
-                "ManagerBrave87",
-                vec![
-                    "ZFV3OZMWADA67PA45EBPDHWBBR",
-                    "252139931714386691",
-                    "749786951287232737",
-                ], //David has 2 sleeper accounts???
-            ),
-            (
-                "ManagerWild06",
-                vec!["MSXOLV3TPG4YWIRHLTTLH7CTKR", "669649552185855627"],
-            ),
-            (
-                "ManagerIron05",
-                vec!["Q6M3SMGVOHFXMOBJLGR5ZKXKDL", "355028255152716972"],
-            ),
-            ("ManagerIron36", vec!["891257881093878073"]),
-            ("ManagerIron21", vec!["5641843776073125157"]),
-            ("ManagerCrimson51", vec!["789478417584731319"]),
-            ("ManagerStormy63", vec!["ELMPJBYWZGDEE3NOVWLVNE6EPP"]),
-            ("ManagerRapid88", vec!["AQGCI2KPCEFMP5D6IEJ32UHGCG"]),
-            ("ManagerSilent14", vec!["1511255259875654879"]),
-            ("ManagerStormy98", vec!["433867313387100781"]),
-            ("ManagerBrave42", vec!["744482347784160106"]),
-            ("ManagerCosmic96", vec!["FNQWFKXSGS6CQ5C4TLSHGYOZBP"]),
-            ("ManagerSilent03", vec!["641365149273056286"]),
-            ("ManagerSwift83", vec!["158638755124059567"]),
-        ];
+        let owner_id_mapping = history
+            .owners
+            .iter()
+            .map(|owner| (owner.name.as_str(), owner.ids.iter().map(String::as_str).collect()))
+            .collect::<Vec<(&str, Vec<&str>)>>();
         let owner_records =
             core::history::build_owner_records(&leagues_standings, &owner_id_mapping);
         LeagueHistoryOwnerRecordsPage {

@@ -9,7 +9,8 @@ pub fn color_from_position(pos: &core::PlayerPosition) -> tui::style::Color {
         core::PlayerPosition::WR => constants::COLOR_WR,
         core::PlayerPosition::TE => constants::COLOR_TE,
         core::PlayerPosition::K => constants::COLOR_K,
-        core::PlayerPosition::DEF => constants::COLOR_DEF,
+        // defense, including the individual defensive positions (LB, DE, ...)
+        _ => constants::COLOR_DEF,
     }
 }
 

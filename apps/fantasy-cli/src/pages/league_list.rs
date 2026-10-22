@@ -42,7 +42,7 @@ impl<'a> LeaguesPage {
     }
 
     pub fn select_by_league_id(&mut self, league_id: String) {
-        if let Some(index) = self.leagues.iter().position(|l| l.id() == league_id) {
+        if let Some(index) = self.leagues.iter().position(|l| l.id().to_string() == league_id) {
             self.selected = index
         }
     }

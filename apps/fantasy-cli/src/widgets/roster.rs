@@ -38,6 +38,8 @@ impl RosterWidget {
                         .map(|r| RosterWidget::from_yahoo(t, r))
                 })
                 .flatten(),
+            // the roster view is not implemented for FleaFlicker yet
+            League::FleaFlicker { .. } => None,
         }
     }
 

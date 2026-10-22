@@ -24,7 +24,7 @@ impl DraftPicksWidget {
     ) -> Self {
         DraftPicksWidget {
             title_override: title_override,
-            _league_id: league.id(),
+            _league_id: league.id().to_string(),
             picks: league.draft().map_or(vec![], |d| {
                 d.picks
                     .into_iter()

@@ -8,16 +8,24 @@ use yahoo_fantasy_rs::{self as yahoo};
 pub async fn get_all_leagues(
     seasons: Vec<String>,
     league_accessor: &core::LeagueAccessor,
+    sleeper_user_id: Option<&str>,
 ) -> Result<Vec<core::League>, Box<dyn std::error::Error + Send + Sync>> {
-    // TODO: export this configuration
-    let sleeper_user_id = "727598467304811923".to_string();
     let sleeper_sport = sleeper::Sport::NFL;
     let yahoo_game_code = yahoo::GameCode::NFL;
 
     // let sleeper_players = sleeper_client.fetch_all_players(&sleeper_sport).await?;
     let mut leagues: Vec<core::League> = vec![];
-    let sleeper_leagues_future =
-        get_sleeper_leagues(league_accessor, &seasons, &sleeper_user_id, &sleeper_sport);
+    let sleeper_leagues_future = async {
+        match sleeper_user_id {
+            Some(user_id) => {
+                get_sleeper_leagues(league_accessor, &seasons, &user_id.to_string(), &sleeper_sport).await
+            }
+            None => {
+                log::info!("sleeper_user_id is not configured, skipping Sleeper leagues");
+                Ok(vec![])
+            }
+        }
+    };
     let yahoo_leagues_future = get_yahoo_leagues(league_accessor, &seasons, yahoo_game_code);
     let (sleeper_leagues, yahoo_leagues) =
         tokio::join!(sleeper_leagues_future, yahoo_leagues_future);
