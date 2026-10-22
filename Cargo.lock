@@ -953,6 +953,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sled",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "walkdir",
