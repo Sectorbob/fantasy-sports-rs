@@ -8,6 +8,8 @@ repository.workspace = true
 authors.workspace = true
 description = "Platform-independent fantasy sports data model over Sleeper, Yahoo and Fleaflicker"
 readme = "README.md"
+keywords = ["fantasy", "sports", "football", "leagues", "sleeper"]
+categories = ["api-bindings", "data-structures"]
 
 [dependencies]
 fantasy-sports-cache.workspace = true

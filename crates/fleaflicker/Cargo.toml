@@ -8,6 +8,9 @@ repository.workspace = true
 authors.workspace = true
 description = "Rust client for the Fleaflicker fantasy sports API"
 readme = "README.md"
+keywords = ["fleaflicker", "fantasy", "football", "sports", "api"]
+categories = ["api-bindings"]
+exclude = ["testdata/**"]
 
 [dependencies]
 async-trait.workspace = true

@@ -8,7 +8,9 @@ repository.workspace = true
 authors.workspace = true
 description = "Rust client for the Yahoo Fantasy Sports API (OAuth2 PKCE)"
 readme = "README.md"
-exclude = ["notes/*"]
+keywords = ["yahoo", "fantasy", "oauth2", "sports", "api"]
+categories = ["api-bindings"]
+exclude = ["notes/**", "tests/data/**"]
 
 [dependencies]
 async-trait.workspace = true

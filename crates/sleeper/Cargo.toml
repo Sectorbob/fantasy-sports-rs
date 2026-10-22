@@ -8,6 +8,9 @@ repository.workspace = true
 authors.workspace = true
 description = "Rust client for the Sleeper fantasy sports API"
 readme = "README.md"
+keywords = ["sleeper", "fantasy", "football", "sports", "api"]
+categories = ["api-bindings"]
+exclude = ["testdata/**"]
 
 [dependencies]
 fantasy-sports-cache.workspace = true
