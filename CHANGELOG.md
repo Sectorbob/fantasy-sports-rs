@@ -19,8 +19,7 @@ First release. The commit history goes back to May 2025; this entry describes wh
 - `fantasy-sports-core`: platform independent league model and `LeagueAccessor`, a player cache that maps
   Yahoo players onto Sleeper's, and cross-season owner records.
 - `fantasy-sports`: facade crate re-exporting the above.
-- `fantasy-cli` (terminal UI) and `sectorbot` (Discord bot with an HTTP API and RSS feeds), not published
-  to crates.io.
+- `fantasy-cli` (terminal UI), not published to crates.io.
 
 ### Fixed
 Bugs found while preparing this release, each now covered by a test:
@@ -35,7 +34,6 @@ Bugs found while preparing this release, each now covered by a test:
 - Sleeper `total_points()` read a settings key that does not exist, so it was always the "unknown" value.
 - A Fleaflicker or Yahoo league with an unowned team or an unnamed manager crashed the whole load; a
   non-numeric Fleaflicker league id panicked.
-- The draft order report always used one hardcoded league.
 
 *Authentication and security*
 - Yahoo requests were sent without their `Authorization` header, and an expired token was never reported
@@ -43,8 +41,6 @@ Bugs found while preparing this release, each now covered by a test:
 - The Yahoo token file (access and refresh tokens) was created with default, usually world-readable,
   permissions; it is now `0600`.
 - Three panics on malformed responses in the Yahoo OAuth flow are errors now.
-- The bot's HTTP API (no authentication) listened on every interface although it logged loopback; it now
-  binds `127.0.0.1` unless `HTTP_BIND_ADDRESS` says otherwise.
 
 *Crashes and start-up*
 - A first run on a machine without a cache directory failed to start.
@@ -55,13 +51,6 @@ Bugs found while preparing this release, each now covered by a test:
 - `fantasy-sports-cache` did not compile on its own (it relied on another crate enabling a `serde`
   feature).
 
-*Bot behavior*
-- A feed's `quiet_time` was documented but ignored; it is now honored (US Pacific time).
-- One unreachable Twitter account stopped the whole feed run, YouTube sources included.
-- Tweet embeds showed hardcoded retweet/like/view counts, and only on quote tweets.
-- YouTube entries used the video's own link as the author icon.
-
 ### Security
-- Dependencies updated for the advisories that have fixes. The remaining ones are rustls 0.22 /
-  rustls-webpki 0.102 pulled in by `serenity` 0.12 (sectorbot only) and two unmaintained crates pulled in by
-  `sled`; they are recorded with their reasons in `deny.toml`.
+- Dependencies updated for the advisories that have fixes. The remaining ones are two unmaintained crates
+  pulled in by `sled`; they are recorded with their reasons in `deny.toml`.

@@ -1,7 +1,0 @@
-.env
-.env.*
-!.env.example
-data_store
-target
-.git
-*.log
