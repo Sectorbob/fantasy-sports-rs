@@ -4,7 +4,7 @@ use crate::{Standings, StandingsEntry};
 
 pub fn build_owner_records(
     leagues_standings: &Vec<Standings>,
-    owner_id_mapping: &Vec<(&'static str, Vec<&'static str>)>,
+    owner_id_mapping: &Vec<(&str, Vec<&str>)>,
 ) -> Vec<StandingsEntry> {
     let owner_ids = leagues_standings
         .iter()
@@ -72,4 +72,51 @@ pub fn build_owner_records(
     new_owner_records.sort_by_key(|e| e.wins);
     new_owner_records.reverse();
     new_owner_records
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(owner_id: &str, owner_name: &str, wins: u64, losses: u64) -> StandingsEntry {
+        StandingsEntry {
+            roster_id: "1".into(),
+            team_name: format!("Team {owner_name}"),
+            owner_name: owner_name.into(),
+            owner_id: owner_id.into(),
+            wins,
+            losses,
+            ties: 0,
+        }
+    }
+
+    #[test]
+    fn records_of_one_person_with_several_ids_are_merged() {
+        let seasons = vec![
+            Standings { entries: vec![entry("sleeper-id", "sam", 10, 4), entry("other", "alex", 3, 11)] },
+            Standings { entries: vec![entry("yahoo-guid", "Sam S.", 8, 6)] },
+        ];
+        let mapping = vec![("Sam Sample", vec!["sleeper-id", "yahoo-guid"])];
+
+        let records = build_owner_records(&seasons, &mapping);
+
+        assert_eq!(2, records.len());
+        // sorted by wins, descending
+        assert_eq!("Sam Sample", records[0].owner_name);
+        assert_eq!((18, 10), (records[0].wins, records[0].losses));
+        assert_eq!("alex", records[1].owner_name);
+    }
+
+    #[test]
+    fn unmapped_owners_keep_their_own_records() {
+        let seasons = vec![Standings { entries: vec![entry("a", "alex", 5, 9)] }];
+        let records = build_owner_records(&seasons, &vec![]);
+        assert_eq!(1, records.len());
+        assert_eq!("a", records[0].owner_id);
+    }
+
+    #[test]
+    fn no_standings_means_no_records() {
+        assert!(build_owner_records(&vec![], &vec![("Nobody", vec!["x"])]).is_empty());
+    }
 }
