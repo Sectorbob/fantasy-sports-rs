@@ -35,6 +35,8 @@ impl FileSystemCacher {
 
     pub fn open_sync<T: Into<PathBuf>>(cache_dir: T) -> Result<Self, std::io::Error> {
         let cache_dir = cache_dir.into();
+        // a first run has no cache directory yet
+        std::fs::create_dir_all(&cache_dir)?;
 
         let f = std::fs::OpenOptions::new()
             .read(true)
@@ -60,6 +62,8 @@ impl FileSystemCacher {
 
     pub async fn open<T: Into<PathBuf>>(cache_dir: T) -> Result<Self, tokio::io::Error> {
         let cache_dir = cache_dir.into();
+        // a first run has no cache directory yet
+        tokio::fs::create_dir_all(&cache_dir).await?;
 
         let f = tokio::fs::OpenOptions::new()
             .read(true)
@@ -329,6 +333,33 @@ mod fs_cacher_tests {
         debug_assert!(entry.is_some(), "did not find entry");
         let entry = entry.unwrap();
         debug_assert_eq!(entry.ttl, 3600, "not correct ttl");
+    }
+
+    #[tokio::test]
+    async fn opening_creates_a_missing_cache_directory_including_its_parents() {
+        let tmp_dir = TempDir::new().unwrap();
+        let nested = tmp_dir.path().join("does").join("not").join("exist");
+
+        let cache = FileSystemCacher::open(&nested)
+            .await
+            .expect("open creates the directory");
+        cache.save_cache("http://localhost/x", b"1").await.unwrap();
+
+        assert!(nested.join(METADATA_FILE_NAME).exists());
+        assert_eq!(
+            Some(b"1".to_vec()),
+            cache.load_cache("http://localhost/x").await
+        );
+    }
+
+    #[test]
+    fn opening_synchronously_creates_a_missing_cache_directory_too() {
+        let tmp_dir = TempDir::new().unwrap();
+        let nested = tmp_dir.path().join("a").join("b");
+
+        FileSystemCacher::open_sync(&nested).expect("open_sync creates the directory");
+
+        assert!(nested.join(METADATA_FILE_NAME).exists());
     }
 
     #[tokio::test]
