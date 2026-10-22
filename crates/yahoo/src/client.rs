@@ -329,11 +329,10 @@ impl Client {
             .token()
             .await? // should never return an err
             .ok_or(Error::UnknownError(String::from("no token available")))?;
-        let req: Request<'_, FantasyContentWrapper> = self.cached_client.build_request(
-            request_ctx,
-            false,
-            Some(ResponseBodyFormat::XML),
-        );
+        let req: Request<'_, FantasyContentWrapper> = self
+            .cached_client
+            .build_request(request_ctx, false, Some(ResponseBodyFormat::XML))
+            .with_bearer_auth(token.access_token.as_str());
         req.send().await.map_err(|err| {
             match err {
                 cached_client_rs::Error::CacheError(error) => {
@@ -822,13 +821,15 @@ mod tests {
     use chrono::{NaiveDate, Utc};
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
-        matchers::{method, path},
+        matchers::{header, method, path},
     };
 
     async fn setup_with_200(p: &str) -> (Client, MockServer) {
         let mock_server = wiremock::MockServer::builder().start().await;
         Mock::given(method("GET"))
             .and(path(p))
+            // every request must be authenticated with the client's token ("foo" below)
+            .and(header("authorization", "Bearer foo"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_string(

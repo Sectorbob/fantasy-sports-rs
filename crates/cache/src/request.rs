@@ -14,10 +14,18 @@ pub struct Request<'a, T: DeserializeOwned> {
     pub(crate) filters: Option<Vec<(&'a str, String)>>,
     pub(crate) phantom: PhantomData<&'a T>,
     pub(crate) response_body_format: ResponseBodyFormat,
+    pub(crate) bearer_token: Option<String>,
 }
 impl<'a, T: DeserializeOwned> Request<'a, T> {
     pub fn force_update(mut self) -> Self {
         self.force_update = true;
+        self
+    }
+
+    /// Sends `Authorization: Bearer <token>` with this request (marked sensitive, so it is
+    /// redacted from debug output). The token is not part of the cache key.
+    pub fn with_bearer_auth<S: Into<String>>(mut self, token: S) -> Self {
+        self.bearer_token = Some(token.into());
         self
     }
 
@@ -33,6 +41,9 @@ impl<'a, T: DeserializeOwned> Request<'a, T> {
             .get(&self.url)
             .header("Accept", self.response_body_format.as_mime_str());
 
+        if let Some(token) = &self.bearer_token {
+            request_builder = request_builder.bearer_auth(token);
+        }
         if let Some(filters) = &self.filters {
             request_builder = request_builder.query(&filters)
         }

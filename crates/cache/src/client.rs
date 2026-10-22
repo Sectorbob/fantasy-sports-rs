@@ -63,6 +63,7 @@ impl Client {
             filters: ctx.filters,
             phantom: PhantomData,
             response_body_format: response_data_format.map_or(ResponseBodyFormat::default(), |v| v),
+            bearer_token: None,
         }
     }
 
@@ -273,6 +274,36 @@ mod tests {
             }
             other => panic!("expected ClientError, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn bearer_token_is_sent_only_when_requested() {
+        let server = MockServer::start().await;
+        Mock::given(matchers::path("/secure"))
+            .and(matchers::header("authorization", "Bearer s3cret"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})).insert_header("content-type", "application/json"))
+            .mount(&server)
+            .await;
+        Mock::given(matchers::path("/secure"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("no token"))
+            .mount(&server)
+            .await;
+        let client = Client::new(server.uri());
+
+        let v: Value = client
+            .build_request(ctx("/secure"), false, None)
+            .with_bearer_auth("s3cret")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(json!({"ok": true}), v);
+
+        let err = client
+            .build_request::<Value>(ctx("/secure"), false, None)
+            .send()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::ClientError { status, .. } if status.as_u16() == 401));
     }
 
     #[tokio::test]
