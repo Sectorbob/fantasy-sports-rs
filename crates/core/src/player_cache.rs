@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 const SLEEPER_PLAYER_TTL: Duration = Duration::hours(24);
-const DEFAULT_CACHE_DIR: &'static str = "players";
-const SLEEPER_CACHE_SUBDIR: &'static str = "sleeper";
-const YAHOO_CACHE_SUBDIR: &'static str = "yahoo";
-const METADATA_CACHE_SUBDIR: &'static str = "metadata";
+const DEFAULT_CACHE_DIR: &str = "players";
+const SLEEPER_CACHE_SUBDIR: &str = "sleeper";
+const YAHOO_CACHE_SUBDIR: &str = "yahoo";
+const METADATA_CACHE_SUBDIR: &str = "metadata";
 
 /// This player cache is a data model repository that saves player lookup data
 /// for fantasy football p[latforms to disk for easy lookup. It is using
@@ -97,7 +97,7 @@ impl PlayerCache {
                 PlayerCache::insert_metadata(&self.metadata, &m).await?;
                 Ok(m)
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
@@ -200,7 +200,7 @@ impl PlayerCache {
 
     pub(crate) fn insert_sleeper_player(&self, player: &sleeper::Player) -> Result<()> {
         self.sleeper
-            .insert(player.player_id.to_string(), serde_json::to_vec(player)?)?;
+            .insert(&player.player_id, serde_json::to_vec(player)?)?;
         if let Some(yahoo_id) = &player.yahoo_id {
             self.yahoo_to_sleeper
                 .insert(yahoo_id.to_le_bytes(), player.player_id.as_bytes())?;
@@ -282,7 +282,7 @@ impl From<fantasy_sports_cache::Error> for Error {
                 fantasy_sports_cache::SerdeError::JsonError(json_err) => {
                     Error::SerializationError(json_err)
                 }
-                fantasy_sports_cache::SerdeError::XMLError(de_error) => todo!(),
+                fantasy_sports_cache::SerdeError::XMLError(_de_error) => todo!(),
             },
         }
     }

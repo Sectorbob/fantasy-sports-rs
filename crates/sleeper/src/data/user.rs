@@ -22,9 +22,9 @@ impl User {
                     Some(team_name) => String::from(team_name),
                     None => todo!(), // data error
                 },
-                None => format!("Team {}", &self.display_name.as_str()),
+                None => format!("Team {}", self.display_name.as_str()),
             },
-            None => format!("Team {}", &self.display_name.as_str()),
+            None => format!("Team {}", self.display_name.as_str()),
         }
     }
 }

@@ -61,7 +61,7 @@ impl League {
                 rules,
                 team: rosters
                     .iter()
-                    .find(|r| r.team.id.clone().map(|id| id.to_string()) == Some(id.id.clone()))
+                    .find(|r| r.team.id.map(|id| id.to_string()) == Some(id.id.clone()))
                     .map(|r| r.team.clone()),
                 rosters,
                 standings,
@@ -114,7 +114,7 @@ impl League {
                 team: teams
                     .iter()
                     .find(|t| t.managers().iter().find(|m| m.guid == id.id).is_some())
-                    .map(yahoo::Team::clone),
+                    .cloned(),
                 teams,
                 transactions,
             },
@@ -123,18 +123,17 @@ impl League {
     pub fn selected_owner_id(&self) -> Option<String> {
         match self {
             League::FleaFlicker { team, .. } => {
-                team.as_ref().map(|t| t.id.map(|i| i.to_string())).flatten()
+                team.as_ref().and_then(|t| t.id.map(|i| i.to_string()))
             }
-            League::Sleeper { user_id, .. } => user_id.as_ref().map(String::clone),
+            League::Sleeper { user_id, .. } => user_id.clone(),
             League::Yahoo { team, .. } => team
                 .as_ref()
-                .map(|t| t.managers().first().map(|m| m.guid.clone()))
-                .flatten(),
+                .and_then(|t| t.managers().first().map(|m| m.guid.clone())),
         }
     }
     pub fn status(&self) -> LeagueStatus {
         match self {
-            League::FleaFlicker { league, .. } => {
+            League::FleaFlicker { .. } => {
                 LeagueStatus::PreDraft
                 // LeagueStatus::from(league)
             }
@@ -202,7 +201,7 @@ impl League {
                                     .as_ref()
                                     .map_or(0, |r| r.ties.map_or(0, |v| v.try_into().unwrap()));
                                 StandingsEntry {
-                                    roster_id: team.id.clone().unwrap().to_string(),
+                                    roster_id: team.id.unwrap().to_string(),
                                     team_name: team.name.clone().unwrap().to_string(),
                                     owner_name: owner.display_name.clone(),
                                     owner_id: owner.id.to_string(),
@@ -224,23 +223,20 @@ impl League {
                         let wins = roster
                             .settings
                             .get("wins")
-                            .map(Number::as_u64)
-                            .flatten()
+                            .and_then(Number::as_u64)
                             .unwrap_or_default();
                         let losses = roster
                             .settings
                             .get("losses")
-                            .map(Number::as_u64)
-                            .flatten()
+                            .and_then(Number::as_u64)
                             .unwrap_or_default();
                         let ties = roster
                             .settings
                             .get("ties")
-                            .map(Number::as_u64)
-                            .flatten()
+                            .and_then(Number::as_u64)
                             .unwrap_or_default();
                         let owner_id = &roster.owner_id;
-                        let owner = owner_id.as_ref().map(|id| owners.get(id)).flatten();
+                        let owner = owner_id.as_ref().and_then(|id| owners.get(id));
                         StandingsEntry {
                             roster_id: roster.roster_id.to_string(),
                             team_name: owner.map_or(format!("Team {id}"), sleeper::User::team_name),
@@ -275,7 +271,7 @@ impl League {
                             .as_ref()
                             .map(|s| s.outcome_totals.ties as u64)
                             .unwrap_or_default();
-                        let manager = team.managers().first().clone().unwrap();
+                        let manager = team.managers().first().unwrap();
                         StandingsEntry {
                             roster_id: team.team_key.to_string(),
                             team_name: team.name.clone(),
@@ -321,36 +317,32 @@ impl League {
                     return None;
                 };
                 let mut s = HashMap::new();
-                if let Some(champ_roster_id) = winners_bracket.champion() {
-                    if let Some(t) = teams.remove(&champ_roster_id.to_string()) {
-                        s.insert(1, t);
-                    }
+                if let Some(champ_roster_id) = winners_bracket.champion()
+                    && let Some(t) = teams.remove(&champ_roster_id.to_string())
+                {
+                    s.insert(1, t);
                 }
-                if let Some(runner_up_roster_id) = winners_bracket.runner_up() {
-                    if let Some(t) = teams.remove(&runner_up_roster_id.to_string()) {
-                        s.insert(2, t);
-                    }
+                if let Some(runner_up_roster_id) = winners_bracket.runner_up()
+                    && let Some(t) = teams.remove(&runner_up_roster_id.to_string())
+                {
+                    s.insert(2, t);
                 }
-                if let Some(third_place_roster_id) = winners_bracket.third_place() {
-                    if let Some(t) = teams.remove(&third_place_roster_id.to_string()) {
-                        s.insert(3, t);
-                    }
+                if let Some(third_place_roster_id) = winners_bracket.third_place()
+                    && let Some(t) = teams.remove(&third_place_roster_id.to_string())
+                {
+                    s.insert(3, t);
                 }
-                if let Some(fourth_place_roster_id) = winners_bracket.fourth_place() {
-                    if let Some(t) = teams.remove(&fourth_place_roster_id.to_string()) {
-                        s.insert(4, t);
-                    }
+                if let Some(fourth_place_roster_id) = winners_bracket.fourth_place()
+                    && let Some(t) = teams.remove(&fourth_place_roster_id.to_string())
+                {
+                    s.insert(4, t);
                 }
                 log::debug!(
                     "sleeper playoff results not collected for 5+ place in winners bracket and any of the losers bracket"
                 );
                 Some(s)
             }
-            League::Yahoo {
-                scoreboards: _,
-                settings: _,
-                ..
-            } => {
+            League::Yahoo { .. } => {
                 log::debug!("league playoff results not yet implemented for yahoo leagues");
                 None
             }
@@ -365,11 +357,10 @@ impl League {
                         .team
                         .owners
                         .as_ref()
-                        .map(|owners| owners.first())
-                        .flatten();
+                        .and_then(|owners| owners.first());
                     Team {
-                        id: roster.team.id.clone().unwrap().to_string(),
-                        roster_id: roster.team.id.clone().unwrap().to_string(),
+                        id: roster.team.id.unwrap().to_string(),
+                        roster_id: roster.team.id.unwrap().to_string(),
                         team_name: roster.team.name.clone().unwrap(),
                         owner_id: owner.map(|o| o.id.to_string()),
                         owner_name: owner.map(|o| o.display_name.clone()),
@@ -392,13 +383,7 @@ impl League {
     }
     pub fn record_for_roster(&self, roster_id: String) -> String {
         match self {
-            League::FleaFlicker {
-                league,
-                rules,
-                rosters,
-                team,
-                ..
-            } => String::from("0-0-0"),
+            League::FleaFlicker { .. } => String::from("0-0-0"),
             League::Sleeper { rosters, .. } => match rosters
                 .iter()
                 .find(|(_, r)| r.roster_id.to_string() == roster_id)
@@ -439,21 +424,18 @@ impl League {
         }
     }
     pub fn team(&self) -> Option<Team> {
-        self.selected_owner_id()
-            .as_ref()
-            .map(|id| {
-                self.teams()
-                    .iter()
-                    .find(|t| {
-                        if let Some(owner_id) = &t.owner_id {
-                            owner_id == id
-                        } else {
-                            false
-                        }
-                    })
-                    .map(Team::clone)
-            })
-            .flatten()
+        self.selected_owner_id().as_ref().and_then(|id| {
+            self.teams()
+                .iter()
+                .find(|t| {
+                    if let Some(owner_id) = &t.owner_id {
+                        owner_id == id
+                    } else {
+                        false
+                    }
+                })
+                .cloned()
+        })
     }
     pub fn team_name(&self) -> String {
         self.team()
@@ -461,13 +443,7 @@ impl League {
     }
     pub fn total_points(&self) -> f64 {
         match self {
-            League::FleaFlicker {
-                league,
-                rules,
-                rosters,
-                team,
-                ..
-            } => 0.0,
+            League::FleaFlicker { .. } => 0.0,
             League::Sleeper {
                 rosters, user_id, ..
             } => match rosters
@@ -478,7 +454,7 @@ impl League {
                     .settings
                     .get("points")
                     .and_then(|p| p.as_f64())
-                    .unwrap_or(-2.0) as f64,
+                    .unwrap_or(-2.0),
                 None => -1.0,
             },
             League::Yahoo {
@@ -498,7 +474,7 @@ impl League {
     }
     pub fn settings(&self) -> LeagueSettings {
         match self {
-            League::FleaFlicker { league, rules, .. } => LeagueSettings {
+            League::FleaFlicker { league, .. } => LeagueSettings {
                 has_playoffs: true,
                 playoff_start_week: 1,
                 num_playoff_teams: 0,
@@ -515,7 +491,7 @@ impl League {
                 trade_ratify_type: crate::TradeRatifyType::Other("N/A".to_string()),
                 roster_spots: vec![],
             },
-            League::Sleeper { league, draft, .. } => LeagueSettings::from_sleeper(&league, draft),
+            League::Sleeper { league, draft, .. } => LeagueSettings::from_sleeper(league, draft),
             League::Yahoo { settings, .. } => LeagueSettings::from_yahoo(settings),
         }
     }
@@ -529,7 +505,7 @@ impl League {
     }
     pub fn scoreboards(&self) -> Vec<Scoreboard> {
         match self {
-            League::FleaFlicker { standings, .. } => {
+            League::FleaFlicker { .. } => {
                 vec![]
                 // TODO:
             }
@@ -541,7 +517,7 @@ impl League {
             } => matchups
                 .iter()
                 .map(|(week, matchups)| {
-                    Scoreboard::from_sleeper(week.clone() as u32, matchups.clone(), rosters, owners)
+                    Scoreboard::from_sleeper(*week as u32, matchups.clone(), rosters, owners)
                 })
                 .collect(),
             League::Yahoo { scoreboards, .. } => scoreboards.iter().map(Scoreboard::from).collect(), // Yahoo leagues do not have matchups in the same way
@@ -549,13 +525,7 @@ impl League {
     }
     pub fn players(&self) -> HashMap<String, Player> {
         match self {
-            League::FleaFlicker {
-                league,
-                rules,
-                rosters,
-                team,
-                ..
-            } => {
+            League::FleaFlicker { .. } => {
                 HashMap::new()
                 //TODO:
             }
@@ -564,20 +534,14 @@ impl League {
                 .map(|(id, p)| (id.clone(), Player::from(p)))
                 .collect::<HashMap<String, Player>>(),
             League::Yahoo { players, .. } => players
-                .iter()
-                .map(|(_, player)| (player._id.clone(), player.clone()))
+                .values()
+                .map(|player| (player._id.clone(), player.clone()))
                 .collect(),
         }
     }
     pub fn draft(&self) -> Option<Draft> {
         match self {
-            League::FleaFlicker {
-                league,
-                rules,
-                rosters,
-                team,
-                ..
-            } => None,
+            League::FleaFlicker { .. } => None,
             League::Sleeper {
                 draft,
                 draft_picks,
@@ -664,7 +628,7 @@ impl League {
     }
     pub fn transactions(&self) -> Vec<Transaction> {
         match self {
-            League::FleaFlicker { transactions, .. } => {
+            League::FleaFlicker { .. } => {
                 vec![]
                 // transactions.iter().map(Transaction::from).collect()
             }
@@ -686,9 +650,9 @@ impl std::fmt::Display for League {
                     .iter()
                     .find(|(_, t2)| t.id == t2.id)
                     .map_or(String::new(), |(place, _)| match *place {
-                        1 => format!(" 👑"),
-                        2 => format!(" 🥈"),
-                        3 => format!(" 🥉"),
+                        1 => " 👑".to_string(),
+                        2 => " 🥈".to_string(),
+                        3 => " 🥉".to_string(),
                         _ => String::new(),
                     }),
                 None => String::new(),
@@ -727,7 +691,7 @@ impl fmt::Display for LeagueStatus {
     }
 }
 impl From<&fleaflicker::League> for LeagueStatus {
-    fn from(value: &fleaflicker::League) -> Self {
+    fn from(_value: &fleaflicker::League) -> Self {
         todo!()
     }
 }
@@ -791,7 +755,7 @@ mod tests {
                     team_1
                         .team_points
                         .as_ref()
-                        .map_or(0.0, |team_points| team_points.total.map_or(0.0, |p| p))
+                        .map_or(0.0, |team_points| team_points.total.unwrap_or(0.0))
                 );
                 let right_side = format!(
                     "{} {}",
@@ -799,7 +763,7 @@ mod tests {
                     team_2
                         .team_points
                         .as_ref()
-                        .map_or(0.0, |team_points| team_points.total.map_or(0.0, |p| p))
+                        .map_or(0.0, |team_points| team_points.total.unwrap_or(0.0))
                 );
                 println!(
                     "Round: {rd} MatchupId {id} {left_side} vs {right_side}",
@@ -820,35 +784,35 @@ mod tests {
         settings: &yahoo::Settings,
     ) -> Vec<(u8, u8, &'a yahoo::Matchup)> {
         let mut matchups = vec![];
-        if settings.uses_playoff {
-            if let Some(first_week_of_playoffs) = settings.playoff_start_week {
-                let num_of_playoff_teams = settings.num_playoff_teams;
-                log::warn!(
-                    "still need to do a yahoo check for the num of teams allowed in playoffs: {num_of_playoff_teams}"
-                );
-                let mut playoff_rounds: HashMap<u8, &yahoo::Scoreboard> = HashMap::new();
-                let mut rounds = vec![];
-                let mut matchup_counter: u8 = 0;
-                for scoreboard in scoreboards {
-                    if scoreboard.week >= first_week_of_playoffs {
-                        // is playoff week
-                        let round: u8 = scoreboard.week as u8 - first_week_of_playoffs as u8 + 1;
-                        playoff_rounds.insert(round as u8, scoreboard);
-                        rounds.push(round);
-                    }
+        if settings.uses_playoff
+            && let Some(first_week_of_playoffs) = settings.playoff_start_week
+        {
+            let num_of_playoff_teams = settings.num_playoff_teams;
+            log::warn!(
+                "still need to do a yahoo check for the num of teams allowed in playoffs: {num_of_playoff_teams}"
+            );
+            let mut playoff_rounds: HashMap<u8, &yahoo::Scoreboard> = HashMap::new();
+            let mut rounds = vec![];
+            let mut matchup_counter: u8 = 0;
+            for scoreboard in scoreboards {
+                if scoreboard.week >= first_week_of_playoffs {
+                    // is playoff week
+                    let round: u8 = scoreboard.week as u8 - first_week_of_playoffs as u8 + 1;
+                    playoff_rounds.insert(round, scoreboard);
+                    rounds.push(round);
                 }
-                rounds.sort();
-                for round in rounds {
-                    if let Some(scoreboard) = playoff_rounds.get(&round) {
-                        for matchup in &scoreboard.matchups.matchups {
-                            if matchup.teams.len() != 2 {
-                                continue;
-                            }
-                            // let team_1 = matchup.teams.index(0);
-                            // let team_2 = matchup.teams.index(1);
-                            matchup_counter = matchup_counter + 1;
-                            matchups.push((round as u8, matchup_counter, matchup));
+            }
+            rounds.sort();
+            for round in rounds {
+                if let Some(scoreboard) = playoff_rounds.get(&round) {
+                    for matchup in &scoreboard.matchups.matchups {
+                        if matchup.teams.len() != 2 {
+                            continue;
                         }
+                        // let team_1 = matchup.teams.index(0);
+                        // let team_2 = matchup.teams.index(1);
+                        matchup_counter += 1;
+                        matchups.push((round, matchup_counter, matchup));
                     }
                 }
             }
@@ -864,20 +828,19 @@ mod tests {
         sleeper::PlayoffBracketEntry {
             round,
             matchup_id,
-            team_1_roster_id: matchup.teams.get(0).map(|t| t.team_id as u8),
+            team_1_roster_id: matchup.teams.first().map(|t| t.team_id as u8),
             team_2_roster_id: matchup.teams.get(1).map(|t| t.team_id as u8),
             winner_roster_id: matchup.winner_team_key.as_ref().map(|k| k.team_id as u8),
             loser_roster_id: matchup
                 .winner_team_key
                 .as_ref()
-                .map(|winner_team_key| {
-                    if Some(winner_team_key.team_id) == matchup.teams.get(0).map(|t| t.team_id) {
+                .and_then(|winner_team_key| {
+                    if Some(winner_team_key.team_id) == matchup.teams.first().map(|t| t.team_id) {
                         matchup.teams.get(1).map(|t| t.team_id as u8)
                     } else {
-                        matchup.teams.get(0).map(|t| t.team_id as u8)
+                        matchup.teams.first().map(|t| t.team_id as u8)
                     }
-                })
-                .flatten(),
+                }),
             team_1_from: None,
             team_2_from: None,
         }

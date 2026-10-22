@@ -15,10 +15,7 @@ pub struct ExternalId {
 }
 impl ExternalId {
     pub fn new(platform: Platform, id: String) -> Self {
-        ExternalId {
-            platform: platform,
-            id,
-        }
+        ExternalId { platform, id }
     }
     fn parse<T: Into<String>>(v: T) -> Result<Self, ParseExternalIdError> {
         let v = v.into();
@@ -37,9 +34,9 @@ impl ExternalId {
                 ));
             }
         }
-        return Err(ParseExternalIdError::from(
+        Err(ParseExternalIdError::from(
             "expecting a string with two segments delinted by a :",
-        ));
+        ))
     }
 }
 impl<'de> Deserialize<'de> for ExternalId {
@@ -82,7 +79,7 @@ impl Serialize for ExternalId {
 }
 impl fmt::Display for ExternalId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.platform.to_string(), self.id)
+        write!(f, "{}:{}", self.platform, self.id)
     }
 }
 impl TryFrom<&str> for ExternalId {

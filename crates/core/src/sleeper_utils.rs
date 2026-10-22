@@ -28,23 +28,23 @@ pub async fn exec(user: &str, league_ids: &[String]) -> Result<(), Box<dyn std::
     let mut owners = match owners_future.await {
         Ok(owners) => owners,
         Err(err) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to fetch owners: {:?}", err),
-            )));
+            return Err(Box::new(std::io::Error::other(format!(
+                "Failed to fetch owners: {:?}",
+                err
+            ))));
         }
     };
     owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
     let mut rosters = match rosters_future.await {
         Ok(rosters) => rosters,
         Err(err) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to fetch rosters: {:?}", err),
-            )));
+            return Err(Box::new(std::io::Error::other(format!(
+                "Failed to fetch rosters: {:?}",
+                err
+            ))));
         }
     };
-    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
+    rosters.sort_by_key(|a| a.roster_id);
     match get_league_matchups(&league, &client, &force_update).await {
         Ok(fantasy_matchups_for_week) => {
             let num_of_weeks = 17; //league.settings.weeks;
@@ -58,7 +58,6 @@ pub async fn exec(user: &str, league_ids: &[String]) -> Result<(), Box<dyn std::
                         matchup.printy(50, &players);
                         println!();
                     }
-                } else {
                 }
             }
         }
@@ -74,7 +73,7 @@ async fn check_transactions(client: &Client, league_id: &String, sport: &Sport) 
     let mut owners = client.get_users_for_league(league_id).await.unwrap();
     owners.sort_by(|a, b| a.user_id.cmp(&b.user_id));
     let mut rosters = client.get_rosters_in_league(league_id).await.unwrap();
-    rosters.sort_by(|a, b| a.roster_id.cmp(&b.roster_id));
+    rosters.sort_by_key(|a| a.roster_id);
 
     let transactions = client.get_transactions(league_id, 1).await.unwrap();
     for transaction in transactions.iter() {
@@ -127,14 +126,14 @@ async fn check_trending_players(players: &HashMap<String, Player>, client: &Clie
 
     let trending_players = client
         .get_trending_players(
-            &sport,
+            sport,
             fantasy_sports_sleeper::TrendType::ADD,
             None,
             Some(100),
         )
         .await
         .unwrap();
-    println!("Trending Count: {}", trending_players.iter().count());
+    println!("Trending Count: {}", trending_players.len());
 
     for trending_player in trending_players {
         if let Some(player) = players.get(trending_player.player_id.as_str()) {
@@ -159,10 +158,10 @@ async fn check_all_ecr_leagues(client: &Client, ecr_league_ids: &[String]) {
         let league = client.get_league(&String::from(league_id)).await.unwrap();
         println!(
             "League ({}): {} (id={} prev={}) ",
-            &league.season,
-            &league.name,
-            &league.league_id,
-            &league.previous_league_id.unwrap_or(String::from("null")),
+            league.season,
+            league.name,
+            league.league_id,
+            league.previous_league_id.unwrap_or(String::from("null")),
         );
 
         let users = client
@@ -191,9 +190,9 @@ async fn check_all_leagues_in(client: &Client, season: &str, user: &User, sport:
 fn determine_weeks_to_scan(league: &League) -> Range<usize> {
     let first_leg = START_WEEK;
     // leg, last_leg, last_scored_leg
-    let last_leg: Option<usize> = league.settings.last_leg.map(|n| n as usize);
-    let leg: Option<usize> = league.settings.leg.map(|n| n as usize);
-    let last_scored_leg: Option<usize> = league.settings.last_scored_leg.map(|n| n as usize);
+    let last_leg: Option<usize> = league.settings.last_leg.map(|n| n);
+    let leg: Option<usize> = league.settings.leg.map(|n| n);
+    let last_scored_leg: Option<usize> = league.settings.last_scored_leg.map(|n| n);
     log::debug!(
         "{} Sleeper League ({}): last_leg: {:?}",
         league.season,
@@ -235,7 +234,7 @@ pub async fn get_league_matchups(
     let matchups_for_week_futures = weeks_to_scan
         .into_iter()
         .map(|week| {
-            let result = client
+            client
                 .get_matchups_request(&league.league_id, week)
                 .with_force_update(force_update)
                 .send()
@@ -249,8 +248,7 @@ pub async fn get_league_matchups(
                             }
                         };
                     result
-                });
-            result
+                })
         })
         .collect::<Vec<_>>();
 
@@ -275,10 +273,10 @@ pub async fn get_league_matchups(
                 // matchups_for_week.insert(week, m);
             }
             Err(err) => {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Error processing matchups: {:?}", err),
-                )));
+                return Err(Box::new(std::io::Error::other(format!(
+                    "Error processing matchups: {:?}",
+                    err
+                ))));
             }
         }
     }
@@ -295,9 +293,9 @@ pub async fn get_league_transactions(
     let transactions_for_week_futures = weeks_to_scan
         .into_iter()
         .map(move |week| {
-            let result = client
+            client
                 .get_transactions_request(&league.league_id, week)
-                .with_force_update(&force_update)
+                .with_force_update(force_update)
                 .send()
                 .map(move |res| {
                     let result: Result<(usize, Vec<Transaction>), fantasy_sports_cache::Error> =
@@ -309,8 +307,7 @@ pub async fn get_league_transactions(
                             }
                         };
                     result
-                });
-            result
+                })
         })
         .collect::<Vec<_>>();
 

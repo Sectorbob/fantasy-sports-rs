@@ -61,7 +61,7 @@ impl
             draft_order: draft.draft_order.as_ref().map(|order| {
                 (1..draft.settings.rounds)
                     .into_iter()
-                    .map(|slot| {
+                    .filter_map(|slot| {
                         order
                             .iter()
                             .find(|(_, v)| *v == &slot)
@@ -78,7 +78,6 @@ impl
                                     .map(|(_, r)| r.roster_id.to_string())
                             })
                     })
-                    .flatten()
                     .collect()
             }),
         }
@@ -98,14 +97,11 @@ impl From<&sleeper::DraftPick> for DraftPick {
     fn from(value: &sleeper::DraftPick) -> Self {
         DraftPick {
             round: value.round as u32,
-            pick: value.pick_no as u32, // TODO: this is wrong
-            overall_pick: value.pick_no as u32,
+            pick: value.pick_no, // TODO: this is wrong
+            overall_pick: value.pick_no,
             player: Player {
                 _id: value.draft_id.clone(), // should I clone?
-                name: format!(
-                    "{} {}",
-                    &value.metadata.first_name, &value.metadata.last_name
-                ),
+                name: format!("{} {}", value.metadata.first_name, value.metadata.last_name),
                 positions: vec![PlayerPosition::from(&value.metadata.position)],
                 irl_team: Some(value.metadata.team.clone()),
             },
@@ -123,14 +119,9 @@ pub struct Roster {
 }
 impl From<&fleaflicker::Roster> for Roster {
     fn from(value: &fleaflicker::Roster) -> Self {
-        let owner = value
-            .team
-            .owners
-            .as_ref()
-            .map(|owners| owners.first())
-            .flatten();
+        let owner = value.team.owners.as_ref().and_then(|owners| owners.first());
         Roster {
-            id: value.team.id.clone().unwrap().to_string(),
+            id: value.team.id.unwrap().to_string(),
             team_name: value.team.name.clone().unwrap(),
             owner_name: owner.unwrap().display_name.clone(),
             player_ids: value
@@ -145,7 +136,7 @@ impl From<&fleaflicker::Roster> for Roster {
 impl From<(&sleeper::Roster, &HashMap<String, sleeper::User>)> for Roster {
     fn from((roster, owners): (&sleeper::Roster, &HashMap<String, sleeper::User>)) -> Self {
         let roster_id = &roster.roster_id;
-        let owner = roster.owner_id.as_ref().map(|id| owners.get(id)).flatten();
+        let owner = roster.owner_id.as_ref().and_then(|id| owners.get(id));
         Roster {
             id: roster_id.to_string(),
             team_name: owner.map_or(format!("Team {roster_id}"), sleeper::User::team_name),
@@ -219,7 +210,7 @@ impl Transaction {
             .find(|p| {
                 p.transaction_data
                     .as_ref()
-                    .map_or(false, |data| match data.r#type {
+                    .is_some_and(|data| match data.r#type {
                         yahoo::TransactionDataType::Add => data.source_type.is_waivers(),
                         yahoo::TransactionDataType::Drop => false,
                         yahoo::TransactionDataType::Trade => false,
@@ -278,8 +269,8 @@ impl Transaction {
 impl Transaction {
     pub fn description(&self) -> String {
         match self {
-            Transaction::Waiver { .. } => format!("Waiver Claim"),
-            Transaction::FreeAgent { .. } => format!("Free Agent Pickup"),
+            Transaction::Waiver { .. } => "Waiver Claim".to_string(),
+            Transaction::FreeAgent { .. } => "Free Agent Pickup".to_string(),
             Transaction::Trade { player_moves, .. } => {
                 let teams_involved = player_moves
                     .iter()
@@ -296,7 +287,7 @@ impl Transaction {
                     .collect::<HashSet<_>>();
                 format!("{n}-way Trade", n = teams_involved.len())
             }
-            Transaction::CommissionerAction { .. } => format!("Commissioner Action"),
+            Transaction::CommissionerAction { .. } => "Commissioner Action".to_string(),
         }
     }
     pub fn draft_pick_moves(&self) -> Vec<PickMove> {
@@ -328,10 +319,10 @@ impl Transaction {
     }
     pub fn ts(&self) -> DateTime<Utc> {
         match self {
-            Transaction::Waiver { updated, .. } => updated.clone(),
-            Transaction::FreeAgent { updated, .. } => updated.clone(),
-            Transaction::Trade { updated, .. } => updated.clone(),
-            Transaction::CommissionerAction { updated, .. } => updated.clone(),
+            Transaction::Waiver { updated, .. } => *updated,
+            Transaction::FreeAgent { updated, .. } => *updated,
+            Transaction::Trade { updated, .. } => *updated,
+            Transaction::CommissionerAction { updated, .. } => *updated,
         }
     }
 }
@@ -422,7 +413,7 @@ impl From<sleeper::Transaction> for Transaction {
                 id,
                 created,
                 updated,
-                player_moves: player_moves,
+                player_moves,
                 description: "".to_string(),
                 draft_pick_moves,
             },
@@ -430,7 +421,7 @@ impl From<sleeper::Transaction> for Transaction {
     }
 }
 impl From<&fleaflicker::LeagueActivityItem> for Transaction {
-    fn from(value: &fleaflicker::LeagueActivityItem) -> Self {
+    fn from(_value: &fleaflicker::LeagueActivityItem) -> Self {
         todo!()
     }
 }
@@ -459,13 +450,13 @@ pub enum PlayerMove {
     },
 }
 impl PlayerMove {
-    pub fn is_add<'a>(self: &'a &Self) -> bool {
+    pub fn is_add(self: &&Self) -> bool {
         match self {
             PlayerMove::Add { .. } => true,
             _ => false,
         }
     }
-    pub fn is_drop<'a>(self: &'a &Self) -> bool {
+    pub fn is_drop(self: &&Self) -> bool {
         match self {
             PlayerMove::Drop { .. } => true,
             _ => false,
@@ -581,7 +572,7 @@ impl From<&yahoo::Pick> for PickMove {
             src_team_id: value.source_team_key.to_string(),
             dest_team_id: value.destination_team_key.to_string(),
             orig_team_id: value.original_team_key.to_string(),
-            round: value.round.clone(),
+            round: value.round,
         }
     }
 }
@@ -596,7 +587,7 @@ impl From<&sleeper::DraftPickMove> for PickMove {
             src_team_id: value.previous_owner_id.to_string(),
             dest_team_id: value.owner_id.to_string(),
             orig_team_id: value.roster_id.to_string(),
-            round: value.round.clone(),
+            round: value.round,
         }
     }
 }
@@ -629,7 +620,7 @@ impl Scoreboard {
             {
                 let tmp = wip.remove(index);
                 matchups.push((tmp, matchup));
-            } else if let None = matchup.matchup_id {
+            } else if matchup.matchup_id.is_none() {
                 orphaned.push(matchup);
             } else {
                 wip.push(matchup);
@@ -730,10 +721,8 @@ impl MatchupSide {
 
         let owner = rosters
             .get(&matchup.roster_id)
-            .map(|r| r.owner_id.clone())
-            .flatten()
-            .map(|id| owners.get(&id))
-            .flatten();
+            .and_then(|r| r.owner_id.clone())
+            .and_then(|id| owners.get(&id));
         let team_name = owner.map_or(String::from(""), |o| o.team_name());
         let owner_name = owner.map_or(String::from(""), |o| o.display_name.clone());
 
@@ -761,11 +750,7 @@ impl MatchupSide {
             roster_id: team.team_id.to_string(),
             team_name: team.name,
             owner_name,
-            score: team
-                .team_points
-                .map(|p| p.total)
-                .flatten()
-                .unwrap_or_default(),
+            score: team.team_points.and_then(|p| p.total).unwrap_or_default(),
             players: vec![],
         }
     }

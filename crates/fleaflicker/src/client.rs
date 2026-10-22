@@ -298,7 +298,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchUserLeagues")))
+            .and(path("/FetchUserLeagues".to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
             .await;
@@ -320,7 +320,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchUserLeagues")))
+            .and(path("/FetchUserLeagues".to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
             .await;
@@ -342,7 +342,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueActivity")))
+            .and(path("/FetchLeagueActivity".to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
             .await;
@@ -365,7 +365,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueActivity")))
+            .and(path("/FetchLeagueActivity".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
@@ -389,7 +389,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueTransactions")))
+            .and(path("/FetchLeagueTransactions".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
@@ -418,7 +418,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueRosters")))
+            .and(path("/FetchLeagueRosters".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
@@ -450,7 +450,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueBoxscore")))
+            .and(path("/FetchLeagueBoxscore".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .and(query_param("fantasy_game_id", fantasy_game_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
@@ -481,7 +481,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueRules")))
+            .and(path("/FetchLeagueRules".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)
@@ -507,7 +507,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueDraftBoard")))
+            .and(path("/FetchLeagueDraftBoard".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .and(query_param("draft_number", draft_number.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
@@ -537,7 +537,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueDraftBoard")))
+            .and(path("/FetchLeagueDraftBoard".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .and(query_param("draft_number", draft_number.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
@@ -566,7 +566,7 @@ mod tests {
 
         let (mock_server, client) = setup().await;
         Mock::given(method("GET"))
-            .and(path(format!("/FetchLeagueStandings")))
+            .and(path("/FetchLeagueStandings".to_string()))
             .and(query_param("league_id", league_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
             .mount(&mock_server)

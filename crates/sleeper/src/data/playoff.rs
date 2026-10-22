@@ -143,7 +143,7 @@ impl Bracket {
         match last_round_matches {
             Some(m) => match m.len() {
                 0 => None,
-                1 => Some(&m[0]),
+                1 => Some(m[0]),
                 _ => None,
             },
             None => None,

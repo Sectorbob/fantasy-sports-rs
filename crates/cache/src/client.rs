@@ -62,7 +62,7 @@ impl Client {
             url,
             filters: ctx.filters,
             phantom: PhantomData,
-            response_body_format: response_data_format.map_or(ResponseBodyFormat::default(), |v| v),
+            response_body_format: response_data_format.unwrap_or_default(),
             bearer_token: None,
         }
     }
@@ -386,7 +386,7 @@ mod tests {
         let request_with_limit = fixture
             .build_request::<Value>(
                 crate::RequestContext {
-                    url: format!("/players/nfl/trending/drop"),
+                    url: "/players/nfl/trending/drop".to_string(),
                     filters: Some(vec![("limit", "100".to_string())]),
                 },
                 false,
@@ -401,7 +401,7 @@ mod tests {
         let request_with_limit_and_lookback = fixture
             .build_request::<Value>(
                 crate::RequestContext {
-                    url: format!("/players/nfl/trending/drop"),
+                    url: "/players/nfl/trending/drop".to_string(),
                     filters: Some(vec![
                         ("lookback_hours", "10".to_string()),
                         ("limit", "100".to_string()),

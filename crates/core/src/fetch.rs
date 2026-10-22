@@ -72,8 +72,7 @@ impl LeagueAccessor {
                 None => (None, None, None, None),
             };
         let player_cache = player_cache
-            .map(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok())
-            .flatten();
+            .and_then(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok());
         if let Some(player_cache) = &player_cache {
             player_cache
                 .init()
@@ -125,7 +124,7 @@ impl LeagueAccessor {
             } else {
                 return Err(AccessorInitError::FailedToSetupPlatformClient(
                     Platform::Yahoo,
-                    format!("unable to bootstrap yahoo client due to no token configuration"),
+                    "unable to bootstrap yahoo client due to no token configuration".to_string(),
                 ));
             }
         } else {
@@ -278,6 +277,12 @@ impl LeagueAccessor {
         Ok(total_size)
     }
 }
+
+impl Default for LeagueAccessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 unsafe impl Send for LeagueAccessor {
     //TODO: WTF
 }
@@ -323,9 +328,9 @@ pub(crate) async fn fetch_fleaflicker_leagues_for_user(
 
 pub(crate) async fn fetch_fleaflicker_league_context(
     cli: &fleaflicker::Client,
-    optional_player_cache: &Option<PlayerCache>,
+    _optional_player_cache: &Option<PlayerCache>,
     fleaflicker_league_id: String,
-    force_update: bool,
+    _force_update: bool,
 ) -> Result<crate::League, Error> {
     let league_standings = cli
         .fetch_league_standings(fleaflicker_league_id.parse().unwrap(), None, None)
@@ -421,7 +426,7 @@ pub(crate) async fn fetch_sleeper_league_context(
     let rosters = rosters_result?;
 
     let matchups =
-        match sleeper_utils::get_league_matchups(&sleeper_league, &cli, &force_update).await {
+        match sleeper_utils::get_league_matchups(sleeper_league, cli, &force_update).await {
             Ok(matchups) => matchups,
             Err(e) => {
                 eprintln!(
@@ -470,7 +475,7 @@ pub(crate) async fn fetch_sleeper_league_context(
     }
 
     let transactions: Vec<sleeper::Transaction> =
-        match sleeper_utils::get_league_transactions(cli, &sleeper_league, &force_update).await {
+        match sleeper_utils::get_league_transactions(cli, sleeper_league, &force_update).await {
             Ok(txns) => txns,
             Err(err) => {
                 log::error!(
@@ -561,8 +566,8 @@ pub(crate) async fn fetch_sleeper_league_context(
         log::warn!(
             "unable to match all players for sleeper league ({season}: {league_id}). unmatched: {count}",
             count = unmatched_players.len(),
-            season = &sleeper_league.season,
-            league_id = &sleeper_league.league_id
+            season = sleeper_league.season,
+            league_id = sleeper_league.league_id
         );
     }
 
@@ -618,7 +623,7 @@ pub(crate) async fn fetch_yahoo_league_context(
     let mut weeks = vec![];
     let playoff_start_week: i32 = settings
         .playoff_start_week
-        .map_or(0, |v| v)
+        .unwrap_or(0)
         .try_into()
         .map_err(|err| {
             Error::new(format!(
@@ -725,7 +730,7 @@ pub(crate) async fn fetch_yahoo_league_context(
     let mut i = 0;
     while let Some(result) = scoreboard_settings_futures.next().await {
         let week = weeks[i];
-        i = i + 1;
+        i += 1;
         match result {
             Ok(scoreboard) => {
                 scoreboards.push(scoreboard);

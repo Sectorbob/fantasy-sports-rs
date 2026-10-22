@@ -50,9 +50,9 @@ pub fn build_owner_records(
             if let Some(existing_index) = new_owner_records.iter().position(|r| r.owner_name == f.0)
             {
                 let existing: &mut StandingsEntry = new_owner_records.index_mut(existing_index);
-                existing.wins = existing.wins + e.wins;
-                existing.losses = existing.losses + e.losses;
-                existing.ties = existing.ties + e.ties;
+                existing.wins += e.wins;
+                existing.losses += e.losses;
+                existing.ties += e.ties;
             } else {
                 new_owner_records.push(StandingsEntry {
                     roster_id: e.roster_id,

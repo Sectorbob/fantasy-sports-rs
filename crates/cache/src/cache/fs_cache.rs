@@ -198,9 +198,8 @@ mod fs_cacher_tests {
     async fn test_open_cache_async() {
         let tmp_dir = TempDir::new().expect("failed to create temp directory");
         let dir_path = tmp_dir.path();
-        debug_assert_eq!(
-            false,
-            dir_path.join("metadata.mpk").exists(),
+        debug_assert!(
+            !dir_path.join("metadata.mpk").exists(),
             "metadata file should not exist yet"
         );
         let fixture = FileSystemCacher::open(dir_path)
@@ -226,9 +225,8 @@ mod fs_cacher_tests {
     fn test_open_cache_sync() {
         let tmp_dir = TempDir::new().expect("failed to create temp directory");
         let dir_path = tmp_dir.path();
-        debug_assert_eq!(
-            false,
-            dir_path.join("metadata.mpk").exists(),
+        debug_assert!(
+            !dir_path.join("metadata.mpk").exists(),
             "metadata file should not exist yet"
         );
         let fixture = FileSystemCacher::open_sync(dir_path).expect("failed to open cache");
@@ -246,9 +244,8 @@ mod fs_cacher_tests {
     async fn test_save_metadata() {
         let tmp_dir = TempDir::new().expect("failed to create temp directory");
         let dir_path = tmp_dir.path();
-        debug_assert_eq!(
-            false,
-            dir_path.join("metadata.mpk").exists(),
+        debug_assert!(
+            !dir_path.join("metadata.mpk").exists(),
             "metadata file should not exist yet"
         );
         let fixture = FileSystemCacher::open(dir_path)
@@ -318,8 +315,7 @@ mod fs_cacher_tests {
         .await
         .expect("failed to setup metadata file");
 
-        debug_assert_eq!(
-            true,
+        debug_assert!(
             dir_path.join(METADATA_FILE_NAME).exists(),
             "metadata file should exist"
         );

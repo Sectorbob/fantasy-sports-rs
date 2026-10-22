@@ -38,7 +38,7 @@ impl LeagueSettings {
 
         LeagueSettings {
             has_playoffs: yahoo_settings.uses_playoff,
-            playoff_start_week: yahoo_settings.playoff_start_week.map_or(0, |v| v),
+            playoff_start_week: yahoo_settings.playoff_start_week.unwrap_or(0),
             num_playoff_teams: yahoo_settings.num_playoff_teams as usize,
             divisions: yahoo_settings
                 .divisions

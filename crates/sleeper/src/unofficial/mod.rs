@@ -1,4 +1,5 @@
 mod client;
-use client::*;
+#[cfg(test)]
+use client::Client;
 mod data;
 use data::*;

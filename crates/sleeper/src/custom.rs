@@ -32,17 +32,17 @@ impl FantasyMatchup {
             {
                 let tmp = wip.remove(index);
                 games.push((tmp, matchup.clone()));
-            } else if let None = matchup.matchup_id {
+            } else if matchup.matchup_id.is_none() {
                 orphaned.push(matchup.clone());
             } else {
                 wip.push(matchup.clone());
             }
         }
         if !wip.is_empty() {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("wip was not empty: {}", wip.len()),
-            )));
+            return Err(Box::new(std::io::Error::other(format!(
+                "wip was not empty: {}",
+                wip.len()
+            ))));
         }
         if !orphaned.is_empty() {
             // info!("had {} orphaned statlines", orphaned.len());
@@ -55,53 +55,53 @@ impl FantasyMatchup {
                 match rosters.binary_search_by_key(&game.0.roster_id, |roster| roster.roster_id) {
                     Ok(index) => rosters[index].clone(),
                     Err(_) => {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("invalid roster {}", &game.0.roster_id),
-                        )));
+                        return Err(Box::new(std::io::Error::other(format!(
+                            "invalid roster {}",
+                            game.0.roster_id
+                        ))));
                     }
                 };
             let roster_1 =
                 match rosters.binary_search_by_key(&game.1.roster_id, |roster| roster.roster_id) {
                     Ok(index) => rosters[index].clone(),
                     Err(_) => {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("invalid roster {}", &game.1.roster_id),
-                        )));
+                        return Err(Box::new(std::io::Error::other(format!(
+                            "invalid roster {}",
+                            game.1.roster_id
+                        ))));
                     }
                 };
             let owner_0 = if let Some(owner_id) = &roster_0.owner_id {
                 match owners.binary_search_by_key(&owner_id, |user| &user.user_id) {
                     Ok(index) => owners[index].clone(),
                     Err(_) => {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("invalid owner '{}'", owner_id),
-                        )));
+                        return Err(Box::new(std::io::Error::other(format!(
+                            "invalid owner '{}'",
+                            owner_id
+                        ))));
                     }
                 }
             } else {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("roster {} does not have an owner", &roster_0.roster_id),
-                )));
+                return Err(Box::new(std::io::Error::other(format!(
+                    "roster {} does not have an owner",
+                    roster_0.roster_id
+                ))));
             };
             let owner_1 = if let Some(owner_id) = &roster_1.owner_id {
                 match owners.binary_search_by_key(&owner_id, |user| &user.user_id) {
                     Ok(index) => owners[index].clone(),
                     Err(_) => {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("invalid owner '{}'", owner_id),
-                        )));
+                        return Err(Box::new(std::io::Error::other(format!(
+                            "invalid owner '{}'",
+                            owner_id
+                        ))));
                     }
                 }
             } else {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("roster {} does not have an owner", &roster_1.roster_id),
-                )));
+                return Err(Box::new(std::io::Error::other(format!(
+                    "roster {} does not have an owner",
+                    roster_1.roster_id
+                ))));
             };
 
             let players_0 = game.0.players.clone();
@@ -110,7 +110,7 @@ impl FantasyMatchup {
             let starters_1 = game.1.starters.clone();
 
             let f = FantasyMatchup {
-                week: week,
+                week,
                 left: FantasyMatchupSide {
                     matchup: game.0,
                     roster: roster_0,
@@ -148,17 +148,15 @@ impl FantasyMatchup {
         let col_width = width / 2;
 
         println!(
-            "{:<col_width$}{}{:>col_width$}",
-            &self.left.owner.display_name,
-            "vs",
-            &self.right.owner.display_name,
+            "{:<col_width$}vs{:>col_width$}",
+            self.left.owner.display_name,
+            self.right.owner.display_name,
             col_width = col_width,
         );
         println!(
-            "{:<col_width$}{}{:>col_width$}",
-            &self.left.matchup.points,
-            "TP",
-            &self.right.matchup.points,
+            "{:<col_width$}TP{:>col_width$}",
+            self.left.matchup.points,
+            self.right.matchup.points,
             col_width = col_width,
         );
         for i in 0..self.left.matchup.starters.len() {
@@ -184,7 +182,7 @@ impl FantasyMatchup {
                 right_max_player_points_width = right_max_player_points_width
             );
 
-            println!("{}{}{}", left, "  ", right);
+            println!("{}  {}", left, right);
         }
     }
 }

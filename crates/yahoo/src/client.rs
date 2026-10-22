@@ -1012,7 +1012,7 @@ mod tests {
         assert_eq!(None, teams[0].clinched_playoffs);
         assert_eq!(Some(1), teams[0].division_id);
         assert_eq!(Some(100), teams[0].faab_balance);
-        assert_eq!(false, teams[0].has_draft_grade);
+        assert!(!teams[0].has_draft_grade);
         assert_eq!(Some(true), teams[0].is_owned_by_current_login);
         assert_eq!("head", teams[0].league_scoring_type);
         assert_eq!(0, teams[0].number_of_moves);
@@ -1053,9 +1053,9 @@ mod tests {
         assert_eq!(league_key, league.league_key);
         assert_eq!(Some("371_20028".to_string()), league.renew);
         assert_eq!("private", league.league_type);
-        assert_eq!(false, league.is_pro_league);
-        assert_eq!(false, league.is_cash_league);
-        assert_eq!(false, league.is_plus_league);
+        assert!(!league.is_pro_league);
+        assert!(!league.is_cash_league);
+        assert!(!league.is_plus_league);
         assert_eq!(
             NaiveDate::from_ymd_opt(2018, 9, 6).unwrap(),
             league.start_date
@@ -1082,9 +1082,9 @@ mod tests {
         assert_eq!(LeagueKey::new(GameKey::Id(390), 299227), league.league_key);
         assert_eq!(Some("380_129397".to_string()), league.renew);
         assert_eq!("private", league.league_type);
-        assert_eq!(false, league.is_pro_league);
-        assert_eq!(false, league.is_cash_league);
-        assert_eq!(false, league.is_plus_league);
+        assert!(!league.is_pro_league);
+        assert!(!league.is_cash_league);
+        assert!(!league.is_plus_league);
         assert_eq!(
             NaiveDate::from_ymd_opt(2019, 9, 5).unwrap(),
             league.start_date

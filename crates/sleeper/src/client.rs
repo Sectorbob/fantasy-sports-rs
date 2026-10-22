@@ -6,7 +6,6 @@ use crate::{
     },
 };
 use fantasy_sports_cache::Request;
-use reqwest;
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 // const SLEEPER_API_BASE_URL_UNPUBLISHED: &str = "https://api.sleeper.app";
@@ -511,6 +510,12 @@ impl Client {
     //         "{SLEEPER_API_BASE_URL_UNPUBLISHED}/projections/{sport}/{season}/{week}?season_type=regular"
     //     );
     // }
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn avatar_url(avatar_id: String) -> String {
