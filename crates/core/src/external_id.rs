@@ -211,22 +211,16 @@ impl fmt::Display for ParseExternalIdError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
-    Discord,
     FleaFlicker,
     Sleeper,
-    Twitter,
     Yahoo,
-    Youtube,
 }
 impl FromStr for Platform {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "discord" => Ok(Platform::Discord),
             "fleaflicker" => Ok(Platform::FleaFlicker),
-            "twitter" => Ok(Platform::Twitter),
-            "youtube" => Ok(Platform::Youtube),
             "sleeper" => Ok(Platform::Sleeper),
             "yahoo" => Ok(Platform::Yahoo),
             _ => Err(format!("Unknown platform: {}", s)),
@@ -236,10 +230,7 @@ impl FromStr for Platform {
 impl fmt::Display for Platform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Platform::Discord => write!(f, "discord"),
             Platform::FleaFlicker => write!(f, "fleaflicker"),
-            Platform::Twitter => write!(f, "twitter"),
-            Platform::Youtube => write!(f, "youtube"),
             Platform::Sleeper => write!(f, "sleeper"),
             Platform::Yahoo => write!(f, "yahoo"),
         }
@@ -248,10 +239,7 @@ impl fmt::Display for Platform {
 impl AsRef<[u8]> for Platform {
     fn as_ref(&self) -> &[u8] {
         match self {
-            Platform::Discord => b"discord",
             Platform::FleaFlicker => b"fleaflicker",
-            Platform::Twitter => b"twitter",
-            Platform::Youtube => b"youtube",
             Platform::Sleeper => b"sleeper",
             Platform::Yahoo => b"yahoo",
         }
@@ -264,14 +252,7 @@ mod tests {
 
     #[test]
     fn ids_round_trip_for_every_platform() {
-        for text in [
-            "discord:1",
-            "fleaflicker:2",
-            "sleeper:3",
-            "twitter:SampleScribe",
-            "yahoo:359.l.1234",
-            "youtube:UCexample",
-        ] {
+        for text in ["fleaflicker:2", "sleeper:3", "yahoo:359.l.1234"] {
             let id = ExternalId::try_from(text).unwrap();
             assert_eq!(text, id.to_string());
             assert_eq!(id, ExternalId::try_from(text.to_string()).unwrap());

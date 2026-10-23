@@ -360,7 +360,10 @@ mod tests {
             .unwrap_err();
         assert!(not_cached.is_none());
         let unsupported = cache
-            .get(&core::ExternalId::new(core::Platform::Discord, "1".into()))
+            .get(&core::ExternalId::new(
+                core::Platform::FleaFlicker,
+                "1".into(),
+            ))
             .unwrap_err();
         assert!(
             unsupported

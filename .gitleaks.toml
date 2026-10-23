@@ -4,11 +4,12 @@ title = "fantasy-sports-rs"
 [extend]
 useDefault = true
 
-# The `discord-client-id` rule fires on the word "discord" near any long number. These are the
-# only two places it does, and neither is a credential: a placeholder channel id in the example
-# feeds file, and a fake (pseudonymized) id in a server test.
+# apps/sectorbot lived in this repository until it moved to its own one, and its history is still
+# here. The `discord-client-id` rule fires on the word "discord" near any long number; these are
+# the only two historical places it does, and neither is a credential: a placeholder channel id
+# in an example feeds file and a fake (pseudonymized) id in a server test.
 [[allowlists]]
-description = "placeholder and fake discord ids"
+description = "placeholder and fake discord ids in the moved-out sectorbot"
 condition = "OR"
 paths = [
     '''apps/sectorbot/feeds\.example\.json''',

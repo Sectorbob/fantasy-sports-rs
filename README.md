@@ -3,20 +3,19 @@
 [![CI](https://github.com/Sectorbob/fantasy-sports-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Sectorbob/fantasy-sports-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-A Rust SDK for fantasy sports platforms, and two applications built on it.
+A Rust SDK for fantasy sports platforms, and a terminal app built on it.
 
 Yahoo, Sleeper and Fleaflicker all expose similar data (leagues, rosters, drafts, matchups,
 transactions) through very different APIs. This workspace puts them behind one data model,
 caches what it fetches on disk, and shows what that makes possible: a terminal UI for browsing
-your leagues and a Discord bot that reports on them.
+your leagues.
 
 ```text
-                       ┌──────────────┐   ┌──────────────┐
-                       │ fantasy-cli  │   │  sectorbot   │   applications
-                       │ (terminal UI)│   │ (Discord bot)│
-                       └──────┬───────┘   └──────┬───────┘
-                              └─────────┬────────┘
-                       ┌────────────────▼───────────────┐
+                          ┌──────────────┐
+                          │ fantasy-cli  │   application
+                          │ (terminal UI)│
+                          └──────┬───────┘
+                       ┌─────────▼──────────────────────┐
                        │   fantasy-sports-core          │   one data model + league accessor
                        └───┬───────────┬────────────┬───┘
               ┌────────────▼──┐ ┌──────▼───────┐ ┌──▼────────────┐
@@ -41,7 +40,6 @@ The `fantasy-sports` crate is a facade that re-exports all of the above. See
 | [`fantasy-sports-fleaflicker`](crates/fleaflicker) | Client for the [Fleaflicker API](https://www.fleaflicker.com/api-docs/index.html) |
 | [`fantasy-sports-cache`](crates/cache) | HTTP GET client with a file system cache (JSON and XML) |
 | [`fantasy-sports-cli`](apps/fantasy-cli) | `fantasy-cli`, a terminal UI over the core crate |
-| [`sectorbot`](apps/sectorbot) | A Discord bot: league reports, keeper costs, RSS and feed posting |
 
 The crates are `0.1.0` and not yet published to crates.io. See the [changelog](CHANGELOG.md), and
 [CONTRIBUTING.md](CONTRIBUTING.md) if you want to help.
@@ -93,15 +91,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo audit                       # needs cargo-audit
 ```
 
-Run the apps:
+Run the terminal UI (config lives in your OS config dir, see `apps/fantasy-cli/config.example.json`):
 
 ```shell
-# terminal UI (config lives in your OS config dir, see apps/fantasy-cli/config.example.json)
 cargo run -p fantasy-sports-cli -- tui
-
-# Discord bot (see apps/sectorbot/README.md)
-cp apps/sectorbot/.env.example .env  # then fill it in
-cargo run -p sectorbot
 ```
 
 ## Testing
@@ -117,14 +110,7 @@ Tests that need real credentials or the network are marked `#[ignore]`; run them
 ## Status and known limitations
 
 - The Yahoo and Fleaflicker integrations are less complete than Sleeper's.
-- `sled`, used for the player cache and the bot's data store, is unmaintained; moving to a
-  maintained store is on the list.
-- `sectorbot` depends on `serenity` 0.12, which still uses rustls 0.22. `cargo audit` reports
-  advisories for that version; they affect the Discord gateway connection only and are
-  tracked until serenity updates.
-- The bot's Twitter feed reads an unofficial syndication endpoint with a session cookie. It
-  may break at any time and may not be permitted by Twitter's terms; it is opt-in
-  (`ENABLE_FEED_FETCHER`) for that reason.
+- `sled`, used for the player cache, is unmaintained; moving to a maintained store is on the list.
 - The fixtures for the unofficial Sleeper endpoints are real, public API data.
 
 ## License

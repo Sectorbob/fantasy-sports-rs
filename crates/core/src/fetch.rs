@@ -272,7 +272,6 @@ impl LeagueAccessor {
                     Err(Error::new("yahoo cli not configured"))
                 }
             }
-            other => Err(Error::new(format!("{other} is not supported"))),
         }
     }
 
@@ -322,7 +321,6 @@ impl LeagueAccessor {
                     Err(Error::new("yahoo cli not configured"))
                 }
             }
-            other => Err(Error::new(format!("{other} is not supported"))),
         }
     }
 
@@ -1534,17 +1532,6 @@ mod tests {
             flea_ids
                 .iter()
                 .all(|id| id.platform == Platform::FleaFlicker)
-        );
-
-        // platforms that have no leagues to list
-        let twitter = ExternalId::new(Platform::Twitter, "SampleScribe".to_string());
-        let err = accessor
-            .fetch_league_ids_for_user(&twitter, vec![], &Sport::NFL)
-            .await
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("twitter is not supported"),
-            "{err}"
         );
     }
 
