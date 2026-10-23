@@ -238,6 +238,27 @@ pub struct Feed {
     pub entries: Vec<FeedEntry>,
 }
 
+impl Feed {
+    /// Whether `now` falls inside the feed's quiet hours: a `"HH:MM-HH:MM"` window in US Pacific
+    /// time (the same clock the daily quotas use), which may run past midnight ("22:00-06:00").
+    /// An empty or malformed window means the feed is never quiet.
+    pub fn is_quiet_at(&self, now: DateTime<Utc>) -> bool {
+        let Some((start, end)) = self.quiet_time.split_once('-') else {
+            return false;
+        };
+        let parse = |t: &str| chrono::NaiveTime::parse_from_str(t.trim(), "%H:%M").ok();
+        let (Some(start), Some(end)) = (parse(start), parse(end)) else {
+            return false;
+        };
+        let local = Pacific.from_utc_datetime(&now.naive_utc()).time();
+        if start <= end {
+            local >= start && local < end
+        } else {
+            local >= start || local < end // the window wraps around midnight
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeedEntry {
     pub id: ExternalId,
@@ -529,6 +550,7 @@ impl League {
 mod tests {
     use super::{DataStore, DataStoreError, Feed, League};
     use crate::store::{ExternalId, Platform};
+    use chrono::{DateTime, TimeZone, Utc};
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -560,6 +582,42 @@ mod tests {
             current_season: 2025,
             league_id_map: HashMap::new(),
             member_map: HashMap::new(),
+        }
+    }
+
+    fn at(hour: u32, minute: u32) -> DateTime<Utc> {
+        // 2025-01-15 is in standard time, so US Pacific is UTC-8
+        Utc.with_ymd_and_hms(2025, 1, 15, 0, 0, 0).unwrap()
+            + chrono::Duration::hours(i64::from(hour) + 8)
+            + chrono::Duration::minutes(i64::from(minute))
+    }
+
+    #[test]
+    fn quiet_hours_are_a_window_in_pacific_time() {
+        let mut feed = feed(1, vec![]);
+        feed.quiet_time = "00:00-06:00".into();
+        assert!(feed.is_quiet_at(at(0, 0)), "the start is inside");
+        assert!(feed.is_quiet_at(at(5, 59)));
+        assert!(!feed.is_quiet_at(at(6, 0)), "the end is outside");
+        assert!(!feed.is_quiet_at(at(12, 0)));
+    }
+
+    #[test]
+    fn quiet_hours_can_wrap_around_midnight() {
+        let mut feed = feed(1, vec![]);
+        feed.quiet_time = "22:00-06:00".into();
+        assert!(feed.is_quiet_at(at(23, 30)));
+        assert!(feed.is_quiet_at(at(2, 0)));
+        assert!(!feed.is_quiet_at(at(7, 0)));
+        assert!(!feed.is_quiet_at(at(21, 59)));
+    }
+
+    #[test]
+    fn missing_or_malformed_quiet_hours_never_silence_a_feed() {
+        let mut feed = feed(1, vec![]);
+        for window in ["", "nonsense", "06:00", "25:00-26:00", "06:00-", "-06:00"] {
+            feed.quiet_time = window.into();
+            assert!(!feed.is_quiet_at(at(3, 0)), "{window:?}");
         }
     }
 

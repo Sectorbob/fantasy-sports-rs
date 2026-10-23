@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    path,
     sync::Arc,
 };
 
@@ -27,14 +26,24 @@ pub struct Service {
 }
 impl Service {
     pub async fn new(store_arc: &Arc<DataStore>) -> Result<Self, ECRError> {
-        let cache_dir = path::Path::new("fantasy_cache");
-        let _sleeper_cache_dir = cache_dir.join("sleeper");
-        let _yahoo_cache_dir = cache_dir.join("yahoo");
-        Ok(Service {
-            sleeper_cli: fantasy_sports_sleeper::Client::new(), /*.with_cache(sleeper_cache_dir).await?*/
-            fantasypros_cli: fantasypros::Client::new(),
+        Ok(Service::with_clients(
+            fantasy_sports_sleeper::Client::new(),
+            fantasypros::Client::new(),
+            store_arc,
+        ))
+    }
+
+    /// A service over the given clients, for another Sleeper or FantasyPros server (or a test one).
+    pub fn with_clients(
+        sleeper_cli: fantasy_sports_sleeper::Client,
+        fantasypros_cli: fantasypros::Client,
+        store_arc: &Arc<DataStore>,
+    ) -> Self {
+        Service {
+            sleeper_cli,
+            fantasypros_cli,
             store: Arc::clone(store_arc),
-        })
+        }
     }
 
     pub async fn fetch_keepable_context<T: Into<String>>(
@@ -615,5 +624,193 @@ mod tests {
         let outfile = outfile.into();
         fs::write(outfile, serde_json::to_vec(&keepables_context)?).await?;
         Ok(keepables_context)
+    }
+
+    // --- gathering the data from (mock) Sleeper and FantasyPros servers -------------------------
+
+    use super::{DataStore, ECRError};
+    use crate::fantasypros;
+    use fantasy_sports_sleeper as sleeper;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+    use wiremock::{
+        Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path_regex},
+    };
+
+    /// the 2019 league recorded in the sleeper crate's test data, which plays the previous season
+    const PREVIOUS: &str = "164974877262287888";
+    /// a made up league that follows it
+    const CURRENT: &str = "2000000000000000009";
+    const DRAFT: &str = "685822547406541191";
+
+    fn sleeper_data(rel: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/../../crates/sleeper/testdata/{rel}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
+    }
+
+    struct Sleeper {
+        /// whether the current league links back to the recorded one
+        has_previous_season: bool,
+    }
+    impl Respond for Sleeper {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            let json =
+                |body: String| ResponseTemplate::new(200).set_body_raw(body, "application/json");
+            match req.url.path() {
+                p if p == format!("/league/{CURRENT}") => {
+                    let mut league: serde_json::Value =
+                        serde_json::from_str(&sleeper_data(&format!("v1/league/{PREVIOUS}.json")))
+                            .unwrap();
+                    league["league_id"] = CURRENT.into();
+                    league["season"] = "2020".into();
+                    league["previous_league_id"] = if self.has_previous_season {
+                        PREVIOUS.into()
+                    } else {
+                        "0".into()
+                    };
+                    json(league.to_string())
+                }
+                p if p == format!("/league/{CURRENT}/rosters") => {
+                    json(sleeper_data(&format!("v1/league/{PREVIOUS}/rosters.json")))
+                }
+                p if p == format!("/league/{CURRENT}/users") => {
+                    json(sleeper_data(&format!("v1/league/{PREVIOUS}/users.json")))
+                }
+                p if p == format!("/league/{PREVIOUS}") => {
+                    json(sleeper_data(&format!("v1/league/{PREVIOUS}.json")))
+                }
+                p if p == format!("/league/{PREVIOUS}/drafts") => {
+                    json(sleeper_data(&format!("v1/league/{PREVIOUS}/drafts.json")))
+                }
+                p if p == format!("/draft/{DRAFT}/picks") => {
+                    json(sleeper_data(&format!("v1/draft/{DRAFT}/picks.json")))
+                }
+                "/players/nfl" => ResponseTemplate::new(200)
+                    .set_body_raw(
+                        std::fs::read(format!(
+                            "{}/../../crates/sleeper/testdata/players_nfl.json.gz",
+                            env!("CARGO_MANIFEST_DIR")
+                        ))
+                        .unwrap(),
+                        "application/json",
+                    )
+                    .insert_header("Content-Encoding", "gzip"),
+                _ => ResponseTemplate::new(404),
+            }
+        }
+    }
+
+    async fn service(has_previous_season: bool) -> (Service, MockServer, MockServer, TempDir) {
+        let sleeper_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(".*"))
+            .respond_with(Sleeper {
+                has_previous_season,
+            })
+            .mount(&sleeper_server)
+            .await;
+        let pros_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("half-point-ppr-cheatsheets"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(
+                        std::fs::read(format!(
+                            "{}/testdata/fantasypros/synthetic_rankings_half_ppr.html.gz",
+                            env!("CARGO_MANIFEST_DIR")
+                        ))
+                        .unwrap(),
+                    )
+                    .insert_header("content-encoding", "gzip")
+                    .insert_header("content-type", "text/html; charset=UTF-8"),
+            )
+            .mount(&pros_server)
+            .await;
+        let dir = TempDir::new().unwrap();
+        let store = Arc::new(DataStore::open(dir.path()).unwrap());
+        let service = Service::with_clients(
+            sleeper::Client::new().with_base_url(sleeper_server.uri()),
+            fantasypros::Client::new_with_base_url(pros_server.uri()),
+            &store,
+        );
+        (service, sleeper_server, pros_server, dir)
+    }
+
+    #[tokio::test]
+    async fn the_keepable_context_gathers_the_league_its_history_and_the_rankings() {
+        let (service, _sleeper, _pros, _dir) = service(true).await;
+
+        let ctx = service
+            .fetch_keepable_context(CURRENT, &SPORT)
+            .await
+            .unwrap();
+
+        assert_eq!("2020", ctx.current_league.season);
+        assert_eq!(12, ctx.rosters.len());
+        assert_eq!(12, ctx.users.len());
+        assert_eq!(10, ctx.rankings.players.len(), "the FantasyPros page");
+        // the history is the previous seasons' drafts, keyed by season; the second recorded
+        // draft never started, so only the real one is used
+        assert_eq!(vec!["2019"], ctx.draft_history.keys().collect::<Vec<_>>());
+        let draft = &ctx.draft_history["2019"];
+        assert_eq!(DRAFT, draft.draft.draft_id);
+        assert_eq!(204, draft.picks.len());
+        // only the players that matter to the league are kept, not the whole player universe
+        assert!(ctx.players.len() < 1000, "{}", ctx.players.len());
+        assert!(
+            ctx.rosters
+                .iter()
+                .flat_map(|r| &r.players)
+                .all(|id| ctx.players.contains_key(id))
+        );
+    }
+
+    #[tokio::test]
+    async fn keepables_are_the_players_drafted_last_season_that_are_still_on_a_roster() {
+        let (service, _sleeper, _pros, _dir) = service(true).await;
+        let ctx = service
+            .fetch_keepable_context(CURRENT, &SPORT)
+            .await
+            .unwrap();
+
+        let report = service.get_keepables(&ctx).unwrap();
+
+        assert_eq!("2020", report.season);
+        assert!(!report.keepables.is_empty());
+        for keepable in &report.keepables {
+            // everyone in the report was drafted in 2019, so the cost is a draft round
+            let cost = keepable.cost("2020").expect("a drafted player has a cost");
+            assert!(
+                cost.parse::<u8>().is_ok() || cost == "ADP",
+                "{} costs {cost}",
+                keepable.player_name
+            );
+        }
+        assert!(report.text_report().contains("COST="));
+    }
+
+    #[tokio::test]
+    async fn a_league_without_a_previous_season_has_no_keepables() {
+        let (service, _sleeper, _pros, _dir) = service(false).await;
+        let ctx = service
+            .fetch_keepable_context(CURRENT, &SPORT)
+            .await
+            .unwrap();
+        assert!(ctx.draft_history.is_empty());
+
+        let err = service.get_keepables(&ctx).unwrap_err();
+
+        assert!(matches!(err, ECRError::NotFound(_)), "{err}");
+        assert!(err.to_string().contains("draft_history for 2019"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn an_unknown_league_is_an_error() {
+        let (service, _sleeper, _pros, _dir) = service(true).await;
+        assert!(service.fetch_keepable_context("999", &SPORT).await.is_err());
     }
 }

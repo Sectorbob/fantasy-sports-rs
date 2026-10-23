@@ -257,3 +257,100 @@ impl AsRef<[u8]> for Platform {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_round_trip_for_every_platform() {
+        for text in [
+            "discord:1",
+            "fleaflicker:2",
+            "sleeper:3",
+            "twitter:SampleScribe",
+            "yahoo:359.l.1234",
+            "youtube:UCexample",
+        ] {
+            let id = ExternalId::try_from(text).unwrap();
+            assert_eq!(text, id.to_string());
+            assert_eq!(id, ExternalId::try_from(text.to_string()).unwrap());
+        }
+    }
+
+    #[test]
+    fn platform_names_are_case_insensitive_but_display_lowercase() {
+        assert_eq!(Platform::Sleeper, "SLEEPER".parse().unwrap());
+        assert_eq!(Platform::FleaFlicker, "FleaFlicker".parse().unwrap());
+        assert_eq!("fleaflicker", Platform::FleaFlicker.to_string());
+        assert_eq!(b"yahoo", Platform::Yahoo.as_ref());
+        assert!("myspace".parse::<Platform>().is_err());
+    }
+
+    #[test]
+    fn malformed_ids_are_rejected_with_a_reason() {
+        for bad in ["sleeper", "", "sleeper:1:2", "myspace:1"] {
+            let err = ExternalId::try_from(bad).unwrap_err();
+            assert!(
+                err.to_string().starts_with("invalid external id"),
+                "{bad}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn ids_serialize_as_plain_strings() {
+        let id = ExternalId::new(Platform::Sleeper, "123".into());
+        assert_eq!("\"sleeper:123\"", serde_json::to_string(&id).unwrap());
+        assert_eq!(id, serde_json::from_str("\"sleeper:123\"").unwrap());
+        assert!(serde_json::from_str::<ExternalId>("\"nope\"").is_err());
+        assert!(serde_json::from_str::<ExternalId>("123").is_err());
+    }
+
+    #[test]
+    fn ids_sort_by_platform_then_id() {
+        let mut ids = [
+            ExternalId::new(Platform::Yahoo, "b".into()),
+            ExternalId::new(Platform::Sleeper, "b".into()),
+            ExternalId::new(Platform::Sleeper, "a".into()),
+        ];
+        ids.sort();
+        assert_eq!(
+            vec!["sleeper:a", "sleeper:b", "yahoo:b"],
+            ids.iter().map(ExternalId::to_string).collect::<Vec<_>>()
+        );
+    }
+
+    fn fixture(rel: &str) -> String {
+        std::fs::read_to_string(format!("{}/../{rel}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+
+    #[test]
+    fn platform_objects_convert_into_ids() {
+        let league: sleeper::League = serde_json::from_str(&fixture(
+            "sleeper/testdata/v1/league/164974877262287888.json",
+        ))
+        .unwrap();
+        let expected = ExternalId::new(Platform::Sleeper, "164974877262287888".into());
+        assert_eq!(expected, ExternalId::from(&league));
+        assert_eq!(expected, ExternalId::from(league));
+
+        let users: Vec<sleeper::User> =
+            serde_json::from_str(&fixture("sleeper/testdata/league_users.json")).unwrap();
+        let user_id = ExternalId::from(&users[0]);
+        assert_eq!(Platform::Sleeper, user_id.platform);
+        assert_eq!(users[0].user_id, user_id.id);
+        assert_eq!(user_id, ExternalId::from(users[0].clone()));
+
+        let key: yahoo::LeagueKey = "359.l.564503".parse().unwrap();
+        assert_eq!("yahoo:359.l.564503", ExternalId::from(&key).to_string());
+        assert_eq!(ExternalId::from(&key), ExternalId::from(key));
+
+        let player_key: yahoo::PlayerKey = "359.p.7241".parse().unwrap();
+        assert_eq!(
+            "yahoo:359.p.7241",
+            ExternalId::from(&player_key).to_string()
+        );
+        assert_eq!(ExternalId::from(&player_key), ExternalId::from(player_key));
+    }
+}

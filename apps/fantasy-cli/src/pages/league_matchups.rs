@@ -32,8 +32,9 @@ impl LeagueMatchupsPage {
             .unwrap_or(6);
         let min_tile_height = rows_needed_in_each_tile + 2;
         let weeks = scoreboards.len();
-        let rows = area.height as usize / min_tile_height;
-        let cols = weeks / rows + (if !weeks.is_multiple_of(rows) { 1 } else { 0 });
+        // never fewer than one row and one column, however small the terminal or short the season
+        let rows = (area.height as usize / min_tile_height).max(1);
+        let cols = weeks.div_ceil(rows).max(1);
 
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -59,9 +60,10 @@ impl LeagueMatchupsPage {
 
             for (i, row) in rows.iter().enumerate() {
                 let week: usize = i * cols + j + 1;
+                // weeks that have not been played have a scoreboard without matchups
                 match scoreboards
                     .iter()
-                    .find(|s| s.matchups[0].week as usize == week)
+                    .find(|s| s.matchups.first().is_some_and(|m| m.week as usize == week))
                 {
                     Some(scoreboard) => {
                         let matchup_widget = widgets::MatchupsList::from(

@@ -43,6 +43,12 @@ impl PlayerCache {
         })
     }
 
+    /// Uses `client` to download the Sleeper player universe (for another base url, for example).
+    pub fn with_sleeper_client(mut self, client: sleeper::Client) -> Self {
+        self.sleeper_client = client;
+        self
+    }
+
     /// Initialize the player cache. Should be run at process startup
     pub async fn init(&self) -> Result<()> {
         let sleeper_metadata = self.ensure_sleeper_metadata().await?;
@@ -264,8 +270,188 @@ impl From<fantasy_sports_cache::Error> for Error {
                 fantasy_sports_cache::SerdeError::JsonError(json_err) => {
                     Error::SerializationError(json_err)
                 }
-                fantasy_sports_cache::SerdeError::XMLError(_de_error) => todo!(),
+                fantasy_sports_cache::SerdeError::XMLError(de_error) => {
+                    Error::DevError(format!("xml deserialization error: {de_error}"))
+                }
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::io::Read;
+    use tempfile::TempDir;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+
+    /// a few real (public) players from the recorded Sleeper player universe
+    fn some_players(n: usize) -> HashMap<String, sleeper::Player> {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../sleeper/testdata/players_nfl.json.gz"
+        );
+        let mut json = String::new();
+        flate2::read::GzDecoder::new(std::fs::File::open(fixture).unwrap())
+            .read_to_string(&mut json)
+            .unwrap();
+        let all: HashMap<String, sleeper::Player> = serde_json::from_str(&json).unwrap();
+        let mut ids: Vec<&String> = all.keys().collect();
+        ids.sort();
+        ids.into_iter()
+            .take(n)
+            .map(|id| (id.clone(), all[id].clone()))
+            .collect()
+    }
+
+    fn cache(dir: &TempDir) -> PlayerCache {
+        PlayerCache::new_with_path(dir.path(), core::Sport::NFL).unwrap()
+    }
+
+    async fn players_server(players: &HashMap<String, sleeper::Player>) -> MockServer {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/players/nfl"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(players))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    #[test]
+    fn a_stored_sleeper_player_can_be_read_back_and_unknown_ids_are_not_found() {
+        let dir = TempDir::new().unwrap();
+        let cache = cache(&dir);
+        let players = some_players(3);
+        let (id, player) = players.iter().next().unwrap();
+
+        assert!(cache.get_sleeper_player(id.as_str()).unwrap_err().is_none());
+        cache.insert_sleeper_player(player).unwrap();
+
+        assert_eq!(player, &cache.get_sleeper_player(id.as_str()).unwrap());
+        assert!(cache.get_sleeper_player("nope").unwrap_err().is_none());
+    }
+
+    #[test]
+    fn players_are_looked_up_by_external_id() {
+        let dir = TempDir::new().unwrap();
+        let cache = cache(&dir);
+        let players = some_players(1);
+        let player = players.values().next().unwrap();
+        cache.insert_sleeper_player(player).unwrap();
+
+        let found = cache
+            .get(&core::ExternalId::new(
+                core::Platform::Sleeper,
+                player.player_id.clone(),
+            ))
+            .unwrap();
+        assert_eq!(player.player_id, found._id);
+
+        let not_cached = cache
+            .get(&core::ExternalId::new(
+                core::Platform::Yahoo,
+                "nfl.p.1".into(),
+            ))
+            .unwrap_err();
+        assert!(not_cached.is_none());
+        let unsupported = cache
+            .get(&core::ExternalId::new(core::Platform::Discord, "1".into()))
+            .unwrap_err();
+        assert!(
+            unsupported
+                .to_string()
+                .contains("unsupported player platform")
+        );
+    }
+
+    #[test]
+    fn a_players_yahoo_id_is_indexed_to_their_sleeper_id() {
+        let dir = TempDir::new().unwrap();
+        let cache = cache(&dir);
+        let mut player = some_players(1).into_values().next().unwrap();
+        player.yahoo_id = Some(7241);
+        cache.insert_sleeper_player(&player).unwrap();
+
+        let stored = cache.yahoo_to_sleeper.get(7241u32.to_le_bytes()).unwrap();
+        assert_eq!(Some(player.player_id.as_bytes()), stored.as_deref());
+    }
+
+    #[tokio::test]
+    async fn init_downloads_the_player_universe_once_and_not_again_while_fresh() {
+        let dir = TempDir::new().unwrap();
+        let players = some_players(25);
+        let server = players_server(&players).await;
+        let client = sleeper::Client::new().with_base_url(server.uri());
+        let cache = cache(&dir).with_sleeper_client(client);
+
+        cache.init().await.unwrap();
+        for id in players.keys() {
+            assert!(
+                cache.get_sleeper_player(id.as_str()).is_ok(),
+                "{id} was not synced"
+            );
+        }
+        assert_eq!(1, server.received_requests().await.unwrap().len());
+
+        let metadata = PlayerCache::get_metadata(&cache.metadata, core::Platform::Sleeper).unwrap();
+        assert!(metadata.last_full_sync.is_some());
+
+        // the data is fresh, so a second start-up does not hit the network again
+        cache.init().await.unwrap();
+        assert_eq!(1, server.received_requests().await.unwrap().len());
+        cache.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn init_refreshes_a_stale_cache() {
+        let dir = TempDir::new().unwrap();
+        let players = some_players(5);
+        let server = players_server(&players).await;
+        let client = sleeper::Client::new().with_base_url(server.uri());
+        let cache = cache(&dir).with_sleeper_client(client);
+        cache.init().await.unwrap();
+
+        // pretend the last sync was long ago
+        PlayerCache::insert_metadata(
+            &cache.metadata,
+            &Metadata {
+                platform: core::Platform::Sleeper,
+                last_full_sync: Some(Utc::now() - Duration::hours(48)),
+                ttl: SLEEPER_PLAYER_TTL,
+            },
+        )
+        .await
+        .unwrap();
+        cache.init().await.unwrap();
+
+        assert_eq!(2, server.received_requests().await.unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn a_failing_player_download_is_an_error_not_an_empty_cache() {
+        let dir = TempDir::new().unwrap();
+        let server = MockServer::start().await; // every path is a 404
+        let client = sleeper::Client::new().with_base_url(server.uri());
+        let cache = cache(&dir).with_sleeper_client(client);
+
+        assert!(cache.init().await.is_err());
+        let metadata = PlayerCache::get_metadata(&cache.metadata, core::Platform::Sleeper).unwrap();
+        assert!(
+            metadata.last_full_sync.is_none(),
+            "a failed sync must not be recorded"
+        );
+    }
+
+    #[test]
+    fn missing_metadata_is_reported_as_not_found() {
+        let dir = TempDir::new().unwrap();
+        let cache = cache(&dir);
+        let err = PlayerCache::get_metadata(&cache.metadata, core::Platform::Sleeper).unwrap_err();
+        assert!(err.is_none());
     }
 }

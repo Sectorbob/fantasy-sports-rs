@@ -14,7 +14,6 @@ use itertools::join;
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::{
     env::{self, VarError},
-    error::Error as _,
     path::PathBuf,
     sync::{Arc, atomic::AtomicU64},
 };
@@ -30,6 +29,7 @@ const YAHOO_FANTASY_API_BASE_URL: &str = "https://fantasysports.yahooapis.com/fa
 
 pub struct Client {
     base_url: String,
+    auth_base_url: String,
     auth_token_client: reqwest::Client,
     cached_client: fantasy_sports_cache::Client,
     /// this client is responsible for generating the oauth request token url
@@ -54,6 +54,7 @@ impl Client {
 
         Client {
             base_url: YAHOO_FANTASY_API_BASE_URL.to_string(),
+            auth_base_url: YAHOO_API_AUTH_BASE_URL.to_string(),
             auth_token_client: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
                 .build()
@@ -85,6 +86,12 @@ impl Client {
     pub fn with_base_url<U: Into<String>>(mut self, url: U) -> Self {
         self.base_url = url.into();
         self.cached_client = self.cached_client.with_base_url(self.base_url.clone());
+        self
+    }
+
+    /// Use another OAuth server (a test server, for example) instead of Yahoo's login service.
+    pub fn with_auth_base_url<U: Into<String>>(mut self, url: U) -> Self {
+        self.auth_base_url = url.into();
         self
     }
 
@@ -125,7 +132,7 @@ impl Client {
 
         let req = match self
             .client_no_redirects
-            .get(format!("{}/request_auth", YAHOO_API_AUTH_BASE_URL).as_str())
+            .get(format!("{}/request_auth", self.auth_base_url).as_str())
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .query(&[
                 ("client_id", self.client_id.as_str()),
@@ -162,12 +169,24 @@ impl Client {
             )));
         }
 
-        let location = resp.headers().get("location").unwrap();
+        let location = resp
+            .headers()
+            .get("location")
+            .ok_or_else(|| {
+                Error::UnknownError("GET /request_auth redirected without a location".into())
+            })?
+            .to_str()
+            .map_err(|e| {
+                Error::UnknownError(format!("GET /request_auth sent an invalid location: {e}"))
+            })?
+            .to_string();
 
         let mut v = self.code_verifier.lock().await;
-        let _ = v.insert(String::from_utf8(code_verifier).unwrap());
+        let _ = v.insert(String::from_utf8(code_verifier).map_err(|e| {
+            Error::UnknownError(format!("the code verifier is not valid text: {e}"))
+        })?);
 
-        Ok(location.to_str().unwrap().to_string())
+        Ok(location)
     }
 
     pub async fn get_token(&self, code: &str) -> Result<Token, Error> {
@@ -188,7 +207,7 @@ impl Client {
         ];
         let req = match self
             .auth_token_client
-            .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
+            .post(format!("{}/get_token", self.auth_base_url).as_str())
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .form(&form)
             .build()
@@ -254,7 +273,7 @@ impl Client {
 
         let req = match self
             .auth_token_client
-            .post(format!("{}/get_token", YAHOO_API_AUTH_BASE_URL).as_str())
+            .post(format!("{}/get_token", self.auth_base_url).as_str())
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .form(&[
                 ("client_id", self.client_id.as_str()),
@@ -278,14 +297,13 @@ impl Client {
             Ok(response) => response,
             Err(err) => {
                 return Err(Error::UnknownError(format!(
-                    "Failed to execute refresh token request: {:?}",
-                    err.source().unwrap()
+                    "Failed to execute refresh token request: {err}"
                 )));
             }
         };
         if !resp.status().is_success() {
             let status = resp.status();
-            let body_text = resp.text().await.unwrap();
+            let body_text = resp.text().await.unwrap_or_default();
             log::warn!("Err: body: {}", body_text);
             return Err(Error::UnknownError(format!(
                 "Failed to refresh token: {}",

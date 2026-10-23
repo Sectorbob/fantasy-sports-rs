@@ -99,7 +99,8 @@ impl MatchupsList {
             .map(|m| m.side_2.team_name.len().max(m.side_1.team_name.len()))
             .max()
             .unwrap_or_default();
-        let width_left = rect.width as usize - (2 * score_col_width) - 5;
+        // a narrow area leaves no room for the names; it must not underflow
+        let width_left = (rect.width as usize).saturating_sub(2 * score_col_width + 5);
         let max_team_col_width = width_left / 2;
         let team_name_col_width = max_team_col_width
             .max(max_team_name_length)

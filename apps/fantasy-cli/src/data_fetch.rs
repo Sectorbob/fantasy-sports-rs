@@ -32,7 +32,14 @@ pub async fn get_all_leagues(
             }
         }
     };
-    let yahoo_leagues_future = get_yahoo_leagues(league_accessor, &seasons, yahoo_game_code);
+    let yahoo_leagues_future = async {
+        if league_accessor.yahoo_enabled() {
+            get_yahoo_leagues(league_accessor, &seasons, yahoo_game_code).await
+        } else {
+            log::info!("yahoo is not configured, skipping Yahoo leagues");
+            Ok(vec![])
+        }
+    };
     let (sleeper_leagues, yahoo_leagues) =
         tokio::join!(sleeper_leagues_future, yahoo_leagues_future);
     match sleeper_leagues {
@@ -196,4 +203,48 @@ async fn get_yahoo_leagues(
     }
 
     Ok(leagues)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::{USER_ID, accessor, accessor_without_yahoo, sleeper_server};
+
+    #[tokio::test]
+    async fn a_users_sleeper_leagues_are_listed_with_that_user_as_the_owner() {
+        let server = sleeper_server().await;
+        let Some(accessor) = accessor_without_yahoo(&server).await else {
+            return; // the environment configures yahoo
+        };
+
+        let leagues = get_all_leagues(vec!["2019".into(), "2017".into()], &accessor, Some(USER_ID))
+            .await
+            .unwrap();
+
+        assert_eq!(1, leagues.len(), "2017 has no leagues recorded");
+        assert_eq!("2019", leagues[0].season());
+        assert_eq!("sleeper:164974877262287888", leagues[0].id().to_string());
+        assert_eq!(Some(USER_ID.to_string()), leagues[0].selected_owner_id());
+    }
+
+    #[tokio::test]
+    async fn no_sleeper_user_and_no_yahoo_means_no_leagues_rather_than_an_error() {
+        let server = sleeper_server().await;
+        let Some(accessor) = accessor_without_yahoo(&server).await else {
+            return;
+        };
+        let leagues = get_all_leagues(vec!["2018".into()], &accessor, None)
+            .await
+            .unwrap();
+        assert!(leagues.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_yahoo_that_cannot_be_reached_is_reported_as_an_error() {
+        // yahoo is configured (against the mock server, which has no yahoo endpoints)
+        let server = sleeper_server().await;
+        let accessor = accessor(&server).await;
+        let result = get_all_leagues(vec!["2018".into()], &accessor, None).await;
+        assert!(result.is_err());
+    }
 }

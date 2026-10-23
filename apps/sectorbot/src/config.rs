@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -13,6 +16,7 @@ const ENV_SLEEPER_LEAGUE_ID: &str = "SLEEPER_LEAGUE_ID";
 const ENV_ADMIN_DISCORD_USER_ID: &str = "ADMIN_DISCORD_USER_ID";
 const ENV_FEEDS_FILE: &str = "FEEDS_FILE";
 const ENV_PUBLIC_BASE_URL: &str = "PUBLIC_BASE_URL";
+const ENV_HTTP_BIND_ADDRESS: &str = "HTTP_BIND_ADDRESS";
 const ENV_ENABLE_FEED_FETCHER: &str = "ENABLE_FEED_FETCHER";
 
 const DEFAULT_HTTP_SERVER_PORT: u16 = 8080;
@@ -29,8 +33,13 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
         Err(_) => DEFAULT_HTTP_SERVER_PORT,
     };
 
+    let http_bind_address =
+        parse_bind_address(std::env::var(ENV_HTTP_BIND_ADDRESS).ok().as_deref())
+            .map_err(|e| format!("{ENV_HTTP_BIND_ADDRESS} {e}"))?;
+
     Ok(Config {
         http_server_port,
+        http_bind_address,
         public_base_url: std::env::var(ENV_PUBLIC_BASE_URL)
             .ok()
             .filter(|v| !v.is_empty())
@@ -92,6 +101,9 @@ fn setup_logger() {
 
 pub struct Config {
     pub http_server_port: u16,
+    /// Interface the HTTP API listens on. Loopback by default: the API has no authentication,
+    /// so exposing it on other interfaces (for example in a container) has to be asked for.
+    pub http_bind_address: IpAddr,
     /// Externally visible base url, used for links in the RSS feeds.
     pub public_base_url: String,
     pub discord_token: String,
@@ -105,6 +117,16 @@ pub struct Config {
     pub feeds_file: Option<PathBuf>,
     /// Poll every feed's sources and post new entries to its Discord channel (opt-in).
     pub enable_feed_fetcher: bool,
+}
+
+/// The address to listen on: loopback unless a valid address is given.
+fn parse_bind_address(value: Option<&str>) -> Result<IpAddr, String> {
+    match value.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        Some(addr) => addr
+            .parse()
+            .map_err(|e| format!("is not an ip address ({addr:?}): {e}")),
+    }
 }
 
 /// "1", "true", "yes" or "on" (any case) enable a flag; anything else, including unset, does not.
@@ -142,6 +164,28 @@ mod tests {
         assert_eq!(2, file.feeds.len());
         assert_eq!("Rovers News", file.feeds[0].name);
         assert!(file.feeds.iter().all(|f| !f.sources.is_empty()));
+    }
+
+    #[test]
+    fn the_http_api_listens_on_loopback_unless_told_otherwise() {
+        assert_eq!(
+            Ok(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            parse_bind_address(None)
+        );
+        assert_eq!(
+            Ok(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            parse_bind_address(Some("  "))
+        );
+        assert_eq!(
+            Ok(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            parse_bind_address(Some("0.0.0.0"))
+        );
+        assert!(parse_bind_address(Some("::1")).unwrap().is_ipv6());
+        assert!(
+            parse_bind_address(Some("localhost"))
+                .unwrap_err()
+                .contains("not an ip address")
+        );
     }
 
     #[test]

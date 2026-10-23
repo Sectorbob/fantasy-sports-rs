@@ -14,24 +14,23 @@ use crate::{
     store::{Feed, FeedEntry, League},
 };
 
-pub async fn setup_and_listen(
-    port: u16,
-    app_context: Arc<AppContext>,
-) -> Result<(), Box<dyn Error>> {
-    // Create the application router
-    let app = Router::new()
+/// The HTTP API: health, the configured feeds (JSON and RSS) and the known leagues.
+pub fn router(app_context: Arc<AppContext>) -> Router {
+    Router::new()
         .route("/health", get(health_check))
         .route("/feeds", get(fetch_feeds))
         .route("/feeds/{feed_id}", get(fetch_rss_feed))
         .route("/leagues", get(fetch_leagues))
-        .layer(Extension(app_context));
-    // Define the server address
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    log::info!("HTTP Server listening on http://{}", addr);
+        .layer(Extension(app_context))
+}
 
-    // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    axum::serve(listener, app).await?;
+pub async fn setup_and_listen(
+    addr: SocketAddr,
+    app_context: Arc<AppContext>,
+) -> Result<(), Box<dyn Error>> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    log::info!("HTTP Server listening on http://{}", listener.local_addr()?);
+    axum::serve(listener, router(app_context)).await?;
     Ok(())
 }
 
@@ -207,6 +206,7 @@ impl From<FeedEntry> for rss::Item {
 #[cfg(test)]
 #[allow(dead_code, unused_imports)]
 mod tests {
+    use super::*;
     use crate::store::{ExternalId, Feed, FeedEntry, Platform};
     use chrono::{DateTime, Duration, Utc};
 
@@ -258,5 +258,167 @@ mod tests {
         assert_eq!("rovers-news", crate::server::feed_slug("Rovers News"));
         assert_eq!("nfl-news", crate::server::feed_slug("  NFL  News! "));
         assert_eq!("feed-2", crate::server::feed_slug("Feed #2"));
+    }
+
+    // --- the HTTP API, served on an ephemeral port --------------------------------------------
+
+    use crate::{bot::AppContext, config::Config, store::DataStore, yt::YoutubeClient};
+    use std::collections::HashMap;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use tempfile::TempDir;
+
+    fn config() -> Config {
+        Config {
+            http_server_port: 0,
+            http_bind_address: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            public_base_url: "https://bot.example.invalid/".to_string(),
+            discord_token: "token".into(),
+            twitter_cookie: "cookie".into(),
+            yt_api_key: "key".into(),
+            sleeper_league_id: None,
+            admin_discord_user_id: None,
+            feeds_file: None,
+            enable_feed_fetcher: false,
+        }
+    }
+
+    fn entry(id: &str, title: &str, minute: i64) -> FeedEntry {
+        FeedEntry {
+            id: ExternalId::new(Platform::Twitter, id.to_string()),
+            title: title.to_string(),
+            link: format!("https://example.invalid/{id}"),
+            content: format!("{title} & more"),
+            source_ts: DateTime::from_timestamp(1_736_900_000 + minute * 60, 0).unwrap(),
+            published_at: None,
+            author_icon_url: None,
+            author_name: Some("Sam Sample".into()),
+            author_id: None,
+            embed_image_url: None,
+        }
+    }
+
+    /// serves the API for a store with two feeds and one league; returns its base url
+    async fn serve() -> (String, TempDir) {
+        let dir = TempDir::new().unwrap();
+        let store = DataStore::open(dir.path()).unwrap();
+        for (id, name) in [(1u64, "Rovers News"), (2, "League News")] {
+            store
+                .save_feed(&Feed {
+                    id,
+                    name: name.to_string(),
+                    description: format!("{name} description"),
+                    sources: vec![],
+                    last_updated: None,
+                    destination: ExternalId::new(Platform::Discord, "555".into()),
+                    pool_interval: 300,
+                    quiet_time: String::new(),
+                    entries: if id == 1 {
+                        vec![entry("1", "older", 1), entry("2", "newer", 2)]
+                    } else {
+                        vec![]
+                    },
+                })
+                .unwrap();
+        }
+        store
+            .save_league(&League {
+                guild_id: "guild-1".into(),
+                current_season: 2025,
+                league_id_map: HashMap::new(),
+                member_map: HashMap::new(),
+            })
+            .unwrap();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let context = Arc::new(AppContext {
+            config: config(),
+            store: Arc::new(store),
+            new_tweets_sender: tx,
+            yt_client: Arc::new(YoutubeClient::new::<String, String>("key".into(), None)),
+        });
+        let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, router(context)).await });
+        (format!("http://{addr}"), dir)
+    }
+
+    #[tokio::test]
+    async fn health_reports_ok_and_the_youtube_credits_used() {
+        let (base, _dir) = serve().await;
+        let health: Health = reqwest::get(format!("{base}/health"))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!("ok", health.status);
+        assert_eq!(0, health.yt_credits_used);
+    }
+
+    #[tokio::test]
+    async fn feeds_are_listed_as_json() {
+        let (base, _dir) = serve().await;
+        let feeds: Vec<Feed> = reqwest::get(format!("{base}/feeds"))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let mut names: Vec<String> = feeds.into_iter().map(|f| f.name).collect();
+        names.sort();
+        assert_eq!(vec!["League News", "Rovers News"], names);
+    }
+
+    #[tokio::test]
+    async fn a_feed_is_served_as_rss_by_slug_or_by_id() {
+        let (base, _dir) = serve().await;
+        for key in ["rovers-news", "1"] {
+            let response = reqwest::get(format!("{base}/feeds/{key}")).await.unwrap();
+            assert_eq!(200, response.status().as_u16(), "{key}");
+            assert_eq!("application/rss+xml", response.headers()["content-type"]);
+            let channel =
+                rss::Channel::read_from(response.bytes().await.unwrap().as_ref()).unwrap();
+            assert_eq!("Rovers News", channel.title);
+            assert_eq!(
+                "https://bot.example.invalid/feeds/rovers-news",
+                channel.link
+            );
+            assert_eq!(2, channel.items.len());
+            assert_eq!(
+                Some("newer"),
+                channel.items[0].title.as_deref(),
+                "newest first"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unknown_feed_or_route_is_a_404() {
+        let (base, _dir) = serve().await;
+        let missing = reqwest::get(format!("{base}/feeds/nope")).await.unwrap();
+        assert_eq!(404, missing.status().as_u16());
+        assert_eq!("feed not found", missing.text().await.unwrap());
+        assert_eq!(
+            404,
+            reqwest::get(format!("{base}/nothing-here"))
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        );
+    }
+
+    #[tokio::test]
+    async fn leagues_are_listed() {
+        let (base, _dir) = serve().await;
+        let leagues: Vec<League> = reqwest::get(format!("{base}/leagues"))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(1, leagues.len());
+        assert_eq!("guild-1", leagues[0].guild_id);
     }
 }

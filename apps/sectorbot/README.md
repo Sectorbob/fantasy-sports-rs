@@ -36,6 +36,7 @@ directory.
 | `ENABLE_FEED_FETCHER` | no | `true` to poll every feed and post new entries (off by default) |
 | `PUBLIC_BASE_URL` | no | Base URL used in RSS links (default `http://localhost:<port>`) |
 | `HTTP_SERVER_PORT` | no | Port for the HTTP API (default `8080`) |
+| `HTTP_BIND_ADDRESS` | no | Interface for the HTTP API (default `127.0.0.1`). The API has no authentication, so it only listens on other interfaces if you ask: set `0.0.0.0` inside a container |
 | `HIDE_LOG_TS` | no | `true` to omit timestamps from logs (handy under systemd) |
 | `RUST_LOG` | no | Log filter, for example `info` |
 
@@ -58,7 +59,9 @@ Secrets are never read from the repository or baked into the container image.
 ## Feeds
 
 A feed is a list of sources (`twitter:<handle>` or `youtube:<channel id>`), a Discord destination
-(`discord:<channel id>`), a polling interval in seconds and a quiet-hours window. Copy
+(`discord:<channel id>`), a polling interval in seconds and a quiet-hours window
+(`"HH:MM-HH:MM"` in US Pacific time, which may wrap past midnight such as `"22:00-06:00"`; the
+feed is not polled during it, and an empty window means never quiet). Copy
 `feeds.example.json` to `feeds.json`, edit it and point `FEEDS_FILE` at it. Feeds already in the
 data store (and their entries) are left alone.
 
@@ -74,7 +77,7 @@ musl target and a musl C compiler:
 rustup target add x86_64-unknown-linux-musl
 sudo apt install musl-tools          # Debian/Ubuntu
 make buildd                          # builds the binary and the docker image
-docker run --env-file .env -p 8080:8080 -v $PWD/data_store:/data_store sectorbot:latest-amd64
+docker run --env-file .env -e HTTP_BIND_ADDRESS=0.0.0.0 -p 8080:8080 -v $PWD/data_store:/data_store sectorbot:latest-amd64
 ```
 
 `systemd.service` is an example user unit. The data store is a directory (`data_store/`) of `sled`

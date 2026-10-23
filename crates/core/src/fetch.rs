@@ -26,6 +26,15 @@ pub struct LeagueAccessor {
     pub yahoo_cli: Option<yahoo::Client>,
     cache_dir: Option<PathBuf>,
     yahoo_settings: Option<(String, String, Option<String>, Option<yahoo::Token>)>,
+    base_urls: BaseUrls,
+}
+
+/// Overrides for the platform API base urls; unset means the platform's real API.
+#[derive(Default, Clone)]
+struct BaseUrls {
+    sleeper: Option<String>,
+    fleaflicker: Option<String>,
+    yahoo: Option<String>,
 }
 impl LeagueAccessor {
     pub fn new() -> Self {
@@ -36,7 +45,26 @@ impl LeagueAccessor {
             yahoo_cli: None,
             cache_dir: None,
             yahoo_settings: None,
+            base_urls: BaseUrls::default(),
         }
+    }
+
+    /// Talk to a Sleeper API at `base_url` (a proxy or a test server) instead of the real one.
+    pub fn with_sleeper_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_urls.sleeper = Some(base_url.into());
+        self
+    }
+
+    /// Talk to a Fleaflicker API at `base_url` instead of the real one.
+    pub fn with_fleaflicker_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_urls.fleaflicker = Some(base_url.into());
+        self
+    }
+
+    /// Talk to a Yahoo Fantasy API at `base_url` instead of the real one.
+    pub fn with_yahoo_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_urls.yahoo = Some(base_url.into());
+        self
     }
 
     pub fn with_cache_dir<T: Into<PathBuf>>(mut self, cache_dir: T) -> Self {
@@ -72,7 +100,13 @@ impl LeagueAccessor {
                 None => (None, None, None, None),
             };
         let player_cache = player_cache
-            .and_then(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok());
+            .and_then(|player_cache| PlayerCache::new_with_path(&player_cache, Sport::NFL).ok())
+            .map(|player_cache| match &self.base_urls.sleeper {
+                Some(url) => {
+                    player_cache.with_sleeper_client(sleeper::Client::new().with_base_url(url))
+                }
+                None => player_cache,
+            });
         if let Some(player_cache) = &player_cache {
             player_cache
                 .init()
@@ -80,8 +114,13 @@ impl LeagueAccessor {
                 .map_err(|e| AccessorInitError::FailedToSetupPlayerCache(e.to_string()))?;
         }
 
+        let fleaflicker_cli = fleaflicker::Client::new();
+        let fleaflicker_cli = match &self.base_urls.fleaflicker {
+            Some(url) => fleaflicker_cli.with_base_url(url),
+            None => fleaflicker_cli,
+        };
         let fleaflicker_cli = match fleaflicker_cache_dir {
-            Some(fleaflicker_cache_dir) => fleaflicker::Client::new()
+            Some(fleaflicker_cache_dir) => fleaflicker_cli
                 .with_cache(fleaflicker_cache_dir)
                 .await
                 .map_err(|e| {
@@ -90,77 +129,100 @@ impl LeagueAccessor {
                         e.to_string(),
                     )
                 })?,
-            None => fleaflicker::Client::new(),
+            None => fleaflicker_cli,
         };
 
-        let sleeper_cli = match sleeper_cache_dir {
-            Some(sleeper_cache_dir) => sleeper::Client::new()
-                .with_cache(sleeper_cache_dir)
-                .await
-                .map_err(|e| {
-                AccessorInitError::FailedToSetupPlatformClient(Platform::Sleeper, e.to_string())
-            })?,
-            None => sleeper::Client::new(),
+        let sleeper_cli = sleeper::Client::new();
+        let sleeper_cli = match &self.base_urls.sleeper {
+            Some(url) => sleeper_cli.with_base_url(url),
+            None => sleeper_cli,
         };
-
-        let mut yahoo_cli = if let Some((client_id, redirect_uri, opt_token_file, opt_token)) =
-            &self.yahoo_settings
-        {
-            let mut yahoo_cli = yahoo::Client::new(client_id, redirect_uri);
-            if let Some(token) = opt_token {
-                yahoo_cli = yahoo_cli.with_token(token.clone());
-                yahoo_cli
-            } else if let Some(token_file) = opt_token_file {
-                yahoo_cli = yahoo_cli
-                    .with_token_file(Some(token_file.to_string()))
+        let sleeper_cli =
+            match sleeper_cache_dir {
+                Some(sleeper_cache_dir) => sleeper_cli
+                    .with_cache(sleeper_cache_dir)
                     .await
                     .map_err(|e| {
                         AccessorInitError::FailedToSetupPlatformClient(
-                            Platform::Yahoo,
-                            format!("unable to bootstrap yahoo client due to bad token file: {e}"),
+                            Platform::Sleeper,
+                            e.to_string(),
                         )
-                    })?;
-                yahoo_cli
-            } else {
-                return Err(AccessorInitError::FailedToSetupPlatformClient(
-                    Platform::Yahoo,
-                    "unable to bootstrap yahoo client due to no token configuration".to_string(),
-                ));
-            }
-        } else {
-            yahoo::Client::new_from_env().map_err(|e| {
-                AccessorInitError::FailedToSetupPlatformClient(
-                    Platform::Yahoo,
-                    format!("unable to bootstrap yahoo client due to missing env variables: {e}"),
-                )
-            })?.with_token_file::<String>(None).await.map_err(|err| {
-                yahoo::Error::UnknownError(format!("failed to load token file: {err}"))
-            }).map_err(|e| {
-                AccessorInitError::FailedToSetupPlatformClient(
-                    Platform::Yahoo,
-                    format!("unable to bootstrap yahoo client due to failure to load token file: {e}"),
-                )
-            })?
-        };
+                    })?,
+                None => sleeper_cli,
+            };
 
-        // TODO: only refresh if it needs to be
-        yahoo_cli.refresh_token(false).await.map_err(|e| {
-            AccessorInitError::FailedToSetupPlatformClient(Platform::Yahoo, e.to_string())
-        })?;
+        let yahoo_cli = self.setup_yahoo(yahoo_cache_dir).await?;
 
-        if let Some(yahoo_cache_dir) = yahoo_cache_dir {
-            yahoo_cli = yahoo_cli
-                .with_cache_dir(yahoo_cache_dir)
-                .await
-                .map_err(|e| {
-                    AccessorInitError::FailedToSetupPlatformClient(Platform::Yahoo, e.to_string())
-                })?;
-        }
         self.players_cache = player_cache;
         self.fleaflicker_cli = Some(fleaflicker_cli);
         self.sleeper_cli = Some(sleeper_cli);
-        self.yahoo_cli = Some(yahoo_cli);
+        self.yahoo_cli = yahoo_cli;
         Ok(())
+    }
+
+    /// Builds the Yahoo client from the explicit settings or, failing that, the environment.
+    /// Yahoo is optional: with neither configured it is left out (`None`) rather than
+    /// preventing the other platforms from being used.
+    async fn setup_yahoo(
+        &self,
+        cache_dir: Option<PathBuf>,
+    ) -> Result<Option<yahoo::Client>, AccessorInitError> {
+        let fail = |message: String| {
+            AccessorInitError::FailedToSetupPlatformClient(Platform::Yahoo, message)
+        };
+        let with_base_url = |cli: yahoo::Client| match &self.base_urls.yahoo {
+            Some(url) => cli.with_base_url(url),
+            None => cli,
+        };
+        let mut yahoo_cli = match &self.yahoo_settings {
+            Some((client_id, redirect_uri, token_file, token)) => {
+                let cli = with_base_url(yahoo::Client::new(client_id, redirect_uri));
+                if let Some(token) = token {
+                    cli.with_token(token.clone())
+                } else if let Some(token_file) = token_file {
+                    cli.with_token_file(Some(token_file.to_string()))
+                        .await
+                        .map_err(|e| {
+                            fail(format!(
+                                "unable to bootstrap yahoo client due to bad token file: {e}"
+                            ))
+                        })?
+                } else {
+                    return Err(fail(
+                        "unable to bootstrap yahoo client due to no token configuration"
+                            .to_string(),
+                    ));
+                }
+            }
+            None => match yahoo::Client::new_from_env() {
+                Ok(cli) => with_base_url(cli)
+                    .with_token_file::<String>(None)
+                    .await
+                    .map_err(|e| {
+                        fail(format!(
+                            "unable to bootstrap yahoo client due to failure to load token file: {e}"
+                        ))
+                    })?,
+                Err(e) => {
+                    log::info!("yahoo is not configured ({e}); yahoo leagues are unavailable");
+                    return Ok(None);
+                }
+            },
+        };
+
+        // TODO: only refresh if it needs to be
+        yahoo_cli
+            .refresh_token(false)
+            .await
+            .map_err(|e| fail(e.to_string()))?;
+
+        if let Some(yahoo_cache_dir) = cache_dir {
+            yahoo_cli = yahoo_cli
+                .with_cache_dir(yahoo_cache_dir)
+                .await
+                .map_err(|e| fail(e.to_string()))?;
+        }
+        Ok(Some(yahoo_cli))
     }
 
     pub fn fleaflicker_enabled(&self) -> bool {
@@ -538,6 +600,10 @@ pub(crate) async fn fetch_sleeper_league_context(
                 }
             }
         }
+    } else {
+        // without a player cache every player the league uses has to come from the downloaded
+        // player universe; this used to leave the league without any players
+        player_cache_misses = player_id_set;
     }
 
     // if we have cache missed and a sleep player update request is not yet in flight, then fetch players
@@ -931,6 +997,15 @@ mod tests {
                 p if p.starts_with(&format!("{league}/transactions/")) => {
                     ResponseTemplate::new(200).set_body_string("[]")
                 }
+                p if p.starts_with("/user/") && p.contains("/leagues/") => {
+                    // /user/<id>/leagues/<sport>/<season>; seasons without a recording are empty
+                    let rel = format!("v1{p}.json");
+                    if fixture(&rel).exists() {
+                        json(rel)
+                    } else {
+                        ResponseTemplate::new(200).set_body_string("[]")
+                    }
+                }
                 p if p == format!("/draft/{DRAFT_ID}") => json(format!("v1/draft/{DRAFT_ID}.json")),
                 p if p == format!("/draft/{DRAFT_ID}/picks") => {
                     json(format!("v1/draft/{DRAFT_ID}/picks.json"))
@@ -1052,6 +1127,7 @@ mod tests {
                 "/FetchLeagueTransactions" => "league_transactions_page_1.json",
                 "/FetchLeagueRosters" => "league_rosters.json",
                 "/FetchLeagueRules" => "fetch_league_rules.json",
+                "/FetchUserLeagues" => "leagues_for_user.json",
                 _ => return ResponseTemplate::new(404),
             };
             let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1097,5 +1173,402 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("abc"), "{err}");
+    }
+
+    async fn sleeper_league() -> crate::League {
+        let (cli, _server) = sleeper_client().await;
+        fetch_sleeper_league_context_by_id(&cli, &None, LEAGUE_ID, false)
+            .await
+            .unwrap()
+    }
+
+    async fn fleaflicker_league() -> crate::League {
+        let (cli, _server) = fleaflicker_client().await;
+        fetch_fleaflicker_league_context(&cli, &None, "1".to_string(), false)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_league_describes_itself() {
+        let league = sleeper_league().await;
+
+        assert_eq!(format!("sleeper:{LEAGUE_ID}"), league.id().to_string());
+        assert_eq!("Sleeper", league.platform());
+        assert_eq!(crate::LeagueStatus::Complete, league.status());
+        assert_eq!(12, league.teams().len());
+        assert!(league.raw().starts_with("Raw:") && league.raw().contains("playoff_week_start"));
+
+        let settings = league.settings();
+        assert!(settings.has_playoffs);
+        assert_eq!(14, settings.playoff_start_week);
+        assert_eq!(6, settings.num_playoff_teams);
+        assert_eq!(17, settings.draft_rounds);
+        assert!(settings.scoring.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_league_knows_its_players() {
+        // no player cache is configured here; the league must still get its players
+        let league = sleeper_league().await;
+        let players = league.players();
+        assert!(players.len() > 300, "only {} players", players.len());
+
+        let missing: Vec<String> = league
+            .rosters()
+            .iter()
+            .flat_map(|r| r.player_ids.clone())
+            .filter(|id| !players.contains_key(id))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "rostered players without data: {missing:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn sleeper_standings_and_rosters_come_back_in_a_stable_order() {
+        let league = sleeper_league().await;
+
+        let standings = league.standings().entries;
+        assert_eq!(12, standings.len());
+        // best record first
+        assert!(
+            standings.windows(2).all(|w| w[0].wins >= w[1].wins),
+            "{standings:#?}"
+        );
+        assert_eq!("10-3-0", league.record_for_roster("1".to_string()));
+
+        let rosters = league.rosters();
+        let ids: Vec<u32> = rosters.iter().map(|r| r.id.parse().unwrap()).collect();
+        assert_eq!((1..=12).collect::<Vec<u32>>(), ids);
+
+        // the rosters are kept in a HashMap; the order must not depend on its iteration order
+        for _ in 0..10 {
+            let again: Vec<String> = sleeper_league_standings_order(&league);
+            assert_eq!(
+                standings
+                    .iter()
+                    .map(|e| e.roster_id.clone())
+                    .collect::<Vec<_>>(),
+                again
+            );
+        }
+    }
+
+    fn sleeper_league_standings_order(league: &crate::League) -> Vec<String> {
+        league
+            .standings()
+            .entries
+            .into_iter()
+            .map(|e| e.roster_id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_sleeper_leagues_playoff_results_follow_the_bracket() {
+        let league = sleeper_league().await;
+        let results = league
+            .playoff_results()
+            .expect("the league has a winners bracket");
+        assert_eq!("7", results[&1].roster_id, "champion");
+        assert_eq!("9", results[&2].roster_id, "runner-up");
+        assert_eq!("4", results[&3].roster_id, "third place");
+    }
+
+    #[tokio::test]
+    async fn selecting_an_owner_picks_out_their_team_and_record() {
+        let league = sleeper_league().await;
+        assert_eq!(None, league.selected_owner_id());
+        assert!(league.team().is_none());
+        assert_eq!("N/A", league.record());
+
+        let owner = league
+            .standings()
+            .entries
+            .into_iter()
+            .find(|e| e.roster_id == "1")
+            .unwrap();
+        let league =
+            league.with_owner_id(ExternalId::new(Platform::Sleeper, owner.owner_id.clone()));
+
+        assert_eq!(Some(owner.owner_id.clone()), league.selected_owner_id());
+        let team = league.team().expect("the owner has a team in this league");
+        assert_eq!(owner.owner_id, team.owner_id.unwrap());
+        assert_eq!(owner.team_name, league.team_name());
+        assert_eq!(
+            format!("{}-{}-{}", owner.wins, owner.losses, owner.ties),
+            league.record()
+        );
+        // roster 1 scored 1716 points and ten hundredths
+        assert!(
+            (league.total_points() - 1716.10).abs() < 1e-9,
+            "{}",
+            league.total_points()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_fleaflicker_league_describes_itself() {
+        let league = fleaflicker_league().await;
+        assert_eq!(crate::LeagueStatus::PreDraft, league.status());
+        assert_eq!("FleaFlicker", league.platform());
+        assert!(league.id().to_string().starts_with("fleaflicker:"));
+        assert!(league.raw().len() > 1000);
+        assert_eq!(12, league.teams().len());
+        assert!(
+            league.draft().is_none(),
+            "the fixture league has not drafted"
+        );
+        assert!(league.scoreboards().is_empty());
+        assert!(league.playoff_results().is_none());
+        assert!(league.settings().has_playoffs);
+    }
+
+    #[tokio::test]
+    async fn fleaflicker_standings_survive_unowned_and_unnamed_teams() {
+        // open slots have no owner and may have no name; the standings used to unwrap both
+        let mut league = fleaflicker_league().await;
+        if let crate::League::FleaFlicker { standings, .. } = &mut league {
+            for division in &mut standings.divisions {
+                for team in &mut division.teams {
+                    team.owners = None;
+                    team.name = None;
+                }
+            }
+        }
+
+        let entries = league.standings().entries;
+
+        assert_eq!(12, entries.len());
+        for entry in entries {
+            assert_eq!(format!("Team {}", entry.roster_id), entry.team_name);
+            assert_eq!(format!("Team {}", entry.roster_id), entry.owner_name);
+            assert_eq!("", entry.owner_id);
+        }
+    }
+
+    fn fresh_yahoo_token() -> yahoo::Token {
+        yahoo::Token {
+            access_token: "token".to_string(),
+            token_type: "bearer".to_string(),
+            expires_in: 3600,
+            refresh_token: "refresh".to_string(),
+            scope: None,
+            ts: Some(chrono::Utc::now()),
+        }
+    }
+
+    fn requests_for(requested: &[String], path: &str) -> usize {
+        requested.iter().filter(|p| p.as_str() == path).count()
+    }
+
+    async fn requested_paths(server: &MockServer) -> Vec<String> {
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.url.path().to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn an_accessor_with_a_cache_dir_fetches_once_and_then_serves_from_disk() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (_, sleeper_server) = sleeper_client().await;
+        let (_, fleaflicker_server) = fleaflicker_client().await;
+        let yahoo_server = MockServer::start().await; // configured but never called here
+        let mut accessor = LeagueAccessor::new()
+            .with_cache_dir(dir.path())
+            .with_sleeper_base_url(sleeper_server.uri())
+            .with_fleaflicker_base_url(fleaflicker_server.uri())
+            .with_yahoo_base_url(yahoo_server.uri())
+            .with_yahoo_settings(
+                "client",
+                "redirect",
+                None::<String>,
+                Some(fresh_yahoo_token()),
+            );
+        assert_eq!(0, accessor.disk_space_used().unwrap());
+
+        accessor
+            .init()
+            .await
+            .expect("all three platforms are configured");
+
+        assert!(
+            accessor.sleeper_enabled()
+                && accessor.fleaflicker_enabled()
+                && accessor.yahoo_enabled()
+        );
+        assert!(
+            accessor.disk_space_used().unwrap() > 0,
+            "the player cache was written to disk"
+        );
+
+        let id = ExternalId::new(Platform::Sleeper, LEAGUE_ID.to_string());
+        let league_path = format!("/league/{LEAGUE_ID}");
+
+        let league = accessor.fetch_league_context(&id, false).await.unwrap();
+        // the players come from the player cache the accessor filled from the player universe
+        assert!(league.players().len() > 300);
+        assert_eq!(
+            1,
+            requests_for(&requested_paths(&sleeper_server).await, &league_path)
+        );
+
+        accessor.fetch_league_context(&id, false).await.unwrap();
+        assert_eq!(
+            1,
+            requests_for(&requested_paths(&sleeper_server).await, &league_path),
+            "the second fetch is served from the disk cache"
+        );
+
+        accessor.fetch_league_context(&id, true).await.unwrap();
+        assert_eq!(
+            2,
+            requests_for(&requested_paths(&sleeper_server).await, &league_path),
+            "force_update goes back to the network"
+        );
+
+        // and the fleaflicker client uses its own server and cache too
+        let fleaflicker_id = ExternalId::new(Platform::FleaFlicker, "348896".to_string());
+        let flea = accessor
+            .fetch_league_context(&fleaflicker_id, false)
+            .await
+            .unwrap();
+        assert_eq!("Golden League 00", flea.name());
+        assert!(
+            !requested_paths(&yahoo_server).await.iter().any(|_| true),
+            "yahoo was not used"
+        );
+    }
+
+    #[tokio::test]
+    async fn yahoo_is_optional_when_it_is_not_configured() {
+        if std::env::var("YAHOO_CLIENT_ID").is_ok() {
+            return; // the developer's environment configures yahoo, which is the other branch
+        }
+        let (_, sleeper_server) = sleeper_client().await;
+        let mut accessor = LeagueAccessor::new().with_sleeper_base_url(sleeper_server.uri());
+
+        accessor
+            .init()
+            .await
+            .expect("sleeper alone is enough to start");
+
+        assert!(accessor.sleeper_enabled());
+        assert!(!accessor.yahoo_enabled());
+        let league = accessor
+            .fetch_league_context(
+                &ExternalId::new(Platform::Sleeper, LEAGUE_ID.to_string()),
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(
+            league.players().len() > 300,
+            "no player cache, players still come back"
+        );
+        let yahoo = accessor
+            .fetch_league_context(
+                &ExternalId::new(Platform::Yahoo, "359.l.1".to_string()),
+                false,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            yahoo.to_string().contains("yahoo cli not configured"),
+            "{yahoo}"
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_yahoo_settings_without_a_token_are_a_setup_error() {
+        let mut accessor =
+            LeagueAccessor::new().with_yahoo_settings("client", "redirect", None::<String>, None);
+        let err = accessor.init().await.unwrap_err();
+        assert!(err.to_string().contains("no token configuration"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn the_leagues_of_a_user_are_listed_per_platform() {
+        let (_, sleeper_server) = sleeper_client().await;
+        let (_, fleaflicker_server) = fleaflicker_client().await;
+        let mut accessor = LeagueAccessor::new()
+            .with_sleeper_base_url(sleeper_server.uri())
+            .with_fleaflicker_base_url(fleaflicker_server.uri())
+            .with_yahoo_settings(
+                "client",
+                "redirect",
+                None::<String>,
+                Some(fresh_yahoo_token()),
+            )
+            .with_yahoo_base_url(MockServer::start().await.uri());
+        accessor.init().await.unwrap();
+
+        // sleeper: the recorded leagues of one user in 2024, nothing in the other season
+        let user = ExternalId::new(Platform::Sleeper, "267506301905934815".to_string());
+        let recorded: Vec<sleeper::League> = serde_json::from_str(
+            &std::fs::read_to_string(fixture("v1/user/267506301905934815/leagues/nfl/2024.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let ids = accessor
+            .fetch_league_ids_for_user(&user, vec!["2024".into(), "2020".into()], &Sport::NFL)
+            .await
+            .unwrap();
+        assert_eq!(recorded.len(), ids.len());
+        assert!(ids.iter().all(|id| id.platform == Platform::Sleeper));
+        assert!(recorded.iter().all(|l| ids.contains(&ExternalId::from(l))));
+
+        // fleaflicker is looked up by the user's email
+        let flea_user = ExternalId::new(Platform::FleaFlicker, "user@example.com".to_string());
+        let flea_ids = accessor
+            .fetch_league_ids_for_user(&flea_user, vec!["2025".into()], &Sport::NFL)
+            .await
+            .unwrap();
+        assert!(!flea_ids.is_empty());
+        assert!(
+            flea_ids
+                .iter()
+                .all(|id| id.platform == Platform::FleaFlicker)
+        );
+
+        // platforms that have no leagues to list
+        let twitter = ExternalId::new(Platform::Twitter, "SampleScribe".to_string());
+        let err = accessor
+            .fetch_league_ids_for_user(&twitter, vec![], &Sport::NFL)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("twitter is not supported"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn listing_leagues_for_an_unconfigured_platform_says_so() {
+        let accessor = LeagueAccessor::new();
+        for (platform, name) in [
+            (Platform::Sleeper, "sleeper"),
+            (Platform::FleaFlicker, "fleaflicker"),
+            (Platform::Yahoo, "yahoo"),
+        ] {
+            let err = accessor
+                .fetch_league_ids_for_user(
+                    &ExternalId::new(platform, "1".into()),
+                    vec![],
+                    &Sport::NFL,
+                )
+                .await
+                .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains(&format!("{name} cli not configured")),
+                "{err}"
+            );
+        }
     }
 }

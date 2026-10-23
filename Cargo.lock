@@ -936,6 +936,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]
@@ -947,11 +948,13 @@ dependencies = [
  "fantasy-sports-fleaflicker",
  "fantasy-sports-sleeper",
  "fantasy-sports-yahoo",
+ "flate2",
  "futures",
  "log",
  "serde",
  "serde_json",
  "sled",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "walkdir",
@@ -1011,6 +1014,7 @@ dependencies = [
  "serde-xml-rs",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "wiremock",

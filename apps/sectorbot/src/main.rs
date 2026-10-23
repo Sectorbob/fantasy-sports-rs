@@ -84,12 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_handle = tokio::spawn({
         let app_context_clone = app_context.clone();
         async move {
-            if let Err(e) = server::setup_and_listen(
+            let addr = std::net::SocketAddr::new(
+                app_context_clone.config.http_bind_address,
                 app_context_clone.config.http_server_port,
-                app_context_clone,
-            )
-            .await
-            {
+            );
+            if let Err(e) = server::setup_and_listen(addr, app_context_clone).await {
                 log::error!("Failed to start server: {}", e);
             }
         }
@@ -130,6 +129,7 @@ async fn start_feed_fetcher(
         let store_clone = app_context.store.clone();
         let cookie_clone = app_context.config.twitter_cookie.clone();
         let yt_client = Arc::clone(&app_context.yt_client);
+        let twitter_client = twitter::syndication::Client::new();
         let feed = store_clone.get_feed(feed_id).ok_or("Feed not found")?;
         async move {
             if let Some(delay) = delay {
@@ -148,11 +148,20 @@ async fn start_feed_fetcher(
             let mut interval = time::interval(Duration::from_secs(feed.pool_interval));
             loop {
                 interval.tick().await;
+                if feed.is_quiet_at(chrono::Utc::now()) {
+                    log::debug!(
+                        "Feed {} is in its quiet hours ({})",
+                        feed.name,
+                        feed.quiet_time
+                    );
+                    continue;
+                }
                 match do_feed_fetch(
                     feed_id,
                     &sender_clone,
                     &store_clone,
                     &cookie_clone,
+                    &twitter_client,
                     &yt_client,
                 )
                 .await
@@ -229,6 +238,7 @@ async fn do_feed_fetch(
     tx: &Sender<FeedEvent>,
     store: &DataStore,
     twitter_cookie: &String,
+    twitter_client: &twitter::syndication::Client,
     yt_client: &yt::YoutubeClient,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut feed = store.get_feed(feed_id).ok_or("Feed not found")?;
@@ -249,8 +259,20 @@ async fn do_feed_fetch(
     for source in feed.sources.iter() {
         match source.platform {
             Some(store::Platform::Twitter) => {
-                let mut user_tweets =
-                    fetch_raw_tweets(source.id.to_string(), twitter_cookie.to_string()).await?;
+                // one unreachable account must not stop the other sources of the feed
+                let mut user_tweets = match fetch_raw_tweets(
+                    twitter_client,
+                    source.id.to_string(),
+                    twitter_cookie.to_string(),
+                )
+                .await
+                {
+                    Ok(tweets) => tweets,
+                    Err(err) => {
+                        log::error!("Failed to fetch the timeline of {}: {err}", source.id);
+                        continue;
+                    }
+                };
                 log::debug!(
                     "Twitter Timeline for {}. {} entries",
                     source.id,
@@ -350,26 +372,22 @@ async fn do_feed_fetch(
     let mut new_tweets: Vec<TweetResponse> = vec![];
     let mut new_yt_videos: Vec<yt::Item> = vec![];
 
+    // anything the feed already has, or that appears twice in this run, is not new
+    let mut seen: std::collections::HashSet<(Option<store::Platform>, String)> = feed
+        .entries
+        .iter()
+        .map(|e| (e.id.platform.clone(), e.id.id.clone()))
+        .collect();
     for tweet in tweets {
-        if feed
-            .entries
-            .iter()
-            .find(|e| e.id.platform == Some(store::Platform::Twitter) && e.id.id == tweet.id_str)
-            .is_none()
-        {
+        if seen.insert((Some(store::Platform::Twitter), tweet.id_str.clone())) {
             new_tweets.push(tweet);
         }
     }
     for video in yt_videos {
-        if feed
-            .entries
-            .iter()
-            .find(|e| {
-                e.id.platform == Some(store::Platform::Youtube)
-                    && e.id.id == video.video_id().unwrap_or_default()
-            })
-            .is_none()
-        {
+        if seen.insert((
+            Some(store::Platform::Youtube),
+            video.video_id().unwrap_or_default(),
+        )) {
             new_yt_videos.push(video);
         }
     }
@@ -460,10 +478,10 @@ async fn do_feed_fetch(
 }
 
 async fn fetch_raw_tweets<T: Display>(
+    syndication_client: &twitter::syndication::Client,
     twitter_username: T,
     twitter_cookie: T,
 ) -> Result<Vec<TweetResponse>, Box<dyn Error>> {
-    let syndication_client = twitter::syndication::Client::new();
     let twitter_timeline = syndication_client
         .fetch_user_timeline(twitter_username.to_string(), twitter_cookie.to_string())
         .await?;
@@ -513,7 +531,7 @@ impl From<yt::Item> for FeedEntry {
             source_ts: video.published_at().unwrap_or_default(),
             content: video.description(),
             published_at: None, // You can set this to Some(Utc::now()) if you want
-            author_icon_url: video.link(),
+            author_icon_url: None, // the channel's icon is not part of a playlist item
             author_name: video
                 .snippet
                 .as_ref()
@@ -561,6 +579,252 @@ mod tests {
     use super::*;
     use crate::{twitter::User, yt::ItemId};
     use tempfile::TempDir;
+    use tokio::sync::mpsc;
+    use wiremock::{
+        Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path, path_regex},
+    };
+
+    fn testdata(rel: &str) -> String {
+        std::fs::read_to_string(format!("{}/testdata/{rel}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+
+    /// The YouTube channels endpoint: only the channels that were asked for (`id=a,b`) come back.
+    struct Channels;
+    impl Respond for Channels {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            let wanted: Vec<String> = req
+                .url
+                .query_pairs()
+                .find(|(k, _)| k == "id")
+                .map(|(_, v)| v.split(',').map(String::from).collect())
+                .unwrap_or_default();
+            let mut all: serde_json::Value =
+                serde_json::from_str(&testdata("yt/list_channels.json")).unwrap();
+            all["items"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|c| wanted.contains(&c["id"].as_str().unwrap().to_string()));
+            ResponseTemplate::new(200).set_body_json(all)
+        }
+    }
+
+    struct Fixtures {
+        twitter: MockServer,
+        youtube: MockServer,
+    }
+    async fn fixtures() -> Fixtures {
+        let twitter = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/srv/timeline-profile/screen-name/.*"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(testdata("timeline.html"), "text/html"),
+            )
+            .mount(&twitter)
+            .await;
+        let youtube = MockServer::start().await;
+        Mock::given(path("/channels"))
+            .respond_with(Channels)
+            .mount(&youtube)
+            .await;
+        Mock::given(path("/playlistItems"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(testdata("yt/list_playlist_items.json"), "application/json"),
+            )
+            .mount(&youtube)
+            .await;
+        Fixtures { twitter, youtube }
+    }
+
+    fn feed(id: u64, sources: &[&str]) -> Feed {
+        Feed {
+            id,
+            name: format!("Feed {id}"),
+            description: String::new(),
+            sources: sources
+                .iter()
+                .map(|s| ExternalId::try_from(*s).unwrap())
+                .collect(),
+            last_updated: None,
+            destination: ExternalId::try_from("discord:555").unwrap(),
+            pool_interval: 60,
+            quiet_time: String::new(),
+            entries: vec![],
+        }
+    }
+
+    /// run one fetch of `feed` and return the events it published
+    async fn fetch(
+        fixtures: &Fixtures,
+        store: &DataStore,
+        feed_id: u64,
+    ) -> (Result<(), Box<dyn std::error::Error>>, Vec<FeedEvent>) {
+        let (tx, mut rx) = mpsc::channel::<FeedEvent>(100);
+        let twitter = twitter::syndication::Client::new().with_base_url(fixtures.twitter.uri());
+        let youtube = yt::YoutubeClient::new("key", Some(fixtures.youtube.uri()));
+        let result = do_feed_fetch(
+            feed_id,
+            &tx,
+            store,
+            &"cookie".to_string(),
+            &twitter,
+            &youtube,
+        )
+        .await;
+        drop(tx);
+        let mut events = vec![];
+        while let Some(event) = rx.recv().await {
+            events.push(event);
+        }
+        (result, events)
+    }
+
+    fn store() -> (DataStore, TempDir) {
+        let dir = TempDir::new().unwrap();
+        (DataStore::open(dir.path()).unwrap(), dir)
+    }
+
+    #[tokio::test]
+    async fn new_tweets_are_published_once_in_order_and_remembered() {
+        let fixtures = fixtures().await;
+        let (store, _dir) = store();
+        store
+            .save_feed(&feed(1, &["twitter:SampleScribe"]))
+            .unwrap();
+
+        let (result, events) = fetch(&fixtures, &store, 1).await;
+
+        result.unwrap();
+        assert_eq!(5, events.len());
+        assert!(
+            events
+                .iter()
+                .all(|e| e.feed_id == 1 && e.destination.id == "555")
+        );
+        let times: Vec<_> = events.iter().map(|e| e.entry.source_ts).collect();
+        assert!(times.is_sorted(), "oldest first: {times:?}");
+        assert!(events[0].entry.title.starts_with("Sample update #"));
+        assert_eq!(5, store.get_feed(1).unwrap().entries.len());
+
+        // the same timeline again has nothing new
+        let (result, events) = fetch(&fixtures, &store, 1).await;
+        result.unwrap();
+        assert!(events.is_empty(), "{} repeated", events.len());
+        assert_eq!(5, store.get_feed(1).unwrap().entries.len());
+    }
+
+    #[tokio::test]
+    async fn new_videos_are_published_once_without_a_bogus_author_icon() {
+        let fixtures = fixtures().await;
+        let (store, _dir) = store();
+        store
+            .save_feed(&feed(2, &["youtube:UCexampleRoverBanter0001"]))
+            .unwrap();
+
+        let (result, events) = fetch(&fixtures, &store, 2).await;
+
+        result.unwrap();
+        assert_eq!(5, events.len(), "five videos in the uploads playlist");
+        assert!(
+            events[0]
+                .entry
+                .link
+                .starts_with("https://www.youtube.com/watch?v=")
+        );
+        assert_eq!(
+            Some("Rover Banter".to_string()),
+            events[0].entry.author_name
+        );
+        // this used to be the video's own link, which Discord rejects as an icon
+        assert!(events.iter().all(|e| e.entry.author_icon_url.is_none()));
+        assert_eq!(5, store.get_feed(2).unwrap().entries.len());
+
+        let (_, again) = fetch(&fixtures, &store, 2).await;
+        assert!(again.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_failing_twitter_account_does_not_stop_the_other_sources() {
+        let fixtures = fixtures().await;
+        fixtures.twitter.reset().await; // every path is now a 404
+        let (store, _dir) = store();
+        store
+            .save_feed(&feed(
+                3,
+                &[
+                    "twitter:Gone",
+                    "youtube:UCexampleRoverBanter0001",
+                    "discord:1",
+                ],
+            ))
+            .unwrap();
+
+        let (result, events) = fetch(&fixtures, &store, 3).await;
+
+        result.expect("the feed run succeeds");
+        assert_eq!(5, events.len(), "the youtube videos still arrived");
+        assert!(
+            events
+                .iter()
+                .all(|e| e.entry.id.platform == Some(store::Platform::Youtube))
+        );
+    }
+
+    #[tokio::test]
+    async fn the_same_video_in_two_channels_is_published_once() {
+        let fixtures = fixtures().await;
+        let (store, _dir) = store();
+        // both channels' uploads playlists answer with the same five videos in this fixture
+        store
+            .save_feed(&feed(
+                4,
+                &[
+                    "youtube:UCexampleRoverBanter0001",
+                    "youtube:UCexampleRoverInsider001",
+                ],
+            ))
+            .unwrap();
+
+        let (_, events) = fetch(&fixtures, &store, 4).await;
+
+        assert_eq!(5, events.len());
+    }
+
+    #[tokio::test]
+    async fn fetching_an_unknown_feed_is_an_error() {
+        let fixtures = fixtures().await;
+        let (store, _dir) = store();
+        let (result, events) = fetch(&fixtures, &store, 99).await;
+        assert!(result.unwrap_err().to_string().contains("Feed not found"));
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn cleaning_a_feed_removes_duplicate_entries_and_saves_it() {
+        let (store, _dir) = store();
+        let mut feed = feed(5, &[]);
+        let entry = |id: &str, minute: i64| FeedEntry {
+            id: ExternalId::try_from(format!("twitter:{id}")).unwrap(),
+            title: id.into(),
+            link: String::new(),
+            source_ts: chrono::DateTime::from_timestamp(1_700_000_000 + minute * 60, 0).unwrap(),
+            content: String::new(),
+            published_at: None,
+            author_icon_url: None,
+            author_name: None,
+            author_id: None,
+            embed_image_url: None,
+        };
+        feed.entries = vec![entry("b", 2), entry("a", 1), entry("b", 2), entry("c", 3)];
+        store.save_feed(&feed).unwrap();
+
+        assert!(feed_cleanup(&mut feed, &store));
+
+        let ids: Vec<&str> = feed.entries.iter().map(|e| e.id.id.as_str()).collect();
+        assert_eq!(vec!["a", "b", "c"], ids, "unique, oldest first");
+        assert_eq!(3, store.get_feed(5).unwrap().entries.len());
+    }
 
     #[test]
     fn seeding_adds_new_feeds_and_leaves_existing_ones_alone() {

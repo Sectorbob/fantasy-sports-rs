@@ -43,6 +43,7 @@ pub fn get_player_history<T: Into<String>>(
     history
 }
 
+#[derive(Debug)]
 pub struct KeepablesReport {
     pub season: String,
     pub keepables: Vec<Keepable>,
@@ -102,6 +103,7 @@ impl KeepablesReport {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Keepable {
     pub owner_id: String,
     pub owner_name: String,

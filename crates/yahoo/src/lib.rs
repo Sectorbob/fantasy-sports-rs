@@ -2,7 +2,11 @@
 
 mod client;
 mod data;
+#[cfg(test)]
+mod endpoint_tests;
 pub mod filters;
+#[cfg(test)]
+mod oauth_tests;
 pub mod token;
 
 pub use client::{Client, Error};
